@@ -83,12 +83,20 @@ enum SelfTest {
         }
         UserDefaults.standard.removeObject(forKey: "selftest")
 
+        // The bundled PNG is what the canvas contract is checked against. In a
+        // bare-binary run (swift run, an Xcode package scheme, ad-hoc probing)
+        // there are no bundled resources at all: styles drawn from the glyph
+        // asset fall back to a stand-in with a deliberately different canvas,
+        // and the size assertion below would fail for reasons that say nothing
+        // about the code. The contract is only checked where the asset exists,
+        // matching how the missing-asset warning below already treats bare runs.
+        let assetsBundled = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png") != nil
         for style in KeepAwakeActiveIcon.allCases {
             guard let image = BlackHoleGlyph.activeImage(style: style, tint: .orange) else {
                 failures.append("Keep Awake icon \(style.rawValue)")
                 continue
             }
-            if image.size != BlackHoleGlyph.pointSize {
+            if assetsBundled, image.size != BlackHoleGlyph.pointSize {
                 failures.append("Keep Awake icon size \(style.rawValue)")
             }
             // image.size stays correct even when the symbol inside it is scaled
@@ -100,7 +108,7 @@ enum SelfTest {
 
         // Tools/MakeIcon.swift writes the glyph PNGs at BlackHoleGlyph.pointSize.
         // Changing the canvas in one and not the other would squash the glyph.
-        if Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png") == nil {
+        if !assetsBundled {
             warnings.append("menu bar glyph asset not bundled")
         } else if let rep = BlackHoleGlyph.image(active: false)?
             .representations.min(by: { $0.pixelsWide < $1.pixelsWide }) {

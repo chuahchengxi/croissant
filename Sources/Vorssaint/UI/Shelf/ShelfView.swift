@@ -24,9 +24,9 @@ struct ShelfView: View {
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var targeted = false
-    @State private var clearButtonHovered = false
-    @State private var pinButtonHovered = false
-    @State private var closeButtonHovered = false
+    /// Shared Liquid Glass space for the header chips; on macOS 26 they melt
+    /// into each other as the pointer crosses between them.
+    @Namespace private var headerGlass
 
     private static let dropTypes: [UTType] = [.fileURL, .image, .url, .text, .plainText]
     private static let panelWidth: CGFloat = 304
@@ -58,7 +58,7 @@ struct ShelfView: View {
             topMoveHandle
         }
         .animation(.easeOut(duration: 0.15), value: isDropTargeted)
-        .animation(.easeOut(duration: 0.18), value: shelf.items)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: shelf.items)
         .onHover { inside in
             shelf.setPointerInsidePanel(inside)
         }
@@ -113,60 +113,47 @@ struct ShelfView: View {
             .contentShape(Rectangle())
             .overlay(WindowMoveHandle())
 
-            if !brandWatermark { pinButton }
-            closeButton
+            headerControls
+        }
+    }
+
+    /// The trailing chips. On macOS 26 they live in one shared glass space so
+    /// pin and close read as droplets of the same material, merging as the
+    /// pointer crosses them; older systems draw the same two chips separately.
+    @ViewBuilder
+    private var headerControls: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 6) { chips }
+        } else {
+            chips
+        }
+    }
+
+    @ViewBuilder
+    private var chips: some View {
+        if !brandWatermark {
+            GlassIconButton(systemImage: shelf.isPinned ? "pin.fill" : "pin",
+                            isActive: shelf.isPinned,
+                            helpText: shelf.isPinned ? l10n.s.shelfUnpin : l10n.s.shelfPin,
+                            accessibilityLabel: shelf.isPinned ? l10n.s.shelfUnpin : l10n.s.shelfPin,
+                            iconSize: 12,
+                            glassID: "shelf-pin",
+                            glassNamespace: headerGlass) {
+                shelf.togglePin()
+            }
+        }
+        GlassIconButton(systemImage: dismissSystemImage,
+                        helpText: dismissHelp ?? l10n.s.menuClose,
+                        iconSize: 13,
+                        glassID: "shelf-close",
+                        glassNamespace: headerGlass) {
+            (onDismiss ?? { shelf.hide() })()
         }
     }
 
     private var topMoveHandle: some View {
         WindowMoveHandle(acceptsDrops: true)
             .frame(width: Self.panelWidth - (brandWatermark ? 58 : 96), height: 55)
-    }
-
-    private var pinButton: some View {
-        Button { shelf.togglePin() } label: {
-            Image(systemName: shelf.isPinned ? "pin.fill" : "pin")
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle().fill(shelf.isPinned
-                                  ? Color.accentColor.opacity(pinButtonHovered ? 0.30 : 0.20)
-                                  : Color.white.opacity(pinButtonHovered ? 0.18 : 0.11))
-                )
-                .overlay(
-                    Circle().strokeBorder(shelf.isPinned
-                                          ? Color.accentColor.opacity(0.65)
-                                          : Color.white.opacity(pinButtonHovered ? 0.75 : 0.32),
-                                          lineWidth: 1)
-                )
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(shelf.isPinned ? Color.accentColor : Color.secondary)
-        .onHover { pinButtonHovered = $0 }
-        .help(shelf.isPinned ? l10n.s.shelfUnpin : l10n.s.shelfPin)
-        .accessibilityLabel(shelf.isPinned ? l10n.s.shelfUnpin : l10n.s.shelfPin)
-    }
-
-    private var closeButton: some View {
-        Button { (onDismiss ?? { shelf.hide() })() } label: {
-            Image(systemName: dismissSystemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(closeButtonHovered ? 0.18 : 0.11))
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(Color.white.opacity(closeButtonHovered ? 0.75 : 0.32), lineWidth: 1)
-                )
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .onHover { closeButtonHovered = $0 }
-        .help(dismissHelp ?? l10n.s.menuClose)
     }
 
     private var bottomBar: some View {
@@ -182,24 +169,15 @@ struct ShelfView: View {
     }
 
     private var clearButton: some View {
-        Button(action: trashAction) {
-            Image(systemName: shelf.selection.isEmpty ? "trash" : "trash.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 42, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.red.opacity(clearButtonHovered ? 0.20 : 0.07))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.red.opacity(clearButtonHovered ? 0.34 : 0.12), lineWidth: 0.8)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        GlassIconButton(systemImage: shelf.selection.isEmpty ? "trash" : "trash.fill",
+                        tint: .red,
+                        helpText: shelf.selection.isEmpty ? l10n.s.shelfClearAll : l10n.s.shelfRemoveSelected,
+                        width: 42,
+                        height: 28,
+                        iconSize: 12,
+                        shape: .rounded(6)) {
+            trashAction()
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(clearButtonHovered ? Color.red.opacity(0.82) : Color.secondary)
-        .onHover { clearButtonHovered = $0 }
-        .help(shelf.selection.isEmpty ? l10n.s.shelfClearAll : l10n.s.shelfRemoveSelected)
     }
 
     private var title: String {

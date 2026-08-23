@@ -54,9 +54,11 @@ enum QuickToolHUD {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .hudGlassBackground(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-        present(AnyView(content), dismissAfter: 1.5)
+        // The panel supplies the fade; the content springs up from slightly
+        // small, so arrival reads as one motion rather than a flat cross-fade.
+        present(AnyView(PoppingIn(content: { content })), dismissAfter: 1.5)
     }
 
     static func showCountdown(_ value: Int) {
@@ -71,7 +73,7 @@ enum QuickToolHUD {
             QuickToolCountdownView(value: value, progress: progress)
         }
         .frame(width: 82, height: 82)
-        .background(.regularMaterial, in: Circle())
+        .hudGlassBackground(in: Circle())
         .padding(12)
 
         present(AnyView(content), dismissAfter: 0.92, windowShadow: false)
@@ -220,6 +222,20 @@ enum QuickToolHUD {
     }
 }
 
+/// Springs its content up from slightly small on first appearance.
+private struct PoppingIn<Content: View>: View {
+    @ViewBuilder var content: () -> Content
+
+    @State private var shown = false
+
+    var body: some View {
+        content()
+            .scaleEffect(shown ? 1 : 0.86)
+            .animation(.spring(response: 0.32, dampingFraction: 0.66), value: shown)
+            .onAppear { shown = true }
+    }
+}
+
 private struct QuickToolCountdownView: View {
     let value: Int
     let progress: CGFloat
@@ -287,6 +303,6 @@ private struct ScrollingCaptureHUDView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .hudGlassBackground(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
