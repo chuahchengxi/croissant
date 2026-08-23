@@ -130,6 +130,7 @@ struct SettingsView: View {
         case .autoQuit: AutoQuitSettings()
         case .uninstaller: UninstallerView()
         case .killProcess: KillProcessView()
+        case .desktopPet: DesktopPetSettings()
         case .urlCleaner: URLCleanerSettings()
         case .cleaner: CleanerSettings()
         case .homebrew: HomebrewSettings()

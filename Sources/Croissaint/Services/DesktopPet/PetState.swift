@@ -1,0 +1,492 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Vorssaint
+
+import Foundation
+import Combine
+import AppKit
+
+struct SpeciesDef: Identifiable {
+    let key: String
+    let name: String
+    let evoIDs: [Int]
+    let tagline: String
+
+    var id: String { key }
+    var displayName: String { name }
+    var baseID: Int { evoIDs[0] }
+    var supportsEvolution: Bool { evoIDs.count > 1 }
+    var spriteIDs: [Int] { evoIDs }
+
+    static func lookup(_ key: String) -> SpeciesDef? {
+        speciesCatalog.first { $0.key == key }
+    }
+}
+
+let speciesCatalog: [SpeciesDef] = [
+    SpeciesDef(key: "dedenne", name: "Dedenne", evoIDs: [702], tagline: "Electric & cheeky"),
+    SpeciesDef(key: "bulbasaur", name: "Bulbasaur", evoIDs: [1, 2, 3], tagline: "Chill starter"),
+    SpeciesDef(key: "charmander", name: "Charmander", evoIDs: [4, 5, 6], tagline: "Fiery & playful"),
+    SpeciesDef(key: "squirtle", name: "Squirtle", evoIDs: [7, 8, 9], tagline: "Cool & curious"),
+    SpeciesDef(key: "pikachu", name: "Pikachu", evoIDs: [25, 26], tagline: "Static surprise"),
+    SpeciesDef(key: "eevee", name: "Eevee", evoIDs: [133], tagline: "Full of potential"),
+    SpeciesDef(key: "jigglypuff", name: "Jigglypuff", evoIDs: [39, 40], tagline: "Sleepy songwriter"),
+    SpeciesDef(key: "psyduck", name: "Psyduck", evoIDs: [54, 55], tagline: "Perpetual headache"),
+    SpeciesDef(key: "meowth", name: "Meowth", evoIDs: [52, 53], tagline: "Coin collector"),
+    SpeciesDef(key: "growlithe", name: "Growlithe", evoIDs: [58, 59], tagline: "Loyal pup"),
+    SpeciesDef(key: "vulpix", name: "Vulpix", evoIDs: [37, 38], tagline: "Six-tailed charm"),
+    SpeciesDef(key: "togepi", name: "Togepi", evoIDs: [175, 176], tagline: "Bundle of joy"),
+    SpeciesDef(key: "slowpoke", name: "Slowpoke", evoIDs: [79, 80], tagline: "Very relaxed"),
+    SpeciesDef(key: "snorlax", name: "Snorlax", evoIDs: [143], tagline: "Professional napper"),
+    SpeciesDef(key: "lapras", name: "Lapras", evoIDs: [131], tagline: "Gentle giant"),
+    SpeciesDef(key: "dratini", name: "Dratini", evoIDs: [147, 148, 149], tagline: "Dragon in waiting"),
+    SpeciesDef(key: "rowlet", name: "Rowlet", evoIDs: [722, 723, 724], tagline: "Leafy little owl")
+]
+
+extension Notification.Name {
+    static let spriteCacheDidUpdate = Notification.Name("PokePal.spriteCacheDidUpdate")
+    static let pokePalCelebrate = Notification.Name("PokePal.celebrate")
+    static let pokePalToast = Notification.Name("PokePal.toast")
+}
+
+enum PetItemKind: String, Codable, CaseIterable {
+    case pokeBall
+    case greatBall
+    case ultraBall
+    case berry
+
+    var displayName: String {
+        switch self {
+        case .pokeBall: return "Poké Ball"
+        case .greatBall: return "Great Ball"
+        case .ultraBall: return "Ultra Ball"
+        case .berry: return "Oran Berry"
+        }
+    }
+}
+
+enum PetMood {
+    case great, okay, sad, critical, sleeping
+
+    var text: String {
+        switch self {
+        case .great:
+            return ["is thriving!", "loves this!", "feels amazing!", "is super happy!"].randomElement()!
+        case .okay:
+            return ["is doing alright.", "is chilling.", "wouldn't mind a snack."].randomElement()!
+        case .sad:
+            return ["is feeling lonely...", "wants attention...", "is getting hungry..."].randomElement()!
+        case .critical:
+            return ["needs help NOW!", "isn't doing so well!", "misses you dearly!"].randomElement()!
+        case .sleeping:
+            return ["is fast asleep. Zzz...", "is dreaming of berries...", "is recharging energy..."].randomElement()!
+        }
+    }
+}
+
+struct PetSnapshot: Codable {
+    var species: String?
+    var name: String = ""
+    var hunger: Double = 80
+    var happiness: Double = 80
+    var energy: Double = 90
+    var xp: Double = 0
+    var sleeping = false
+    var lastTick = Date()
+    var createdAt = Date()
+    var desktopVisible: Bool?
+    var posX: Double?
+    var posY: Double?
+    var caughtCount: Int?
+    var inventory: [String: Int]?
+    var activeBall: String?
+    var coins: Int?
+}
+
+final class PetState: ObservableObject {
+    static let shared = PetState()
+
+    @Published private(set) var snapshot: PetSnapshot
+
+    private(set) var saveURL: URL
+    private var timer: Timer?
+
+    /// Creates the buddy store under the app's own container, carrying over a
+    /// pet raised in the standalone PokePal app when one exists.
+    private static func resolveSaveURL() -> URL {
+        let base = PrivateFileStore.containerURL
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appendingPathComponent("DesktopPet", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("pet.json")
+
+        if !FileManager.default.fileExists(atPath: url.path) {
+            let legacy = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("PokePal/pet.json")
+            if let data = try? Data(contentsOf: legacy) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+        return url
+    }
+
+    init() {
+        saveURL = Self.resolveSaveURL()
+
+        if let data = try? Data(contentsOf: saveURL),
+           let snap = try? JSONDecoder().decode(PetSnapshot.self, from: data) {
+            snapshot = snap
+        } else {
+            snapshot = PetSnapshot()
+        }
+
+        // Dedenne is the default companion.
+        if snapshot.species == nil {
+            snapshot.species = "dedenne"
+            snapshot.name = "Dedenne"
+        }
+
+        // Starter pack for first launch.
+        if snapshot.inventory == nil {
+            snapshot.inventory = [
+                PetItemKind.pokeBall.rawValue: 10,
+                PetItemKind.greatBall.rawValue: 3,
+                PetItemKind.ultraBall.rawValue: 1,
+                PetItemKind.berry.rawValue: 5
+            ]
+        }
+
+        applyOfflineDecay()
+    }
+
+    /// Starts the care simulation. Called by DesktopPetService when the feature
+    /// comes to life, so an uninstalled feature leaves no timers behind.
+    func startClock() {
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+
+        if let key = snapshot.species, let def = SpeciesDef.lookup(key) {
+            SpriteCache.prefetch(ids: def.spriteIDs) { [weak self] in
+                self?.objectWillChange.send()
+            }
+        }
+    }
+
+    /// Stops the simulation and drops the shared instance's timers, so an
+    /// uninstalled or disabled feature costs nothing while it sits idle.
+    func stopClock() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    // MARK: - Derived
+
+    var species: SpeciesDef? {
+        snapshot.species.flatMap { SpeciesDef.lookup($0) }
+    }
+
+    var name: String {
+        get { snapshot.name.isEmpty ? (species?.displayName ?? "") : snapshot.name }
+        set {
+            snapshot.name = newValue
+            save()
+        }
+    }
+
+    var level: Int { min(99, Int(snapshot.xp / 100) + 1) }
+    var levelProgress: Double { (snapshot.xp.truncatingRemainder(dividingBy: 100)) / 100 }
+
+    var stage: Int {
+        guard let s = species else { return 0 }
+        if !s.supportsEvolution { return 0 }
+        return level >= 14 ? 2 : (level >= 6 ? 1 : 0)
+    }
+
+    var dexID: Int? {
+        guard let s = species else { return nil }
+        return s.evoIDs[min(stage, s.evoIDs.count - 1)]
+    }
+
+    var nextEvolutionLevel: Int? {
+        guard species?.supportsEvolution == true else { return nil }
+        return stage == 0 ? 6 : (stage == 1 ? 14 : nil)
+    }
+
+    var mood: PetMood {
+        if snapshot.sleeping { return .sleeping }
+        if snapshot.hunger <= 0 || snapshot.energy <= 0 || snapshot.happiness <= 0 { return .critical }
+        let avg = (snapshot.hunger + snapshot.happiness + snapshot.energy) / 3
+        return avg >= 65 ? .great : (avg >= 35 ? .okay : .sad)
+    }
+
+    // MARK: - Actions
+
+    /// Swap buddy at any time. All account progress (XP, level, items,
+    /// coins, catches) carries over — only the companion changes.
+    func switchTo(_ key: String) {
+        guard let def = SpeciesDef.lookup(key), snapshot.species != key else { return }
+        let fresh = snapshot.species == nil
+        snapshot.species = def.key
+        snapshot.name = def.name
+        if fresh {
+            snapshot.hunger = 85
+            snapshot.happiness = 85
+            snapshot.energy = 95
+            snapshot.xp = 0
+            snapshot.sleeping = false
+        }
+        snapshot.lastTick = Date()
+        save()
+        SpriteCache.prefetch(ids: def.spriteIDs) { [weak self] in
+            self?.objectWillChange.send()
+        }
+        objectWillChange.send()
+    }
+
+    enum FeedOutcome { case ate, full, noBerries }
+
+    func feed() -> FeedOutcome {
+        guard snapshot.species != nil else { return .noBerries }
+        if snapshot.sleeping { snapshot.sleeping = false }
+        guard snapshot.hunger < 99 else { return .full }
+        guard consume(.berry) else { return .noBerries }
+        snapshot.hunger += 26
+        snapshot.happiness += 4
+        snapshot.xp += 5
+        maybeFindItem()
+        normalizeAndSave()
+        return .ate
+    }
+
+    @discardableResult
+    func play() -> Bool {
+        guard snapshot.species != nil else { return false }
+        if snapshot.sleeping { snapshot.sleeping = false }
+        guard snapshot.energy >= 15 else { return false }
+        snapshot.happiness += 22
+        snapshot.energy -= 14
+        snapshot.hunger -= 6
+        snapshot.xp += 5
+        maybeFindItem()
+        normalizeAndSave()
+        return true
+    }
+
+    @discardableResult
+    func pet() -> Bool {
+        guard snapshot.species != nil, !snapshot.sleeping else { return false }
+        snapshot.happiness += 2.5
+        snapshot.xp += 1
+        maybeFindItem()
+        normalizeAndSave()
+        return true
+    }
+
+    func toggleSleep() {
+        guard snapshot.species != nil else { return }
+        snapshot.sleeping.toggle()
+        normalizeAndSave()
+    }
+
+    // MARK: - Inventory
+
+    func count(of kind: PetItemKind) -> Int {
+        snapshot.inventory?[kind.rawValue] ?? 0
+    }
+
+    func addItem(_ kind: PetItemKind, _ amount: Int = 1) {
+        var inv = snapshot.inventory ?? [:]
+        inv[kind.rawValue, default: 0] += amount
+        snapshot.inventory = inv
+        save()
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func consume(_ kind: PetItemKind) -> Bool {
+        guard count(of: kind) > 0 else { return false }
+        var inv = snapshot.inventory ?? [:]
+        inv[kind.rawValue, default: 0] -= 1
+        snapshot.inventory = inv
+        save()
+        objectWillChange.send()
+        return true
+    }
+
+    var activeBall: PetItemKind {
+        PetItemKind(rawValue: snapshot.activeBall ?? "") ?? .pokeBall
+    }
+
+    func setActiveBall(_ kind: PetItemKind) {
+        snapshot.activeBall = kind.rawValue
+        save()
+        objectWillChange.send()
+    }
+
+    /// Small chance to find an item after caring for the buddy.
+    private func maybeFindItem() {
+        guard Double.random(in: 0..<1) < 0.12 else { return }
+        let roll = Double.random(in: 0..<1)
+        let found: PetItemKind
+        switch roll {
+        case ..<0.50: found = .pokeBall
+        case ..<0.80: found = .berry
+        case ..<0.95: found = .greatBall
+        default: found = .ultraBall
+        }
+        addItem(found, 1)
+        NotificationCenter.default.post(
+            name: .pokePalToast, object: nil,
+            userInfo: ["message": "\(name) found a \(found.displayName)!"]
+        )
+    }
+
+    func reset() {
+        snapshot = PetSnapshot()
+        snapshot.species = "dedenne"
+        snapshot.name = "Dedenne"
+        snapshot.inventory = [
+            PetItemKind.pokeBall.rawValue: 10,
+            PetItemKind.greatBall.rawValue: 3,
+            PetItemKind.ultraBall.rawValue: 1,
+            PetItemKind.berry.rawValue: 5
+        ]
+        save()
+        objectWillChange.send()
+    }
+
+    /// Bonus when the buddy successfully fetches an app for you.
+    @discardableResult
+    func rewardFetch() -> Bool {
+        guard snapshot.species != nil else { return false }
+        if snapshot.sleeping { snapshot.sleeping = false }
+        snapshot.happiness += 2
+        snapshot.xp += 3
+        normalizeAndSave()
+        return true
+    }
+
+    var coinBalance: Int { snapshot.coins ?? 0 }
+
+    func addCoins(_ amount: Int) {
+        guard amount > 0 else { return }
+        snapshot.coins = coinBalance + amount
+        save()
+        objectWillChange.send()
+    }
+
+    @discardableResult
+    func spendCoins(_ amount: Int) -> Bool {
+        guard coinBalance >= amount else { return false }
+        snapshot.coins = coinBalance - amount
+        save()
+        objectWillChange.send()
+        return true
+    }
+
+    /// Reward for catching a wild pokemon, plus item drops.
+    @discardableResult
+    func catchReward() -> Bool {
+        guard snapshot.species != nil else { return false }
+        if snapshot.sleeping { snapshot.sleeping = false }
+        snapshot.happiness += 8
+        snapshot.xp += 12
+        snapshot.caughtCount = (snapshot.caughtCount ?? 0) + 1
+        addItem(.pokeBall, 2)
+        addItem(.berry, 1)
+        if Double.random(in: 0..<1) < 0.25 { addItem(.greatBall, 1) }
+        addCoins(20)
+        normalizeAndSave()
+        return true
+    }
+
+    var caught: Int { snapshot.caughtCount ?? 0 }
+
+    // MARK: - Desktop companion
+
+    var desktopVisible: Bool { snapshot.desktopVisible ?? true }
+
+    func setDesktopVisible(_ visible: Bool) {
+        snapshot.desktopVisible = visible
+        save()
+        objectWillChange.send()
+    }
+
+    func desktopPos() -> NSPoint? {
+        guard let x = snapshot.posX, let y = snapshot.posY else { return nil }
+        return NSPoint(x: x, y: y)
+    }
+
+    func setDesktopPos(x: Double, y: Double) {
+        snapshot.posX = x
+        snapshot.posY = y
+        save()
+    }
+
+    // MARK: - Simulation
+
+    private func tick() {
+        guard snapshot.species != nil else { return }
+        let now = Date()
+        let dt = now.timeIntervalSince(snapshot.lastTick)
+        guard dt > 0 else { return }
+        snapshot.lastTick = now
+        let beforeLevel = level
+        apply(dt: dt)
+        snapshot.xp += dt / 60
+        if level > beforeLevel {
+            let reward = 25 * (level - beforeLevel)
+            addCoins(reward)
+            NotificationCenter.default.post(
+                name: .pokePalToast, object: nil,
+                userInfo: ["message": "Level up! +\(reward) coins"]
+            )
+        }
+        if snapshot.sleeping && snapshot.energy >= 100 { snapshot.sleeping = false }
+        normalizeAndSave()
+    }
+
+    private func applyOfflineDecay() {
+        guard snapshot.species != nil else { return }
+        let now = Date()
+        let elapsed = now.timeIntervalSince(snapshot.lastTick)
+        guard elapsed > 1 else { return }
+        apply(dt: min(elapsed, 86400))
+        snapshot.lastTick = now
+        normalizeAndSave()
+    }
+
+    /// Rates per second of wall time.
+    private func apply(dt: TimeInterval) {
+        let h = dt / 3600
+        if snapshot.sleeping {
+            snapshot.energy += 17 * h      // full in ~6h
+            snapshot.hunger -= 4 * h
+            snapshot.happiness -= 1 * h
+        } else {
+            snapshot.hunger -= 8 * h       // empty in ~12h
+            snapshot.happiness -= 5 * h    // empty in ~20h
+            snapshot.energy -= 7 * h       // empty in ~14h
+        }
+    }
+
+    private func normalizeAndSave() {
+        snapshot.hunger = clamp(snapshot.hunger)
+        snapshot.happiness = clamp(snapshot.happiness)
+        snapshot.energy = clamp(snapshot.energy)
+        snapshot.xp = max(0, snapshot.xp)
+        save()
+        objectWillChange.send()
+    }
+
+    private func clamp(_ v: Double) -> Double { min(100, max(0, v)) }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(snapshot) {
+            try? data.write(to: saveURL, options: .atomic)
+        }
+    }
+}

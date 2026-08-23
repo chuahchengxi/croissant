@@ -176,6 +176,7 @@ enum DefaultsKey {
     static let killProcessGroupRelated = "killProcessGroupRelated"
     static let killProcessSortBy = "killProcessSortBy" // cpu | memory | name | pid
     static let killProcessSortAscending = "killProcessSortAscending"
+    static let desktopPetEnabled = "desktopPetEnabled"  // buddy walks the screen while the feature is installed
     static let panelUtilityCleaner = "panelUtilityCleaner"
     static let panelUtilityHomebrew = "panelUtilityHomebrew"
     static let panelUtilityAppUpdates = "panelUtilityAppUpdates"
@@ -219,6 +220,7 @@ enum DefaultsKey {
     static let panelShowUtilities = "panelShowUtilities"
     static let panelShowControls = "panelShowControls"
     static let panelShowToggles = "panelShowToggles"
+    static let panelShowDesktopPet = "panelShowDesktopPet"
     // Quick toggles tab: per-action visibility (the order lives in panelToggleOrder).
     static let panelToggleDarkMode = "panelToggleDarkMode"
     static let panelToggleKeyboardLight = "panelToggleKeyboardLight"
@@ -881,6 +883,9 @@ enum Defaults {
         DefaultsKey.killProcessGroupRelated: true,
         DefaultsKey.killProcessSortBy: "cpu",
         DefaultsKey.killProcessSortAscending: false,
+        // Once the pet feature is installed the buddy shows up right away;
+        // uninstalling in the hub is the way to send it home.
+        DefaultsKey.desktopPetEnabled: true,
         DefaultsKey.panelUtilityCleaner: true,
         DefaultsKey.panelUtilityHomebrew: true,
         DefaultsKey.panelUtilityAppUpdates: true,
@@ -922,6 +927,7 @@ enum Defaults {
         DefaultsKey.panelShowUtilities: true,
         DefaultsKey.panelShowControls: true,
         DefaultsKey.panelShowToggles: true,
+        DefaultsKey.panelShowDesktopPet: true,
         DefaultsKey.panelToggleDarkMode: true,
         DefaultsKey.panelToggleKeyboardLight: true,
         DefaultsKey.panelToggleMicMute: true,

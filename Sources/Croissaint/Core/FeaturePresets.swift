@@ -108,7 +108,9 @@ extension AppFeature {
                 ? .idle : .mouse
         case .clipboardHistory, .urlCleaner, .extraBrightness,
              .monitorCPU, .monitorGPU, .monitorMemory,
-             .monitorNetwork, .monitorDisk, .monitorPower:
+             .monitorNetwork, .monitorDisk, .monitorPower,
+             // The buddy keeps a walk timer ticking while it is out.
+             .desktopPet:
             return .periodic
         case .pastePlain, .mixer, .soundOutputSwitcher, .micMute,
              .musicBlock, .keepAwake, .brightness, .quickLauncher, .quickToggles, .colorPicker,

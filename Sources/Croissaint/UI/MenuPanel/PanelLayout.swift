@@ -11,7 +11,7 @@ protocol PanelOrderItem: RawRepresentable, CaseIterable, Hashable where RawValue
 /// renaming a case would orphan a user's stored layout — keep them stable.
 enum PanelSectionID: String, CaseIterable, Identifiable, Hashable {
     case keepAwake, brightness, mixer, system, network, disk, power, fanControl, utilities, controls,
-         toggles
+         toggles, desktopPet
 
     var id: String { rawValue }
 
@@ -29,6 +29,7 @@ enum PanelSectionID: String, CaseIterable, Identifiable, Hashable {
         case .utilities: return s.utilitiesSection
         case .controls: return s.quickControlsSection
         case .toggles: return FeatureStrings.quickToggles(L10n.shared.language).pageTitle
+        case .desktopPet: return FeatureStrings.desktopPet(L10n.shared.language).pageTitle
         }
     }
 
@@ -45,6 +46,7 @@ enum PanelSectionID: String, CaseIterable, Identifiable, Hashable {
         case .utilities: return "wrench.and.screwdriver.fill"
         case .controls: return "switch.2"
         case .toggles: return "togglepower"
+        case .desktopPet: return "pawprint"
         }
     }
 
@@ -64,6 +66,7 @@ enum PanelSectionID: String, CaseIterable, Identifiable, Hashable {
         case .utilities: return DefaultsKey.panelShowUtilities
         case .controls: return DefaultsKey.panelShowControls
         case .toggles: return DefaultsKey.panelShowToggles
+        case .desktopPet: return DefaultsKey.panelShowDesktopPet
         }
     }
 
@@ -94,6 +97,7 @@ enum PanelSectionID: String, CaseIterable, Identifiable, Hashable {
                                 .shelf, .windowMaximizer, .dockPreview, .keyboardDebounce, .dockClick,
                                 .middleClick, .textSnippets, .superKey, .radialMenu]
         case .toggles: return [.quickToggles, .micMute]
+        case .desktopPet: return [.desktopPet]
         }
     }
 

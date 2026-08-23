@@ -66,6 +66,12 @@ final class FeatureRuntime: ObservableObject {
         replaceAvailable(with: preset.features, enabling: preset.enableKeys)
     }
 
+    /// Lets a service report that its feature came to life outside the usual
+    /// availability path (the desktop pet starts lazily from its own binding).
+    func markLoadedThisSession(_ feature: AppFeature) {
+        loadedThisSession.insert(feature)
+    }
+
     /// Replaces the installed set after the first-run picker. It uses the same
     /// availability layer as the hub, so unselected features disappear without
     /// losing any of their settings.
@@ -222,6 +228,7 @@ final class FeatureRuntime: ObservableObject {
                 FanControlService.shared.syncWithPreferences()
             }
         },
+        .desktopPet: { DesktopPetService.shared.syncWithPreferences() },
     ]
 
     private static func syncMonitor() {

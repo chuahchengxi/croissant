@@ -28,7 +28,7 @@ enum AppFeature: String, CaseIterable {
     // Tools
     case quickLauncher, quickToggles, colorPicker, screenOCR, cleaningMode, mediaTools,
          cleaner, uninstaller, homebrew, appUpdates, screenshot, cameraPreview, radialMenu, scratchpad,
-         commandBar, screenRecorder, killProcess
+         commandBar, screenRecorder, killProcess, desktopPet
     // System monitor, one entry per metric family (temperatures live with
     // their parent metric: CPU temp with CPU, battery temp with power).
     case monitorCPU, monitorGPU, monitorMemory, monitorNetwork, monitorDisk, monitorPower, fanControl
@@ -100,7 +100,7 @@ extension AppFeature {
             return .energyDisplay
         case .quickLauncher, .quickToggles, .colorPicker, .screenOCR, .cleaningMode, .mediaTools,
              .cleaner, .uninstaller, .homebrew, .appUpdates, .screenshot, .cameraPreview, .radialMenu,
-             .scratchpad, .commandBar, .screenRecorder, .killProcess:
+             .scratchpad, .commandBar, .screenRecorder, .killProcess, .desktopPet:
             return .tools
         case .monitorCPU, .monitorGPU, .monitorMemory, .monitorNetwork, .monitorDisk, .monitorPower,
              .fanControl:
@@ -156,6 +156,7 @@ extension AppFeature {
         case .scratchpad: return "note.text"
         case .commandBar: return "command"
         case .killProcess: return "xmark.octagon"
+        case .desktopPet: return "pawprint"
         case .monitorCPU: return "cpu"
         case .monitorGPU: return "rectangle.connected.to.line.below"
         case .monitorMemory: return "memorychip"
@@ -211,6 +212,7 @@ extension AppFeature {
         case .musicBlock: return [DefaultsKey.musicBlockEnabled]
         case .brightness: return [DefaultsKey.brightnessControlEnabled]
         case .extraBrightness: return [DefaultsKey.extraBrightnessEnabled]
+        case .desktopPet: return [DefaultsKey.desktopPetEnabled]
         case .windowLayout, .diskImageInstaller, .mixer, .micMute, .keepAwake,
              .quickLauncher, .quickToggles, .colorPicker, .screenOCR, .cleaningMode, .mediaTools,
              .cleaner, .uninstaller, .homebrew, .appUpdates, .screenshot, .cameraPreview, .scratchpad,
@@ -259,7 +261,10 @@ extension AppFeature {
         case .clipboardHistory, .shelf, .urlCleaner,
              .soundOutputSwitcher, .musicBlock,
              .extraBrightness, .quickLauncher, .colorPicker, .micMute, .mediaTools,
-             .scratchpad, .monitorGPU, .monitorNetwork, .fanControl, .killProcess:
+             .scratchpad, .monitorGPU, .monitorNetwork, .fanControl, .killProcess,
+             // The buddy draws its own floating panels and fetches sprites
+             // over the network; neither needs a system grant.
+             .desktopPet:
             return []
         }
     }
@@ -283,12 +288,14 @@ extension AppFeature {
     }
 
     /// Registered defaults preserve existing features on update. New opt-in
-    /// features and explicit betas ship uninstalled.
+    /// features and explicit betas ship uninstalled. The desktop pet joins
+    /// that list: a buddy appearing uninvited on every existing user's
+    /// desktop would be a surprise, so it waits in the hub.
     static var availabilityDefaults: [String: Any] {
         Dictionary(uniqueKeysWithValues: allCases.map {
             ($0.availabilityKey,
              $0 != .focusFollowsMouse && $0 != .fanControl && $0 != .diskImageInstaller
-                && $0 != .killProcess)
+                && $0 != .killProcess && $0 != .desktopPet)
         })
     }
 

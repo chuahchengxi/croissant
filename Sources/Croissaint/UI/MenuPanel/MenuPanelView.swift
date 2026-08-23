@@ -77,6 +77,7 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.panelShowUtilities) private var showUtilities = true
     @AppStorage(DefaultsKey.panelShowControls) private var showControls = true
     @AppStorage(DefaultsKey.panelShowToggles) private var showToggles = true
+    @AppStorage(DefaultsKey.panelShowDesktopPet) private var showDesktopPet = true
     @AppStorage(DefaultsKey.panelSectionOrder) private var sectionOrderRaw = ""
     @State private var navigableContentHeight: CGFloat = 0
     @State private var metricContentHeight: CGFloat = 0
@@ -264,6 +265,7 @@ struct MenuPanelView: View {
         case .utilities: return 500
         case .controls: return 360
         case .toggles: return 420
+        case .desktopPet: return 560
         }
     }
 
@@ -295,6 +297,7 @@ struct MenuPanelView: View {
         case .utilities: UtilitiesSection(collapsible: collapsible, startCleaning: startCleaning)
         case .controls: QuickControlsSection(collapsible: collapsible)
         case .toggles: QuickTogglesSection(collapsible: collapsible)
+        case .desktopPet: DesktopPetPanelSection(collapsible: collapsible)
         }
     }
 
@@ -314,6 +317,7 @@ struct MenuPanelView: View {
         case .utilities: return showUtilities
         case .controls: return showControls
         case .toggles: return showToggles
+        case .desktopPet: return showDesktopPet
         }
     }
 
