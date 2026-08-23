@@ -39,8 +39,15 @@ openssl req -x509 -newkey rsa:2048 -keyout "$WORK/key.pem" -out "$WORK/cert.pem"
     -addext "keyUsage=critical,digitalSignature" \
     -addext "extendedKeyUsage=critical,codeSigning" \
     -addext "basicConstraints=critical,CA:false" 2>/dev/null
-openssl pkcs12 -export -legacy -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
-    -out "$WORK/id.p12" -passout pass:"$KCPASS" -name "$IDENTITY" 2>/dev/null
+# -legacy exists only in OpenSSL 3 (Homebrew); macOS ships LibreSSL, whose
+# export is already in the legacy format the keychain accepts. Passing the flag
+# there fails the whole script, silently leaving builds ad-hoc signed.
+LEGACY=()
+if openssl pkcs12 -help 2>&1 | grep -q -- '-legacy'; then
+    LEGACY=(-legacy)
+fi
+openssl pkcs12 -export "${LEGACY[@]}" -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
+    -out "$WORK/id.p12" -passout pass:"$KCPASS" -name "$IDENTITY"
 
 security delete-keychain "$KC" 2>/dev/null || true
 security create-keychain -p "$KCPASS" "$KC"

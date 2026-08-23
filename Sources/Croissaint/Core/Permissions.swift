@@ -191,13 +191,44 @@ final class Permissions: ObservableObject {
     /// suitable for frequent polling.
     private func refreshActivePermissions() {
         let ax = AXIsProcessTrusted()
-        let sr = CGPreflightScreenCaptureAccess()
+        let sr = Self.screenRecordingIsGranted()
         DispatchQueue.main.async {
             if self.accessibility != ax { self.accessibility = ax }
             if self.screenRecording != sr { self.screenRecording = sr }
             // A flip can change which cadence applies (e.g. the last grant
             // landed while the app was in the background).
             self.scheduleActivePermissionPolling()
+        }
+    }
+
+    /// Screen Recording, read live. CGPreflightScreenCaptureAccess() answers
+    /// from a cache that is filled once per process, so a grant made while the
+    /// app is running never shows up there — which left every permission
+    /// surface waiting on a value that could not change until the next launch.
+    ///
+    /// Other apps' window titles are the reliable live signal: the window
+    /// server only hands them out with Screen Recording, and it is asked afresh
+    /// on every call. Note the grant still does not reach the capture APIs in
+    /// this process; callers that need to CAPTURE (rather than report state)
+    /// must relaunch, which is what the permission guide does.
+    static func screenRecordingIsGranted() -> Bool {
+        if CGPreflightScreenCaptureAccess() { return true }
+        return canReadOtherAppWindowTitles()
+    }
+
+    /// True when at least one ordinary window belonging to another process
+    /// reports a title. Without Screen Recording the key is simply absent.
+    private static func canReadOtherAppWindowTitles() -> Bool {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        return windows.contains { window in
+            guard let pid = window[kCGWindowOwnerPID as String] as? pid_t, pid != ownPID,
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  let title = window[kCGWindowName as String] as? String else { return false }
+            return !title.isEmpty
         }
     }
 

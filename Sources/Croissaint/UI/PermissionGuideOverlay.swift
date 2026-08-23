@@ -3,6 +3,7 @@
 
 import AppKit
 import Combine
+import CoreGraphics
 import SwiftUI
 
 /// The floating permission guide: a small non-activating card that appears
@@ -82,14 +83,22 @@ final class PermissionGuideOverlay {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 model.granted = true
-                self?.scheduleDismiss()
+                // A Screen Recording grant reaches the capture APIs only in a
+                // fresh process (this one still holds the cached refusal), so
+                // the card's success beat is followed by the same quit-and-
+                // reopen macOS itself offers. Accessibility needs no such trip.
+                let staleCapture = kind == .screenRecording && !CGPreflightScreenCaptureAccess()
+                self?.scheduleDismiss(thenRelaunch: staleCapture)
             }
     }
 
     /// The success beat stays on screen for a moment, then the card leaves.
-    private func scheduleDismiss() {
+    private func scheduleDismiss(thenRelaunch relaunch: Bool = false) {
         dismissWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.dismiss() }
+        let work = DispatchWorkItem { [weak self] in
+            self?.dismiss()
+            if relaunch { appDelegate()?.relaunchApp() }
+        }
         dismissWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
     }
