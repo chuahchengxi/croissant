@@ -1,4 +1,4 @@
-# Contributing to Vorssaint
+# Contributing to Croissaint
 
 Thanks for the interest. This project aims to stay small, native and readable.
 
@@ -13,7 +13,7 @@ under GPL-3.0-or-later.
 git clone https://github.com/vorssaint/vorssaint-utils.git
 cd vorssaint-utils
 ./build.sh                         # build and assemble the bundle
-./build/Vorssaint --selftest       # quick health check (SELFTEST OK)
+./build/Croissaint --selftest       # quick health check (SELFTEST OK)
 ./build.sh --install               # install into /Applications and launch
 ```
 
@@ -35,7 +35,7 @@ Run this once
 ./Tools/setup-signing.sh
 ```
 
-to create a free, self signed identity called `Vorssaint Utils Signing` in a
+to create a free, self signed identity called `Croissaint Utils Signing` in a
 dedicated keychain. `build.sh` then signs local builds with it and gives them a
 constant designated requirement, so granted permissions stick across rebuilds.
 It is a local convenience only and never shows up outside the keychain.
@@ -45,18 +45,18 @@ from the repo secrets `SIGNING_CERT_P12` and `SIGNING_CERT_PASSWORD`, then
 **notarizes** and staples them through `Tools/notarize.sh`, with secrets
 `NOTARY_API_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`, so downloads open
 with no Gatekeeper warning. `build.sh` prefers the Developer ID identity when it
-is present, with the hardened runtime and `Resources/Vorssaint.entitlements`,
+is present, with the hardened runtime and `Resources/Croissaint.entitlements`,
 and falls back to the self signed identity, then to ad hoc.
 
 ## Project layout
 
 | Folder | Role |
 |---|---|
-| `Sources/Vorssaint/App` | App lifecycle and the menu bar status item |
-| `Sources/Vorssaint/Core` | Localization, permissions, UserDefaults keys |
-| `Sources/Vorssaint/Services` | All behavior, like energy, monitor, scroll and switcher |
-| `Sources/Vorssaint/UI` | SwiftUI views only, no business logic |
-| `Sources/Vorssaint/Support` | `--selftest` and `--sensors` diagnostics |
+| `Sources/Croissaint/App` | App lifecycle and the menu bar status item |
+| `Sources/Croissaint/Core` | Localization, permissions, UserDefaults keys |
+| `Sources/Croissaint/Services` | All behavior, like energy, monitor, scroll and switcher |
+| `Sources/Croissaint/UI` | SwiftUI views only, no business logic |
+| `Sources/Croissaint/Support` | `--selftest` and `--sensors` diagnostics |
 | `Tools` | Icon generator and DMG packaging |
 
 A few conventions to keep in mind.
@@ -75,7 +75,7 @@ Every user facing string lives in `Core/Localization.swift` as a field of the
 it, and the compiler is the completeness check, so a translation can never
 silently fall out of sync.
 
-Vorssaint ships eight languages today, namely English, Português (Brasil),
+Croissaint ships eight languages today, namely English, Português (Brasil),
 Español, Deutsch, Français, Italiano, 日本語 and 简体中文. The non base
 translations live in `Core/Localizations/`. To add a language, add a case to
 `AppLanguage` and a `static let` extension of `Strings` with every field
@@ -88,7 +88,7 @@ look like `Tp…` and `Te…`, GPU is `Tg…`, and battery runs from `TB0T` to
 `TB2T`. If a new Apple Silicon generation renames the keys, run this
 
 ```sh
-./build/Vorssaint --sensors
+./build/Croissaint --sensors
 ```
 
 and open a PR with the dump and the adjusted prefixes.
@@ -98,7 +98,7 @@ and open a PR with the dump and the adjusted prefixes.
 You do not need to write code to help. Use the issue forms on the
 [new issue](https://github.com/vorssaint/vorssaint-utils/issues/new/choose) page.
 
-- **Bug report.** Include your Vorssaint version from Settings under About and
+- **Bug report.** Include your Croissaint version from Settings under About and
   your macOS version, plus clear steps to reproduce. The
   [troubleshooting guide](docs/TROUBLESHOOTING.md) explains what makes a report
   useful.

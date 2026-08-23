@@ -12,8 +12,8 @@
 # Usage: ./Tools/ui-smoke.sh [output-dir]
 set -uo pipefail
 
-APP="/Applications/Vorssaint (Developer).app"
-PROCESS="VorssaintDeveloper"
+APP="/Applications/Croissaint (Developer).app"
+PROCESS="CroissaintDeveloper"
 OUT="${1:-$(mktemp -d /tmp/vorss-ui-smoke.XXXXXX)}"
 mkdir -p "$OUT"
 FAILURES=0
@@ -61,7 +61,7 @@ sleep 0.8
 step "Quick panel"
 osascript -e 'tell application "System Events" to keystroke "v" using {control down, command down}' >/dev/null
 sleep 1.5
-QP=$(ax 'get position of window "Vorssaint"')
+QP=$(ax 'get position of window "Croissaint"')
 if [[ -n "${QP:-}" ]]; then
     pass "quick panel window at $QP"
     screencapture -x "$OUT/quick-panel.png"
@@ -76,11 +76,11 @@ ax 'click menu bar item 1 of menu bar 2' >/dev/null
 sleep 1.2
 ax 'click button 9 of group 1 of pop over 1 of menu bar item 1 of menu bar 2' >/dev/null
 sleep 1.5
-SW=$(ax 'get position of window "Vorssaint Settings"')
+SW=$(ax 'get position of window "Croissaint Settings"')
 if [[ -n "${SW:-}" ]]; then
     pass "settings window at $SW"
     screencapture -x "$OUT/settings.png"
-    ax 'click button 1 of window "Vorssaint Settings"' >/dev/null
+    ax 'click button 1 of window "Croissaint Settings"' >/dev/null
 else
     fail "settings window did not open"
 fi

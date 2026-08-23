@@ -1,5 +1,5 @@
 name: "🐛 Bug Report"
-description: Report a bug or unexpected behavior in Vorssaint
+description: Report a bug or unexpected behavior in Croissaint
 title: "[Bug]: "
 labels:
   - bug
@@ -20,7 +20,7 @@ body:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior.
       placeholder: |
-        1. Open Vorssaint
+        1. Open Croissaint
         2. Click on '...'
         3. See error
     validations:
@@ -33,9 +33,9 @@ body:
       description: Add screenshots or recordings if applicable.
 
   - type: input
-    id: vorssaint_version
+    id: croissaint_version
     attributes:
-      label: Vorssaint Version
+      label: Croissaint Version
       description: The number shown in Settings, on the About page.
       placeholder: Copy the number from the About page
     validations:

@@ -1,23 +1,23 @@
 /* macOS Automation permission prompt. */
-"NSAppleEventsUsageDescription" = "Vorssaint verwendet Automatisierung, um Dateien im Finder zu bewegen, Objekte in den Papierkorb zu legen und Terminal-Befehle zu öffnen, wenn du Homebrew-Aktionen anforderst.";
+"NSAppleEventsUsageDescription" = "Croissaint verwendet Automatisierung, um Dateien im Finder zu bewegen, Objekte in den Papierkorb zu legen und Terminal-Befehle zu öffnen, wenn du Homebrew-Aktionen anforderst.";
 
 /* macOS Screen & System Audio Recording permission prompt. */
-"NSAudioCaptureUsageDescription" = "Vorssaint greift nur auf den Ton einzelner Apps zu, um deren Lautstärke im Mixer anzupassen. Es wird nichts aufgezeichnet und nichts verlässt deinen Mac.";
+"NSAudioCaptureUsageDescription" = "Croissaint greift nur auf den Ton einzelner Apps zu, um deren Lautstärke im Mixer anzupassen. Es wird nichts aufgezeichnet und nichts verlässt deinen Mac.";
 
 /* macOS Bluetooth permission prompt. */
-"NSBluetoothAlwaysUsageDescription" = "Vorssaint verwendet Bluetooth nur, um den Akkustand verbundener Peripheriegeräte zu lesen. Nichts verlässt deinen Mac.";
+"NSBluetoothAlwaysUsageDescription" = "Croissaint verwendet Bluetooth nur, um den Akkustand verbundener Peripheriegeräte zu lesen. Nichts verlässt deinen Mac.";
 
 /* macOS Microphone permission prompt. */
-"NSMicrophoneUsageDescription" = "Vorssaint nimmt dein Mikrofon nur auf, wenn du es für eine Bildschirmaufnahme einschaltest. Der Ton bleibt auf deinem Mac, außer du erstellst einen temporären Link.";
+"NSMicrophoneUsageDescription" = "Croissaint nimmt dein Mikrofon nur auf, wenn du es für eine Bildschirmaufnahme einschaltest. Der Ton bleibt auf deinem Mac, außer du erstellst einen temporären Link.";
 
 /* macOS Camera permission prompt. */
-"NSCameraUsageDescription" = "Vorssaint zeigt deine Kamera nur im Vorschaufenster, das du öffnest, damit du vor einem Anruf prüfen kannst, wie du aussiehst. Es wird nichts aufgezeichnet und nichts verlässt deinen Mac.";
+"NSCameraUsageDescription" = "Croissaint zeigt deine Kamera nur im Vorschaufenster, das du öffnest, damit du vor einem Anruf prüfen kannst, wie du aussiehst. Es wird nichts aufgezeichnet und nichts verlässt deinen Mac.";
 
 /* macOS Downloads folder permission prompt. */
-"NSDownloadsFolderUsageDescription" = "Vorssaint prüft lokale Metadaten in Downloads, um nur ausgewählte bestätigte WhatsApp-Dateien zu prüfen, zu organisieren oder in den Papierkorb zu verschieben.";
+"NSDownloadsFolderUsageDescription" = "Croissaint prüft lokale Metadaten in Downloads, um nur ausgewählte bestätigte WhatsApp-Dateien zu prüfen, zu organisieren oder in den Papierkorb zu verschieben.";
 
 /* macOS user-selected organizer destination prompts. */
-"NSDesktopFolderUsageDescription" = "Vorssaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
-"NSDocumentsFolderUsageDescription" = "Vorssaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
-"NSNetworkVolumesUsageDescription" = "Vorssaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
-"NSRemovableVolumesUsageDescription" = "Vorssaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
+"NSDesktopFolderUsageDescription" = "Croissaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
+"NSDocumentsFolderUsageDescription" = "Croissaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
+"NSNetworkVolumesUsageDescription" = "Croissaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";
+"NSRemovableVolumesUsageDescription" = "Croissaint organisiert bestätigte WhatsApp-Downloads in einem Zielordner, den du ausdrücklich auswählst.";

@@ -2,24 +2,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Vorssaint
 
-# Cleanly removes Vorssaint and every piece of system state it created:
+# Cleanly removes Croissaint and every piece of system state it created:
 # the login item, TCC permissions, preferences, saved state and (if present)
 # the password-free closed-lid sudoers rule. Leaves no dead entries behind.
-# Also clears the pre-rename "Vorssaint Utils.app" if it is still around.
+# Also clears the pre-rename "Croissaint Utils.app" if it is still around.
 set -uo pipefail
 
-BUNDLE="com.vorssaint.utils"
-APP="/Applications/Vorssaint.app"
-LEGACY_APP="/Applications/Vorssaint Utils.app"
+BUNDLE="com.croissaint.utils"
+APP="/Applications/Croissaint.app"
+LEGACY_APP="/Applications/Croissaint Utils.app"
 
 echo "▸ Quitting…"
-pkill -x Vorssaint 2>/dev/null || true
-pkill -x VorssaintUtils 2>/dev/null || true
+pkill -x Croissaint 2>/dev/null || true
+pkill -x CroissaintUtils 2>/dev/null || true
 sleep 0.5
 
 # Detach from the system from inside whichever bundle still exists: unregisters
 # the login item (no BTM tombstone) and restores normal sleep.
-for candidate in "$APP/Contents/MacOS/Vorssaint" "$LEGACY_APP/Contents/MacOS/VorssaintUtils"; do
+for candidate in "$APP/Contents/MacOS/Croissaint" "$LEGACY_APP/Contents/MacOS/CroissaintUtils"; do
     if [[ -x "$candidate" ]]; then
         echo "▸ Detaching login item and restoring sleep…"
         "$candidate" --uninstall || true
@@ -36,10 +36,10 @@ defaults delete "$BUNDLE" >/dev/null 2>&1 || true
 rm -f "$HOME/Library/Preferences/$BUNDLE.plist"
 rm -rf "$HOME/Library/Saved Application State/$BUNDLE.savedState"
 
-RULES="/etc/sudoers.d/vorssaint-clamshell /etc/sudoers.d/vorssaint-utils-clamshell /etc/sudoers.d/vorss-clamshell"
+RULES="/etc/sudoers.d/croissaint-clamshell /etc/sudoers.d/vorssaint-utils-clamshell /etc/sudoers.d/vorss-clamshell"
 if ls $RULES >/dev/null 2>&1; then
     echo "▸ Removing closed-lid sudoers rule (asks for your admin password)…"
-    osascript -e "do shell script \"rm -f $RULES\" with administrator privileges with prompt \"Vorssaint uninstaller\"" || true
+    osascript -e "do shell script \"rm -f $RULES\" with administrator privileges with prompt \"Croissaint uninstaller\"" || true
 fi
 
-echo "✓ Vorssaint fully removed."
+echo "✓ Croissaint fully removed."

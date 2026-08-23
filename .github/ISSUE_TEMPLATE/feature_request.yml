@@ -1,5 +1,5 @@
 name: "✨ Feature Request"
-description: Suggest a new feature or improvement for Vorssaint
+description: Suggest a new feature or improvement for Croissaint
 title: "[Feature]: "
 labels:
   - enhancement
@@ -19,7 +19,7 @@ body:
     attributes:
       label: Proposed Solution
       description: Describe the solution you'd like to see.
-      placeholder: It would be great if Vorssaint could...
+      placeholder: It would be great if Croissaint could...
     validations:
       required: true
 

@@ -564,7 +564,7 @@ struct MetricsTests {
                     "org.nspasteboard.ConcealedType",
                     "the secret mark keeps the exact name the apps that write it use")
 
-        let pasteboardAccess = GeneralPasteboardAccess(label: "Vorssaint.Tests.PasteboardAccess")
+        let pasteboardAccess = GeneralPasteboardAccess(label: "Croissaint.Tests.PasteboardAccess")
         let pasteboardGroup = DispatchGroup()
         let pasteboardStateLock = NSLock()
         var activePasteboardOperations = 0
@@ -1009,7 +1009,7 @@ struct MetricsTests {
                "launch, termination and mounted-volume changes refresh registered web handlers")
         expect(MouseNavigationSupport.shouldRefreshWebHandlers(
             isApplicationActivation: true, activatedPID: 41, ownPID: 41),
-               "activating Vorssaint refreshes registered web handlers")
+               "activating Croissaint refreshes registered web handlers")
         expect(!MouseNavigationSupport.shouldRefreshWebHandlers(
             isApplicationActivation: true, activatedPID: 42, ownPID: 41),
                "activating another app does not repeat the handler lookup")
@@ -1457,8 +1457,8 @@ struct MetricsTests {
                "keep awake shortcut defaults to Ctrl+Opt+Cmd+K")
         expect(registeredDefaults[DefaultsKey.keepAwakeIconTint] as? String == KeepAwakeIconTint.orange.rawValue,
                "keep-awake active icon tint defaults to orange")
-        expect(registeredDefaults[DefaultsKey.keepAwakeActiveIcon] as? String == KeepAwakeActiveIcon.vorssaint.rawValue,
-               "keep-awake active icon defaults to the Vorssaint glyph")
+        expect(registeredDefaults[DefaultsKey.keepAwakeActiveIcon] as? String == KeepAwakeActiveIcon.croissaint.rawValue,
+               "keep-awake active icon defaults to the Croissaint glyph")
         expect(registeredDefaults[DefaultsKey.keepAwakeMouseJiggleEnabled] as? Bool == false,
                "Keep Awake mouse movement is opt-in")
         expect(registeredDefaults[DefaultsKey.keepAwakeMouseJiggleInterval] as? Int == 5,
@@ -1473,8 +1473,8 @@ struct MetricsTests {
                "invalid keep-awake active icon tint falls back to orange")
         expect(Defaults.sanitizedKeepAwakeActiveIcon("coffee") == .coffee,
                "valid keep-awake active icon is preserved")
-        expect(Defaults.sanitizedKeepAwakeActiveIcon("bad") == .vorssaint,
-               "invalid keep-awake active icon falls back to the Vorssaint glyph")
+        expect(Defaults.sanitizedKeepAwakeActiveIcon("bad") == .croissaint,
+               "invalid keep-awake active icon falls back to the Croissaint glyph")
         expect(KeepAwakeActiveIcon.eye.systemSymbolName == "eye.fill",
                "keep-awake eye option maps to its menu bar symbol")
         expect(!KeepAwakeAutomationSupport.hasExternalDisplay(builtInFlags: []),
@@ -2172,7 +2172,7 @@ struct MetricsTests {
         // title both over the thumbnail and under it. In a panel every card
         // belongs to one app, so both said the same thing once per window.
         let dockPreviewCardSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/UI/Switcher/DockPreviewPanelView.swift",
+            contentsOfFile: "Sources/Croissaint/UI/Switcher/DockPreviewPanelView.swift",
             encoding: .utf8)) ?? ""
         expect(dockPreviewCardSource.components(separatedBy: "Text(window.displayTitle)").count - 1 == 1,
                "a Dock Preview card names its window once")
@@ -3286,7 +3286,7 @@ struct MetricsTests {
         expect(CleanerSupport.isProtectedBundleID("com.apple.Music")
                && CleanerSupport.isProtectedBundleID("com.apple")
                && CleanerSupport.isProtectedBundleID("group.com.apple.notes")
-               && CleanerSupport.isProtectedBundleID("com.vorssaint.utils"),
+               && CleanerSupport.isProtectedBundleID("com.croissaint.utils"),
                "system domains and this app can never be junk owners")
         expect(!CleanerSupport.isProtectedBundleID("com.vendor.editor"),
                "third party identifiers are eligible for the leftover check")
@@ -3297,7 +3297,7 @@ struct MetricsTests {
                && UninstallerSupport.verifiedBundleID("") == nil
                && UninstallerSupport.verifiedBundleID("plain-name") == nil
                && UninstallerSupport.verifiedBundleID("com.vendor../escape") == nil
-               && UninstallerSupport.verifiedBundleID("com.vorssaint.utils") == nil
+               && UninstallerSupport.verifiedBundleID("com.croissaint.utils") == nil
                && UninstallerSupport.verifiedBundleID("com.apple.system") == nil,
                "malformed, protected and current app identifiers never enter uninstall paths")
         let uninstallAppURL = URL(fileURLWithPath: "/Applications/Editor.app")
@@ -3545,7 +3545,7 @@ struct MetricsTests {
             exceptions: ["com.example.unrelated"]
         ), "AutoQuit does not protect a generated guest app without its host exception")
         let outerApp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VorssaintAutoQuitTests-\(UUID().uuidString)")
+            .appendingPathComponent("CroissaintAutoQuitTests-\(UUID().uuidString)")
             .appendingPathComponent("Container.app")
         let nestedApp = outerApp.appendingPathComponent("Contents/MacOS/WindowHost.app")
         try? FileManager.default.createDirectory(at: nestedApp.appendingPathComponent("Contents"),
@@ -4517,7 +4517,7 @@ struct MetricsTests {
                && sanitizedProfiles[0].id != sanitizedProfiles[1].id,
                "Image profiles sanitize empty names and duplicate IDs")
         let uniqueDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vorssaint-media-unique-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("croissaint-media-unique-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: uniqueDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: uniqueDir) }
         let firstImageOutput = MediaSupport.uniqueOutputURL(in: uniqueDir, baseName: "Export", fileExtension: "png")
@@ -4678,7 +4678,7 @@ struct MetricsTests {
                == "/tmp/Output.gif",
                "Media GIF output falls back when the visible source name is empty")
         let mediaVisibilityDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vorssaint-media-visibility-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("croissaint-media-visibility-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: mediaVisibilityDir,
                                                  withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: mediaVisibilityDir) }
@@ -6576,13 +6576,13 @@ struct MetricsTests {
         expect(UpdateInstallerSupport.installFailureCode(fromMarker: "") == nil,
                "an empty marker is not a failure")
         expect(UpdateInstallerSupport.runsFromImmutableLocation(
-                   appPath: "/private/var/folders/ab/xyz/T/AppTranslocation/1F2/d/Vorssaint.app",
+                   appPath: "/private/var/folders/ab/xyz/T/AppTranslocation/1F2/d/Croissaint.app",
                    volumeIsReadOnly: { _ in false }),
                "translocated apps are flagged as not updatable in place")
-        expect(UpdateInstallerSupport.runsFromImmutableLocation(appPath: "/Volumes/Vorssaint/Vorssaint.app",
+        expect(UpdateInstallerSupport.runsFromImmutableLocation(appPath: "/Volumes/Croissaint/Croissaint.app",
                                                                 volumeIsReadOnly: { _ in true }),
                "apps on a read-only volume (the DMG) are flagged as not updatable in place")
-        expect(!UpdateInstallerSupport.runsFromImmutableLocation(appPath: "/Volumes/ExternalSSD/Vorssaint.app",
+        expect(!UpdateInstallerSupport.runsFromImmutableLocation(appPath: "/Volumes/ExternalSSD/Croissaint.app",
                                                                  volumeIsReadOnly: { _ in false }),
                "apps on a writable external volume stay updatable in place")
         let installerScript = UpdateInstallerSupport.installerScript()
@@ -6607,14 +6607,14 @@ struct MetricsTests {
                 && !installerScript.contains("note() { /bin/echo \"$1\" > \"$RESULT.progress\""),
                "elevated marker writes drop to the original user's credentials")
         let elevated = UpdateInstallerSupport.elevatedInstallCommand(
-            appPath: "/Applications/Vorssaint.app",
-            dmgPath: "/tmp/Vorssaint-update.dmg",
+            appPath: "/Applications/Croissaint.app",
+            dmgPath: "/tmp/Croissaint-update.dmg",
             pid: 123,
             resultPath: "/tmp/result",
             uid: 501)
         expect(elevated.contains("nohup") && elevated.hasSuffix("&"),
                "elevated installer detaches so the app can quit")
-        expect(elevated.contains("'/Applications/Vorssaint.app'"),
+        expect(elevated.contains("'/Applications/Croissaint.app'"),
                "elevated installer passes the app path quoted for the shell")
 
         // MARK: - UpdateServiceSupport & SemVer channel reconciliation
@@ -6652,8 +6652,8 @@ struct MetricsTests {
                "beta is not newer than the released final version")
 
         // Release candidate selection
-        let dummyDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4/Vorssaint.dmg")!
-        let dummyBetaDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4-beta.1/Vorssaint.dmg")!
+        let dummyDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4/Croissaint.dmg")!
+        let dummyBetaDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4-beta.1/Croissaint.dmg")!
 
         let candidateList = [
             UpdateServiceSupport.ReleaseCandidate(tagName: "v3.3.4-beta.1", isPrerelease: true, isDraft: false, dmgURL: dummyBetaDMG, dmgExpectedBytes: 1000, body: "Beta notes"),
@@ -6674,8 +6674,8 @@ struct MetricsTests {
         expect(Defaults.registeredDefaults[DefaultsKey.includeBetaUpdates] as? Bool == false,
                "includeBetaUpdates defaults to false in registeredDefaults")
 
-        let testDefaults = UserDefaults(suiteName: "VorssaintTests.BetaActivation")!
-        testDefaults.removePersistentDomain(forName: "VorssaintTests.BetaActivation")
+        let testDefaults = UserDefaults(suiteName: "CroissaintTests.BetaActivation")!
+        testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
         Defaults.activateBetaChannelIfRunningBeta(in: testDefaults, version: "3.3.3-beta.1")
         expect(testDefaults.bool(forKey: DefaultsKey.includeBetaUpdates) == true,
                "beta channel is activated automatically on a beta build")
@@ -6685,13 +6685,13 @@ struct MetricsTests {
                "manual opt-out on a beta build is preserved across launches")
 
         // Stable version does not activate beta channel
-        let stableDefaults = UserDefaults(suiteName: "VorssaintTests.StableActivation")!
-        stableDefaults.removePersistentDomain(forName: "VorssaintTests.StableActivation")
+        let stableDefaults = UserDefaults(suiteName: "CroissaintTests.StableActivation")!
+        stableDefaults.removePersistentDomain(forName: "CroissaintTests.StableActivation")
         Defaults.activateBetaChannelIfRunningBeta(in: stableDefaults, version: "3.3.3")
         expect(stableDefaults.object(forKey: DefaultsKey.includeBetaUpdates) == nil,
                "stable release does not touch beta channel default")
-        stableDefaults.removePersistentDomain(forName: "VorssaintTests.StableActivation")
-        testDefaults.removePersistentDomain(forName: "VorssaintTests.BetaActivation")
+        stableDefaults.removePersistentDomain(forName: "CroissaintTests.StableActivation")
+        testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
 
         // Localization completeness & formatting
         for language in AppLanguage.allCases {
@@ -7155,7 +7155,7 @@ struct MetricsTests {
         // rather than the bare call it replaced. Asserted positively: the call
         // it must not use is named in the doc comment right above it.
         let dockClickSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/Services/DockClick/DockClickService.swift",
+            contentsOfFile: "Sources/Croissaint/Services/DockClick/DockClickService.swift",
             encoding: .utf8)) ?? ""
         expect(dockClickSource.contains("NSApp.yieldActivation(to: app)"),
                "a Dock click restore yields this app's activation first")
@@ -7340,8 +7340,8 @@ struct MetricsTests {
                "a click after hiding lets the Dock bring the app back")
         expect(DockClickSupport.repeatDecision(lastAction: .hide, elapsed: 0.1) == .swallow,
                "an accidental double-click never hides and immediately reopens the app")
-        expect(DockClickSupport.isOwnBundleIdentifier("com.vorssaint.utils")
-                && DockClickSupport.isOwnBundleIdentifier("com.vorssaint.utils.dev")
+        expect(DockClickSupport.isOwnBundleIdentifier("com.croissaint.utils")
+                && DockClickSupport.isOwnBundleIdentifier("com.croissaint.utils.dev")
                 && !DockClickSupport.isOwnBundleIdentifier("com.example.editor")
                 && !DockClickSupport.isOwnBundleIdentifier(nil),
                "Dock clicks never target either build of this app")
@@ -8394,7 +8394,7 @@ struct MetricsTests {
                "App Switcher does not swallow middle-mouse-up outside panel")
         let searchRecords = [
             SwitcherSearchRecord(id: "alpha", title: "Inbox", appName: "Alpha"),
-            SwitcherSearchRecord(id: "beta", title: "Vorssaint Roadmap", appName: "Beta"),
+            SwitcherSearchRecord(id: "beta", title: "Croissaint Roadmap", appName: "Beta"),
             SwitcherSearchRecord(id: "gamma", title: "Café notes", appName: "Gamma"),
         ]
         expect(SwitcherSupport.filteredSearchIDs(records: searchRecords, query: "") == ["alpha", "beta", "gamma"],
@@ -8477,7 +8477,7 @@ struct MetricsTests {
         ### Fixed
         - Update preview stays focused on changes.
 
-        Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Vorssaint to Applications.
+        Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications.
         """
         let inAppUpdateBody = ReleaseNotes.inAppUpdateNotes(from: githubReleaseBodyWithFooter) ?? ""
         expect(!inAppUpdateBody.contains("Signed with an Apple Developer ID"),
@@ -8514,7 +8514,7 @@ struct MetricsTests {
         // them did nothing. The hint has to travel as `prompt:` and the label
         // has to stay empty for the field to own its whole row.
         let urlCleanerSettingsSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/UI/Settings/URLCleanerSettings.swift",
+            contentsOfFile: "Sources/Croissaint/UI/Settings/URLCleanerSettings.swift",
             encoding: .utf8)) ?? ""
         expect(urlCleanerSettingsSource.contains("prompt: Text(l10n.s.urlCleanerCustomPlaceholder)")
                 && urlCleanerSettingsSource.contains("prompt: Text(l10n.s.urlCleanerInputPlaceholder)"),
@@ -9091,7 +9091,7 @@ struct MetricsTests {
         expect(bundleLocalizations.contains("tr"), "Info.plist declares Turkish as a bundle localization")
         expect(bundleLocalizations.contains("ko"), "Info.plist declares Korean as a bundle localization")
         let baseAudioPrompt = infoPlist?["NSAudioCaptureUsageDescription"] as? String ?? ""
-        expect(baseAudioPrompt.contains("Vorssaint taps individual app audio"),
+        expect(baseAudioPrompt.contains("Croissaint taps individual app audio"),
                "base audio permission prompt is an English fallback")
         let organizerFolderPromptKeys = [
             "NSDesktopFolderUsageDescription", "NSDocumentsFolderUsageDescription",
@@ -9567,7 +9567,7 @@ struct MetricsTests {
             "appManagement",
         ], "permission portal contains every supported permission")
         let onboardingViewSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/UI/Onboarding/OnboardingView.swift",
+            contentsOfFile: "Sources/Croissaint/UI/Onboarding/OnboardingView.swift",
             encoding: .utf8)) ?? ""
         let additionalPermissionsAlignment =
             #"DisclosureGroup\(isExpanded: \$showingOtherPermissions\) \{\s+"#
@@ -9887,7 +9887,7 @@ struct MetricsTests {
                 && decodedLegacyFanSnapshot?.temperatures == nil,
                "fan snapshots remain compatible with an older installed helper")
 
-        let fanMigrationSuite = "com.vorssaint.tests.fan-migration.\(UUID().uuidString)"
+        let fanMigrationSuite = "com.croissaint.tests.fan-migration.\(UUID().uuidString)"
         if let fanMigration = UserDefaults(suiteName: fanMigrationSuite) {
             fanMigration.set(true, forKey: DefaultsKey.monitorShowFanControlBeta)
             Defaults.migrateFanControlVisibility(in: fanMigration)
@@ -10259,7 +10259,7 @@ struct MetricsTests {
                "WindowServer is protected")
         expect(KillProcessSupport.isProtected(pid: 9999, name: "loginwindow", path: "/System/Library/CoreServices/loginwindow.app/Contents/MacOS/loginwindow"),
                "loginwindow is protected")
-        expect(KillProcessSupport.isProtected(pid: ProcessInfo.processInfo.processIdentifier, name: "Vorssaint"),
+        expect(KillProcessSupport.isProtected(pid: ProcessInfo.processInfo.processIdentifier, name: "Croissaint"),
                "current app PID is protected")
         expect(!KillProcessSupport.isProtected(pid: 12345, name: "Safari", path: "/Applications/Safari.app/Contents/MacOS/Safari"),
                "ordinary user app is not protected")
@@ -10423,7 +10423,7 @@ struct MetricsTests {
                    !$0.permissions.contains(.accessibility)
                },
                "battery and quiet needs no accessibility permission at all")
-        let firstRunSuiteName = "com.vorssaint.tests.first-run.\(UUID().uuidString)"
+        let firstRunSuiteName = "com.croissaint.tests.first-run.\(UUID().uuidString)"
         if let firstRunDefaults = UserDefaults(suiteName: firstRunSuiteName) {
             firstRunDefaults.register(defaults: AppFeature.availabilityDefaults)
             FeaturePreset.prepareFirstRunAvailability(in: firstRunDefaults)
@@ -11396,46 +11396,46 @@ struct MetricsTests {
 
         let ownScreenshotWindows: Set<CGWindowID> = [11, 12, 13]
         let protectedScreenshotWindows: Set<CGWindowID> = [12, 99]
-        expect(Defaults.registeredDefaults[DefaultsKey.screenshotHideVorssaintWindows]
+        expect(Defaults.registeredDefaults[DefaultsKey.screenshotHideCroissaintWindows]
                 as? Bool == true,
-               "screenshots hide Vorssaint windows by default")
+               "screenshots hide Croissaint windows by default")
         expect(SettingsBackupSupport.exportKeys().contains(
-            DefaultsKey.screenshotHideVorssaintWindows),
+            DefaultsKey.screenshotHideCroissaintWindows),
                "the screenshot window visibility preference travels in backups")
         expect(ScreenshotCapturePolicy.excludedWindowIDs(
-            hideVorssaintWindows: true,
+            hideCroissaintWindows: true,
             ownWindowIDs: ownScreenshotWindows,
             protectedWindowIDs: protectedScreenshotWindows
         ) == ownScreenshotWindows,
-        "screenshot hiding Vorssaint excludes every own window")
+        "screenshot hiding Croissaint excludes every own window")
         expect(ScreenshotCapturePolicy.excludedWindowIDs(
-            hideVorssaintWindows: false,
+            hideCroissaintWindows: false,
             ownWindowIDs: ownScreenshotWindows,
             protectedWindowIDs: protectedScreenshotWindows
         ) == [12],
-        "screenshot keeps protected windows excluded while Vorssaint is visible")
+        "screenshot keeps protected windows excluded while Croissaint is visible")
         expect(ScreenshotCapturePolicy.canPickWindow(
             7,
             isOwnWindow: false,
-            hideVorssaintWindows: true,
+            hideCroissaintWindows: true,
             protectedWindowIDs: protectedScreenshotWindows
         ), "screenshot can always pick an ordinary external window")
         expect(!ScreenshotCapturePolicy.canPickWindow(
             11,
             isOwnWindow: true,
-            hideVorssaintWindows: true,
+            hideCroissaintWindows: true,
             protectedWindowIDs: protectedScreenshotWindows
-        ), "screenshot cannot pick a Vorssaint window while hiding them")
+        ), "screenshot cannot pick a Croissaint window while hiding them")
         expect(ScreenshotCapturePolicy.canPickWindow(
             11,
             isOwnWindow: true,
-            hideVorssaintWindows: false,
+            hideCroissaintWindows: false,
             protectedWindowIDs: protectedScreenshotWindows
-        ), "screenshot can pick an ordinary Vorssaint window when visible")
+        ), "screenshot can pick an ordinary Croissaint window when visible")
         expect(!ScreenshotCapturePolicy.canPickWindow(
             12,
             isOwnWindow: true,
-            hideVorssaintWindows: false,
+            hideCroissaintWindows: false,
             protectedWindowIDs: protectedScreenshotWindows
         ), "screenshot cannot pick its own protected capture UI")
 
@@ -11830,25 +11830,25 @@ struct MetricsTests {
             for: .screenshot,
             screenshotFreeze: false,
             screenshotIncludePointer: true,
-            screenshotHideVorssaintWindows: true)
+            screenshotHideCroissaintWindows: true)
         let recorderPolicy = ScreenshotSupport.unifiedCapturePolicy(
             for: .recording,
             screenshotFreeze: false,
             screenshotIncludePointer: true,
-            screenshotHideVorssaintWindows: true)
+            screenshotHideCroissaintWindows: true)
         let textPolicy = ScreenshotSupport.unifiedCapturePolicy(
             for: .text,
             screenshotFreeze: false,
             screenshotIncludePointer: true,
-            screenshotHideVorssaintWindows: true)
+            screenshotHideCroissaintWindows: true)
         expect(liveScreenshotPolicy == .init(freeze: false, includePointer: true,
-                                             hideVorssaintWindows: true,
+                                             hideCroissaintWindows: true,
                                              usesGeometry: false)
                 && recorderPolicy == .init(freeze: true, includePointer: false,
-                                           hideVorssaintWindows: false,
+                                           hideCroissaintWindows: false,
                                            usesGeometry: true)
                 && textPolicy == .init(freeze: true, includePointer: false,
-                                       hideVorssaintWindows: true,
+                                       hideCroissaintWindows: true,
                                        usesGeometry: false),
                "switching capture mode rebuilds the frozen frame, pointer and window policy")
         expect(ScreenshotSupport.captureGuideIsVisible(pointerOnDisplay: true,
@@ -11865,7 +11865,7 @@ struct MetricsTests {
                                                             capturePending: false),
                "the capture chooser disappears for the whole drag and while capture is pending")
         let captureSelectionSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/Services/QuickTools/ScreenshotSelectionController.swift",
+            contentsOfFile: "Sources/Croissaint/Services/QuickTools/ScreenshotSelectionController.swift",
             encoding: .utf8)) ?? ""
         expect(captureSelectionSource.contains(
             "override func mouseExited(with event: NSEvent) {\n        refreshGuideVisibility()"),
@@ -12380,7 +12380,7 @@ struct MetricsTests {
             developerOverride: "https://test.example/")
         expect(testShareEndpoint.absoluteString == "https://test.example"
                 && ScreenshotSharingSupport.endpoint(
-                    bundleIdentifier: "com.vorssaint.utils",
+                    bundleIdentifier: "com.croissaint.utils",
                     developerOverride: "https://test.example").absoluteString
                     == ScreenshotSharingSupport.productionEndpoint.absoluteString
                 && ScreenshotSharingSupport.endpoint(
@@ -12490,7 +12490,7 @@ struct MetricsTests {
                 && GlobalShortcutRole.scratchpad.feature == .scratchpad,
                "the scratchpad shortcut role gates on its toggle and feature")
         let scratchpadViewSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/UI/Scratchpad/ScratchpadView.swift",
+            contentsOfFile: "Sources/Croissaint/UI/Scratchpad/ScratchpadView.swift",
             encoding: .utf8)) ?? ""
         let scratchpadHitTargetContracts = [
             "Image(systemName: \"plus\")\n                    .font(.system(size: 12, weight: .semibold))\n                    .frame(width: 22, height: 22)\n                    .contentShape(Rectangle())",
@@ -12658,7 +12658,7 @@ struct MetricsTests {
 
         // Muting every microphone, not just the one the Mac is set to: an app
         // pointed at a device of its own has to go silent too.
-        expect(MicMuteSupport.isOwnDevice(name: "Vorssaint Mixer")
+        expect(MicMuteSupport.isOwnDevice(name: "Croissaint Mixer")
                 && !MicMuteSupport.isOwnDevice(name: "MacBook Air Microphone"),
                "the mute skips the app's own mixing device and no other")
         expect(!MicMuteSupport.shouldSaveVolume(nil)
@@ -13836,7 +13836,7 @@ struct MetricsTests {
             ignoredTokens: ["vorssaint"],
             apps: [])
         expect(ownPackageRows.isEmpty,
-               "the app update list never offers to replace Vorssaint through its own package")
+               "the app update list never offers to replace Croissaint through its own package")
 
         let storeApps = [
             AppUpdatesSupport.InstalledApp(name: "Blocker", bundleID: "net.example.blocker",
@@ -14647,10 +14647,10 @@ struct MetricsTests {
         expect(Defaults.registeredDefaults[DefaultsKey.panelUtilityScreenRecorder] as? Bool == true,
                "the screen recorder panel tile ships visible like its siblings")
         let quickLauncherServiceSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/Services/QuickTools/QuickLauncherService.swift",
+            contentsOfFile: "Sources/Croissaint/Services/QuickTools/QuickLauncherService.swift",
             encoding: .utf8)) ?? ""
         let quickLauncherViewSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/UI/QuickLauncher/QuickLauncherView.swift",
+            contentsOfFile: "Sources/Croissaint/UI/QuickLauncher/QuickLauncherView.swift",
             encoding: .utf8)) ?? ""
         expect(quickLauncherServiceSource.contains("case .screenRecorder: return .screenRecorder")
                 && quickLauncherServiceSource.contains("ScreenRecorderService.shared.toggle()")
@@ -14668,7 +14668,7 @@ struct MetricsTests {
                 && !extraCloseNeedsDemotion && windowRetention.count == 0,
                "user-facing windows share one balanced app activation lifetime")
         let appDelegateSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/App/AppDelegate.swift",
+            contentsOfFile: "Sources/Croissaint/App/AppDelegate.swift",
             encoding: .utf8)) ?? ""
         expect(appDelegateSource.contains("if !settingsKeepsAppRegular {")
                 && appDelegateSource.contains("WindowActivationPolicy.retain()")
@@ -14879,7 +14879,7 @@ struct MetricsTests {
                "a recording being written right now has no file yet and is left alone")
 
         let directSaveRoot = FileManager.default.temporaryDirectory
-            .appendingPathComponent("vorssaint-recorder-save-\(UUID().uuidString)",
+            .appendingPathComponent("croissaint-recorder-save-\(UUID().uuidString)",
                                     isDirectory: true)
         try? FileManager.default.createDirectory(at: directSaveRoot,
                                                  withIntermediateDirectories: true)
@@ -15822,10 +15822,10 @@ struct MetricsTests {
         expect(CommandBarLinks.expand("https://x.com/{clipboard}", kind: .link,
                                       clipboard: "a+b") == "https://x.com/a%2Bb",
                "a plus sign inside a search is escaped, not read as a space")
-        expect(CommandBarLinks.trailingArgument(query: "gh vorssaint utils", name: "gh")
-                == "vorssaint utils",
+        expect(CommandBarLinks.trailingArgument(query: "gh croissaint utils", name: "gh")
+                == "croissaint utils",
                "what comes after the name is what the saved search opens with")
-        expect(CommandBarLinks.trailingArgument(query: "GH Vorssaint", name: "gh") == "Vorssaint",
+        expect(CommandBarLinks.trailingArgument(query: "GH Croissaint", name: "gh") == "Croissaint",
                "the name is matched without case; the argument keeps its own")
         expect(CommandBarLinks.trailingArgument(query: "ghost writer", name: "gh") == nil
                 && CommandBarLinks.trailingArgument(query: "gh", name: "gh") == nil,
@@ -15874,8 +15874,8 @@ struct MetricsTests {
         expect(CommandBarLinks.revealPath(for: CommandBarLink(name: "day", kind: .place,
                                                               destination: "~/Notes/{date}.md")) == nil,
                "a place still holding a placeholder is a different file every time it runs")
-        expect(CommandBarLinks.rankingTitle(name: "gh", query: "gh vorssaint utils")
-                == "gh vorssaint utils",
+        expect(CommandBarLinks.rankingTitle(name: "gh", query: "gh croissaint utils")
+                == "gh croissaint utils",
                "once an argument follows the name, the row is scored against the whole query")
         expect(CommandBarLinks.rankingTitle(name: "gh", query: "gh") == "gh",
                "the name alone still scores against its own name")
@@ -15885,10 +15885,10 @@ struct MetricsTests {
         // the list on the first word of the argument, which is the moment it
         // was about to run.
         expect(CommandBarSearch.score(title: "gh", keywords: "Link",
-                                      query: "gh vorssaint utils") == nil
+                                      query: "gh croissaint utils") == nil
                 && CommandBarSearch.score(
-                    title: CommandBarLinks.rankingTitle(name: "gh", query: "gh vorssaint utils"),
-                    keywords: "Link", query: "gh vorssaint utils") != nil,
+                    title: CommandBarLinks.rankingTitle(name: "gh", query: "gh croissaint utils"),
+                    keywords: "Link", query: "gh croissaint utils") != nil,
                "a saved search stays in the list while what to look for is typed")
 
         expect(CommandBarLink.Kind.script.symbolName == "terminal",

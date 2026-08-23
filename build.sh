@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Vorssaint
 
-# Builds Vorssaint, assembles the .app bundle, signs it and (with --install)
+# Builds Croissaint, assembles the .app bundle, signs it and (with --install)
 # installs it into /Applications.
 #
 # The bundle is staged in a temporary directory outside ~/Documents: folders synced
@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# Flags: --dev builds the local-only "Vorssaint (Developer)" variant (its own
+# Flags: --dev builds the local-only "Croissaint (Developer)" variant (its own
 # bundle id, so it coexists with the official app); --install puts it in /Applications.
 DEV=0
 INSTALL=0
@@ -24,24 +24,24 @@ for arg in "$@"; do
 done
 
 if (( DEV )); then
-    APP_NAME="Vorssaint (Developer)"
-    EXECUTABLE="VorssaintDeveloper"
-    APP_BUNDLE_ID="com.vorssaint.utils.dev"
-    BUILD_VARIANT_FLAGS=(-D VORSSAINT_DEVELOPMENT)
+    APP_NAME="Croissaint (Developer)"
+    EXECUTABLE="CroissaintDeveloper"
+    APP_BUNDLE_ID="com.croissaint.utils.dev"
+    BUILD_VARIANT_FLAGS=(-D CROISSAINT_DEVELOPMENT)
     APP_OPTIMIZATION_FLAGS=(-Onone)
     BUILD_CONFIGURATION="debug"
 else
-    APP_NAME="Vorssaint"
-    EXECUTABLE="Vorssaint"
-    APP_BUNDLE_ID="com.vorssaint.utils"
+    APP_NAME="Croissaint"
+    EXECUTABLE="Croissaint"
+    APP_BUNDLE_ID="com.croissaint.utils"
     BUILD_VARIANT_FLAGS=()
     APP_OPTIMIZATION_FLAGS=(-O)
     BUILD_CONFIGURATION="release"
 fi
 FAN_HELPER_ID="$APP_BUNDLE_ID.fan-control"
 TARGET="arm64-apple-macosx14.0"
-ENTITLEMENTS="Resources/Vorssaint.entitlements"
-LEGACY_IDENTITY="Vorssaint Utils Signing"
+ENTITLEMENTS="Resources/Croissaint.entitlements"
+LEGACY_IDENTITY="Croissaint Utils Signing"
 
 developer_id_identity() {
     security find-identity -v -p codesigning 2>/dev/null \
@@ -115,8 +115,8 @@ finalize_installed_bundle_after_child() {
     echo "✓ Signature ready: $bundle"
 }
 
-if (( INSTALL && ! TEST )) && [[ "${VORSSAINT_INSTALL_CHILD:-0}" != "1" ]]; then
-    VORSSAINT_INSTALL_CHILD=1 "$0" "$@"
+if (( INSTALL && ! TEST )) && [[ "${CROISSAINT_INSTALL_CHILD:-0}" != "1" ]]; then
+    CROISSAINT_INSTALL_CHILD=1 "$0" "$@"
     child_status=$?
     if (( child_status != 0 )); then
         exit "$child_status"
@@ -152,151 +152,151 @@ if (( TEST )); then
     # Unit assertions do not need optimization; avoiding it cuts most of the
     # test harness compile time without reducing the code the tests exercise.
     swiftc -Onone -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" \
-        Sources/Vorssaint/Services/Media/MediaSupport.swift \
-        Sources/Vorssaint/Core/Defaults.swift \
-        Sources/Vorssaint/Core/FeatureCatalog.swift \
-        Sources/Vorssaint/Core/FeaturePresets.swift \
-        Sources/Vorssaint/Core/FeatureHubStrings.swift \
-        Sources/Vorssaint/Core/ShortcutSettingsStrings.swift \
-        Sources/Vorssaint/Core/SettingsBackupSupport.swift \
-        Sources/Vorssaint/Core/BackupStrings.swift \
-        Sources/Vorssaint/Core/SnippetStrings.swift \
-        Sources/Vorssaint/Core/BrightnessStrings.swift \
-        Sources/Vorssaint/Core/MediaImageStrings.swift \
-        Sources/Vorssaint/Core/QuickToggleStrings.swift \
-        Sources/Vorssaint/Core/ScreenshotStrings.swift \
-        Sources/Vorssaint/Core/RecentCaptureStrings.swift \
-        Sources/Vorssaint/Core/RecorderStrings.swift \
-        Sources/Vorssaint/Core/RecorderShareStrings.swift \
-        Sources/Vorssaint/Core/CameraPreviewStrings.swift \
-        Sources/Vorssaint/Core/ScratchpadStrings.swift \
-        Sources/Vorssaint/Core/FinderRenameStrings.swift \
-        Sources/Vorssaint/Core/CommandBarStrings.swift \
-        Sources/Vorssaint/Core/FeedbackStrings.swift \
-        Sources/Vorssaint/Core/RadialMenuStrings.swift \
-        Sources/Vorssaint/Core/MenuBarAppearanceStrings.swift \
-        Sources/Vorssaint/Core/AppAppearance.swift \
-        Sources/Vorssaint/Core/AppearanceStrings.swift \
-        Sources/Vorssaint/Core/BatteryTimeStrings.swift \
-        Sources/Vorssaint/Core/KeepAwakeStrings.swift \
-        Sources/Vorssaint/Core/PermissionGuideStrings.swift \
-        Sources/Vorssaint/Core/FanControlStrings.swift \
-        Sources/Vorssaint/Services/FanControl/FanControlSupport.swift \
-        Sources/Vorssaint/Services/Snippets/TextSnippetSupport.swift \
-        Sources/Vorssaint/Services/RadialMenu/RadialMenuSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/ScratchpadSupport.swift \
-        Sources/Vorssaint/Services/KillProcess/KillProcessSupport.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderSupport.swift \
-        Sources/Vorssaint/Services/Recorder/RecordingSharingSupport.swift \
-        Sources/Vorssaint/Services/PrivateFileStore.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderTakeStore.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderMotion.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderPointerTrack.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderTypingTrack.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderTimeline.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderTextOverlay.swift \
-        Sources/Vorssaint/Services/Recorder/RecorderEditDocument.swift \
-        Sources/Vorssaint/Core/AppInfo.swift \
-        Sources/Vorssaint/Core/GlobalShortcut.swift \
-        Sources/Vorssaint/Core/Localization.swift \
-        Sources/Vorssaint/Core/Localizations/Strings+*.swift \
-        Sources/Vorssaint/Core/FeatureStrings.swift \
-        Sources/Vorssaint/Core/KillProcessStrings.swift \
-        Sources/Vorssaint/Core/WhatsAppDownloadStrings.swift \
-        Sources/Vorssaint/Core/WhatsAppOrganizerStrings.swift \
-        Sources/Vorssaint/Core/ReleaseNotes.swift \
-        Sources/Vorssaint/Core/URLCleaning.swift \
-        Sources/Vorssaint/Services/GeneralPasteboardAccess.swift \
-        Sources/Vorssaint/Services/Audio/MixerRoutingSupport.swift \
-        Sources/Vorssaint/Services/Audio/MusicLaunchSupport.swift \
-        Sources/Vorssaint/UI/MenuPanel/MixerPercentNativeTextField.swift \
-        Sources/Vorssaint/Services/Audio/BoostLimiter.swift \
-        Sources/Vorssaint/Services/Audio/MixerRender.swift \
-        Sources/Vorssaint/Services/DockPreview/DockPreviewSupport.swift \
-        Sources/Vorssaint/Services/Homebrew/HomebrewSupport.swift \
-        Sources/Vorssaint/Services/AppUpdates/AppUpdatesSupport.swift \
-        Sources/Vorssaint/Core/AppUpdateStrings.swift \
-        Sources/Vorssaint/Core/DiskImageInstallerStrings.swift \
-        Sources/Vorssaint/Services/DiskImageInstaller/DiskImageInstallerSupport.swift \
-        Sources/Vorssaint/Services/Clipboard/ClipboardHistorySupport.swift \
-        Sources/Vorssaint/Services/Clipboard/ClipboardAutoClearSupport.swift \
-        Sources/Vorssaint/Services/AutoQuit/AutoQuitSupport.swift \
-        Sources/Vorssaint/Services/Shelf/ShelfSupport.swift \
-        Sources/Vorssaint/Services/Finder/FinderRenameSupport.swift \
-        Sources/Vorssaint/Services/Update/UpdateInstallerSupport.swift \
-        Sources/Vorssaint/Services/Update/UpdateServiceSupport.swift \
-        Sources/Vorssaint/Services/InstalledApps.swift \
-        Sources/Vorssaint/Services/LaunchAtLoginSupport.swift \
-        Sources/Vorssaint/UI/Settings/SettingsSearchSupport.swift \
-        Sources/Vorssaint/UI/Settings/FeatureVisibilitySupport.swift \
-        Sources/Vorssaint/App/MenuBarSpacingSupport.swift \
-        Sources/Vorssaint/App/StatusItemAnchorSupport.swift \
-        Sources/Vorssaint/Services/DockClick/DockClickSupport.swift \
-        Sources/Vorssaint/Services/Finder/CutPasteProgressSupport.swift \
-        Sources/Vorssaint/Services/Finder/FinderPasteImageSupport.swift \
-        Sources/Vorssaint/Services/MiddleClick/MiddleClickSupport.swift \
-        Sources/Vorssaint/Services/MouseNavigation/MouseNavigationSupport.swift \
-        Sources/Vorssaint/Services/MouseButtons/MouseButtonShortcutSupport.swift \
-        Sources/Vorssaint/Services/MouseExceptions/MouseAppExceptionSupport.swift \
-        Sources/Vorssaint/Core/MouseButtonStrings.swift \
-        Sources/Vorssaint/Core/MouseExceptionStrings.swift \
-        Sources/Vorssaint/Core/ClipboardIgnoredAppsStrings.swift \
-        Sources/Vorssaint/Core/WindowPreviewExclusionStrings.swift \
-        Sources/Vorssaint/Core/SwitcherAppRulesStrings.swift \
-        Sources/Vorssaint/Services/QuickTools/QuickToolsSupport.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarSupport.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarPreferences.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarMath.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarUnits.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarEmoji.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarLinks.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarDates.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarRowShortcuts.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarSystemSettingsSupport.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarFileSearchSupport.swift \
-        Sources/Vorssaint/Services/CommandBar/CommandBarQueryMemory.swift \
-        Sources/Vorssaint/Services/SpotlightNamesSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/MicMuteSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/QuickTogglesSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/ScreenshotCapturePolicy.swift \
-        Sources/Vorssaint/Services/QuickTools/ScreenshotSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/ScreenshotSharingSupport.swift \
-        Sources/Vorssaint/Services/QuickTools/WindowActivationPolicy.swift \
-        Sources/Vorssaint/Services/KeyboardDebounce/KeyboardDebounceSupport.swift \
-        Sources/Vorssaint/Services/SuperKey/SuperKeySupport.swift \
-        Sources/Vorssaint/Core/SuperKeyStrings.swift \
-        Sources/Vorssaint/Services/ScrollWheelSupport.swift \
-        Sources/Vorssaint/Services/SmoothScrollSupport.swift \
-        Sources/Vorssaint/Services/FocusFollowsMouse/FocusFollowsMouseSupport.swift \
-        Sources/Vorssaint/Services/Switcher/SwitcherModels.swift \
-        Sources/Vorssaint/Services/Switcher/SwitcherSupport.swift \
-        Sources/Vorssaint/Services/Switcher/SpaceHopSupport.swift \
-        Sources/Vorssaint/Services/Switcher/WindowUseOrder.swift \
-        Sources/Vorssaint/Services/Metrics/MetricFormat.swift \
-        Sources/Vorssaint/Services/KeepAwakeAutomationSupport.swift \
-        Sources/Vorssaint/Services/SudoersSupport.swift \
-        Sources/Vorssaint/Services/Metrics/BatteryTimeSupport.swift \
-        Sources/Vorssaint/Services/BoundedProcessRunner.swift \
-        Sources/Vorssaint/Services/ShellSupport.swift \
-        Sources/Vorssaint/Services/Metrics/NetworkProcessSupport.swift \
-        Sources/Vorssaint/Services/Metrics/NetworkSampler.swift \
-        Sources/Vorssaint/Services/Metrics/PeripheralBatterySupport.swift \
-        Sources/Vorssaint/Services/Metrics/DiskSupport.swift \
-        Sources/Vorssaint/Services/Metrics/MonitorSamplingPolicy.swift \
-        Sources/Vorssaint/Services/Metrics/MaxCapacityProbe.swift \
-        Sources/Vorssaint/Services/Metrics/TemperatureSensorSelector.swift \
-        Sources/Vorssaint/Services/Metrics/SustainedAlertGate.swift \
-        Sources/Vorssaint/Services/WindowLayout/WindowLayoutSupport.swift \
-        Sources/Vorssaint/Services/WindowLayout/WindowGestureSupport.swift \
-        Sources/Vorssaint/Core/WindowDirectionalStrings.swift \
-        Sources/Vorssaint/Services/CleaningMode/CleaningUnlockCounter.swift \
-        Sources/Vorssaint/Services/Display/ExtraBrightnessSupport.swift \
-        Sources/Vorssaint/Services/Display/BrightnessSupport.swift \
-        Sources/Vorssaint/Services/Cleaner/CleanerSupport.swift \
-        Sources/Vorssaint/Services/Cleaner/CleanerPolicy.swift \
-        Sources/Vorssaint/Services/Cleaner/CleanerSchedule.swift \
-        Sources/Vorssaint/Services/Uninstall/UninstallerSupport.swift \
-        Sources/Vorssaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift \
+        Sources/Croissaint/Services/Media/MediaSupport.swift \
+        Sources/Croissaint/Core/Defaults.swift \
+        Sources/Croissaint/Core/FeatureCatalog.swift \
+        Sources/Croissaint/Core/FeaturePresets.swift \
+        Sources/Croissaint/Core/FeatureHubStrings.swift \
+        Sources/Croissaint/Core/ShortcutSettingsStrings.swift \
+        Sources/Croissaint/Core/SettingsBackupSupport.swift \
+        Sources/Croissaint/Core/BackupStrings.swift \
+        Sources/Croissaint/Core/SnippetStrings.swift \
+        Sources/Croissaint/Core/BrightnessStrings.swift \
+        Sources/Croissaint/Core/MediaImageStrings.swift \
+        Sources/Croissaint/Core/QuickToggleStrings.swift \
+        Sources/Croissaint/Core/ScreenshotStrings.swift \
+        Sources/Croissaint/Core/RecentCaptureStrings.swift \
+        Sources/Croissaint/Core/RecorderStrings.swift \
+        Sources/Croissaint/Core/RecorderShareStrings.swift \
+        Sources/Croissaint/Core/CameraPreviewStrings.swift \
+        Sources/Croissaint/Core/ScratchpadStrings.swift \
+        Sources/Croissaint/Core/FinderRenameStrings.swift \
+        Sources/Croissaint/Core/CommandBarStrings.swift \
+        Sources/Croissaint/Core/FeedbackStrings.swift \
+        Sources/Croissaint/Core/RadialMenuStrings.swift \
+        Sources/Croissaint/Core/MenuBarAppearanceStrings.swift \
+        Sources/Croissaint/Core/AppAppearance.swift \
+        Sources/Croissaint/Core/AppearanceStrings.swift \
+        Sources/Croissaint/Core/BatteryTimeStrings.swift \
+        Sources/Croissaint/Core/KeepAwakeStrings.swift \
+        Sources/Croissaint/Core/PermissionGuideStrings.swift \
+        Sources/Croissaint/Core/FanControlStrings.swift \
+        Sources/Croissaint/Services/FanControl/FanControlSupport.swift \
+        Sources/Croissaint/Services/Snippets/TextSnippetSupport.swift \
+        Sources/Croissaint/Services/RadialMenu/RadialMenuSupport.swift \
+        Sources/Croissaint/Services/QuickTools/ScratchpadSupport.swift \
+        Sources/Croissaint/Services/KillProcess/KillProcessSupport.swift \
+        Sources/Croissaint/Services/Recorder/RecorderSupport.swift \
+        Sources/Croissaint/Services/Recorder/RecordingSharingSupport.swift \
+        Sources/Croissaint/Services/PrivateFileStore.swift \
+        Sources/Croissaint/Services/Recorder/RecorderTakeStore.swift \
+        Sources/Croissaint/Services/Recorder/RecorderMotion.swift \
+        Sources/Croissaint/Services/Recorder/RecorderPointerTrack.swift \
+        Sources/Croissaint/Services/Recorder/RecorderTypingTrack.swift \
+        Sources/Croissaint/Services/Recorder/RecorderTimeline.swift \
+        Sources/Croissaint/Services/Recorder/RecorderTextOverlay.swift \
+        Sources/Croissaint/Services/Recorder/RecorderEditDocument.swift \
+        Sources/Croissaint/Core/AppInfo.swift \
+        Sources/Croissaint/Core/GlobalShortcut.swift \
+        Sources/Croissaint/Core/Localization.swift \
+        Sources/Croissaint/Core/Localizations/Strings+*.swift \
+        Sources/Croissaint/Core/FeatureStrings.swift \
+        Sources/Croissaint/Core/KillProcessStrings.swift \
+        Sources/Croissaint/Core/WhatsAppDownloadStrings.swift \
+        Sources/Croissaint/Core/WhatsAppOrganizerStrings.swift \
+        Sources/Croissaint/Core/ReleaseNotes.swift \
+        Sources/Croissaint/Core/URLCleaning.swift \
+        Sources/Croissaint/Services/GeneralPasteboardAccess.swift \
+        Sources/Croissaint/Services/Audio/MixerRoutingSupport.swift \
+        Sources/Croissaint/Services/Audio/MusicLaunchSupport.swift \
+        Sources/Croissaint/UI/MenuPanel/MixerPercentNativeTextField.swift \
+        Sources/Croissaint/Services/Audio/BoostLimiter.swift \
+        Sources/Croissaint/Services/Audio/MixerRender.swift \
+        Sources/Croissaint/Services/DockPreview/DockPreviewSupport.swift \
+        Sources/Croissaint/Services/Homebrew/HomebrewSupport.swift \
+        Sources/Croissaint/Services/AppUpdates/AppUpdatesSupport.swift \
+        Sources/Croissaint/Core/AppUpdateStrings.swift \
+        Sources/Croissaint/Core/DiskImageInstallerStrings.swift \
+        Sources/Croissaint/Services/DiskImageInstaller/DiskImageInstallerSupport.swift \
+        Sources/Croissaint/Services/Clipboard/ClipboardHistorySupport.swift \
+        Sources/Croissaint/Services/Clipboard/ClipboardAutoClearSupport.swift \
+        Sources/Croissaint/Services/AutoQuit/AutoQuitSupport.swift \
+        Sources/Croissaint/Services/Shelf/ShelfSupport.swift \
+        Sources/Croissaint/Services/Finder/FinderRenameSupport.swift \
+        Sources/Croissaint/Services/Update/UpdateInstallerSupport.swift \
+        Sources/Croissaint/Services/Update/UpdateServiceSupport.swift \
+        Sources/Croissaint/Services/InstalledApps.swift \
+        Sources/Croissaint/Services/LaunchAtLoginSupport.swift \
+        Sources/Croissaint/UI/Settings/SettingsSearchSupport.swift \
+        Sources/Croissaint/UI/Settings/FeatureVisibilitySupport.swift \
+        Sources/Croissaint/App/MenuBarSpacingSupport.swift \
+        Sources/Croissaint/App/StatusItemAnchorSupport.swift \
+        Sources/Croissaint/Services/DockClick/DockClickSupport.swift \
+        Sources/Croissaint/Services/Finder/CutPasteProgressSupport.swift \
+        Sources/Croissaint/Services/Finder/FinderPasteImageSupport.swift \
+        Sources/Croissaint/Services/MiddleClick/MiddleClickSupport.swift \
+        Sources/Croissaint/Services/MouseNavigation/MouseNavigationSupport.swift \
+        Sources/Croissaint/Services/MouseButtons/MouseButtonShortcutSupport.swift \
+        Sources/Croissaint/Services/MouseExceptions/MouseAppExceptionSupport.swift \
+        Sources/Croissaint/Core/MouseButtonStrings.swift \
+        Sources/Croissaint/Core/MouseExceptionStrings.swift \
+        Sources/Croissaint/Core/ClipboardIgnoredAppsStrings.swift \
+        Sources/Croissaint/Core/WindowPreviewExclusionStrings.swift \
+        Sources/Croissaint/Core/SwitcherAppRulesStrings.swift \
+        Sources/Croissaint/Services/QuickTools/QuickToolsSupport.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarSupport.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarPreferences.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarMath.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarUnits.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarEmoji.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarLinks.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarDates.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarRowShortcuts.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarSystemSettingsSupport.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarFileSearchSupport.swift \
+        Sources/Croissaint/Services/CommandBar/CommandBarQueryMemory.swift \
+        Sources/Croissaint/Services/SpotlightNamesSupport.swift \
+        Sources/Croissaint/Services/QuickTools/MicMuteSupport.swift \
+        Sources/Croissaint/Services/QuickTools/QuickTogglesSupport.swift \
+        Sources/Croissaint/Services/QuickTools/ScreenshotCapturePolicy.swift \
+        Sources/Croissaint/Services/QuickTools/ScreenshotSupport.swift \
+        Sources/Croissaint/Services/QuickTools/ScreenshotSharingSupport.swift \
+        Sources/Croissaint/Services/QuickTools/WindowActivationPolicy.swift \
+        Sources/Croissaint/Services/KeyboardDebounce/KeyboardDebounceSupport.swift \
+        Sources/Croissaint/Services/SuperKey/SuperKeySupport.swift \
+        Sources/Croissaint/Core/SuperKeyStrings.swift \
+        Sources/Croissaint/Services/ScrollWheelSupport.swift \
+        Sources/Croissaint/Services/SmoothScrollSupport.swift \
+        Sources/Croissaint/Services/FocusFollowsMouse/FocusFollowsMouseSupport.swift \
+        Sources/Croissaint/Services/Switcher/SwitcherModels.swift \
+        Sources/Croissaint/Services/Switcher/SwitcherSupport.swift \
+        Sources/Croissaint/Services/Switcher/SpaceHopSupport.swift \
+        Sources/Croissaint/Services/Switcher/WindowUseOrder.swift \
+        Sources/Croissaint/Services/Metrics/MetricFormat.swift \
+        Sources/Croissaint/Services/KeepAwakeAutomationSupport.swift \
+        Sources/Croissaint/Services/SudoersSupport.swift \
+        Sources/Croissaint/Services/Metrics/BatteryTimeSupport.swift \
+        Sources/Croissaint/Services/BoundedProcessRunner.swift \
+        Sources/Croissaint/Services/ShellSupport.swift \
+        Sources/Croissaint/Services/Metrics/NetworkProcessSupport.swift \
+        Sources/Croissaint/Services/Metrics/NetworkSampler.swift \
+        Sources/Croissaint/Services/Metrics/PeripheralBatterySupport.swift \
+        Sources/Croissaint/Services/Metrics/DiskSupport.swift \
+        Sources/Croissaint/Services/Metrics/MonitorSamplingPolicy.swift \
+        Sources/Croissaint/Services/Metrics/MaxCapacityProbe.swift \
+        Sources/Croissaint/Services/Metrics/TemperatureSensorSelector.swift \
+        Sources/Croissaint/Services/Metrics/SustainedAlertGate.swift \
+        Sources/Croissaint/Services/WindowLayout/WindowLayoutSupport.swift \
+        Sources/Croissaint/Services/WindowLayout/WindowGestureSupport.swift \
+        Sources/Croissaint/Core/WindowDirectionalStrings.swift \
+        Sources/Croissaint/Services/CleaningMode/CleaningUnlockCounter.swift \
+        Sources/Croissaint/Services/Display/ExtraBrightnessSupport.swift \
+        Sources/Croissaint/Services/Display/BrightnessSupport.swift \
+        Sources/Croissaint/Services/Cleaner/CleanerSupport.swift \
+        Sources/Croissaint/Services/Cleaner/CleanerPolicy.swift \
+        Sources/Croissaint/Services/Cleaner/CleanerSchedule.swift \
+        Sources/Croissaint/Services/Uninstall/UninstallerSupport.swift \
+        Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift \
         Tests/MetricsTests.swift \
         -o build/metrics-tests
     ./build/metrics-tests
@@ -304,7 +304,7 @@ if (( TEST )); then
 fi
 
 echo "▸ Compiling ($BUILD_CONFIGURATION) against $(basename "$SDK")…"
-APP_SOURCES=(Sources/Vorssaint/**/*.swift)
+APP_SOURCES=(Sources/Croissaint/**/*.swift)
 if (( DEV )); then
     APP_OBJECT_DIR="build/objects/$EXECUTABLE"
     mkdir -p build "$APP_OBJECT_DIR"
@@ -324,11 +324,11 @@ fi
 
 echo "▸ Compiling protected fan helper…"
 swiftc -O -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${BUILD_VARIANT_FLAGS[@]}" \
-    Sources/Vorssaint/Services/FanControl/FanControlSupport.swift \
-    Sources/Vorssaint/Services/FanControl/FanControlXPC.swift \
-    Sources/Vorssaint/Services/SystemMonitor/SMCClient.swift \
-    Sources/Vorssaint/Services/Metrics/TemperatureSensorSelector.swift \
-    Sources/Vorssaint/Services/FanControl/FanControlHardware.swift \
+    Sources/Croissaint/Services/FanControl/FanControlSupport.swift \
+    Sources/Croissaint/Services/FanControl/FanControlXPC.swift \
+    Sources/Croissaint/Services/SystemMonitor/SMCClient.swift \
+    Sources/Croissaint/Services/Metrics/TemperatureSensorSelector.swift \
+    Sources/Croissaint/Services/FanControl/FanControlHardware.swift \
     Sources/FanControlHelper/main.swift \
     -o "build/$FAN_HELPER_ID"
 "build/$FAN_HELPER_ID" --selftest
@@ -343,7 +343,7 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" \
     "$STAGE/Contents/Library/LaunchDaemons" "$STAGE/Contents/Library/LaunchServices"
 cp "build/$EXECUTABLE" "$STAGE/Contents/MacOS/$EXECUTABLE"
 cp "build/$FAN_HELPER_ID" "$STAGE/Contents/Library/LaunchServices/$FAN_HELPER_ID"
-cp Resources/com.vorssaint.utils.fan-control.plist \
+cp Resources/com.croissaint.utils.fan-control.plist \
     "$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
 cp CHANGELOG.md "$STAGE/Contents/Resources/CHANGELOG.md"
@@ -353,21 +353,21 @@ done
 if (( DEV )); then
     # A distinct identity so the Developer build installs and runs next to the
     # official app, with its own permissions, preferences and login item.
-    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.vorssaint.utils.dev" "$STAGE/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c "Set :CFBundleName Vorssaint (Developer)" "$STAGE/Contents/Info.plist"
-    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Vorssaint (Developer)" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.croissaint.utils.dev" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleName Croissaint (Developer)" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Croissaint (Developer)" "$STAGE/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $EXECUTABLE" "$STAGE/Contents/Info.plist"
     FAN_PLIST="$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
     /usr/libexec/PlistBuddy -c "Set :Label $FAN_HELPER_ID" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Set :BundleProgram Contents/Library/LaunchServices/$FAN_HELPER_ID" "$FAN_PLIST"
-    /usr/libexec/PlistBuddy -c "Delete :MachServices:com.vorssaint.utils.fan-control" "$FAN_PLIST"
+    /usr/libexec/PlistBuddy -c "Delete :MachServices:com.croissaint.utils.fan-control" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Add :MachServices:$FAN_HELPER_ID bool true" "$FAN_PLIST"
     # Stamp the source commit + build time so the running dev app shows (in About)
     # exactly which code it was compiled from. Lets you verify it matches HEAD before
     # testing, instead of unknowingly running a stale build. Dev-only; never shipped.
     SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     [[ -n "$(git status --porcelain 2>/dev/null)" ]] && SHA="$SHA-dirty"
-    /usr/libexec/PlistBuddy -c "Add :VorssaintBuildCommit string '$SHA · $(date '+%Y-%m-%d %H:%M')'" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Add :CroissaintBuildCommit string '$SHA · $(date '+%Y-%m-%d %H:%M')'" "$STAGE/Contents/Info.plist"
     echo "  stamped dev build: $SHA"
 fi
 FAN_HELPER_VERSION="$(
@@ -378,7 +378,7 @@ FAN_HELPER_VERSION="$(
         | /usr/bin/awk '{print $1}' | /usr/bin/shasum -a 256 \
         | /usr/bin/awk '{print $1}'
 )"
-/usr/libexec/PlistBuddy -c "Add :VorssaintFanControlHelperVersion string '$FAN_HELPER_VERSION'" \
+/usr/libexec/PlistBuddy -c "Add :CroissaintFanControlHelperVersion string '$FAN_HELPER_VERSION'" \
     "$STAGE/Contents/Info.plist"
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
@@ -399,7 +399,7 @@ xattr -c -r "$STAGE" 2>/dev/null || true
 #      notarization), the app's entitlements and a secure timestamp. Gives a
 #      stable, team-based designated requirement, so permissions persist across
 #      updates AND Gatekeeper shows no "unverified developer" warning.
-#   2. "Vorssaint Utils Signing" — the legacy stable self-signed identity, kept
+#   2. "Croissaint Utils Signing" — the legacy stable self-signed identity, kept
 #      as a fallback so contributors without a Developer ID still get a constant
 #      designated requirement across their local builds.
 #   3. Ad-hoc — fresh clone with no identity at all.
@@ -528,7 +528,7 @@ if (( INSTALL )); then
     stop_process "$EXECUTABLE"
     # Remove the pre-rename apps so two menu bar items never coexist. Same bundle
     # id, so macOS keeps the granted permissions for the new bundle.
-    for legacy in "Vorss:Vorss" "Vorssaint Utils:VorssaintUtils"; do
+    for legacy in "Vorss:Vorss" "Croissaint Utils:CroissaintUtils"; do
         name="${legacy%%:*}"; proc="${legacy##*:}"
         if [[ -d "/Applications/$name.app" ]]; then
             stop_process "$proc"

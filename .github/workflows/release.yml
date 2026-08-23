@@ -43,14 +43,14 @@ jobs:
         run: ./build.sh
 
       - name: Selftest
-        run: ./build/Vorssaint --selftest
+        run: ./build/Croissaint --selftest
 
       - name: Notarize app
         env:
           NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
-        run: ./Tools/notarize.sh build/stage/Vorssaint.app
+        run: ./Tools/notarize.sh build/stage/Croissaint.app
 
       - name: Package DMG
         run: ./Tools/make-dmg.sh
@@ -100,9 +100,9 @@ jobs:
           }
           trap cleanup EXIT
           hdiutil attach -nobrowse -readonly -mountpoint "$MP" "$DMG"
-          spctl -a -t exec -vv "$MP/Vorssaint.app" 2>&1 | tee /tmp/spctl.txt
+          spctl -a -t exec -vv "$MP/Croissaint.app" 2>&1 | tee /tmp/spctl.txt
           grep -q "source=Notarized Developer ID" /tmp/spctl.txt
-          xcrun stapler validate "$MP/Vorssaint.app"
+          xcrun stapler validate "$MP/Croissaint.app"
 
       - name: Release notes from CHANGELOG
         id: notes
@@ -121,7 +121,7 @@ jobs:
             echo "NOTES<<__VRSS_EOF__"
             printf '%s\n' "$NOTES"
             echo ""
-            echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Vorssaint to Applications."
+            echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
             echo "__VRSS_EOF__"
             if [[ "$VERSION" =~ -(beta|rc|alpha) ]]; then
               echo "PRERELEASE=true"

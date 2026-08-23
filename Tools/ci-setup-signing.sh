@@ -15,8 +15,8 @@ fi
 
 TMP="${RUNNER_TEMP:-/tmp}"
 KCPASS="ci-signing"
-KC="$TMP/vorssaint-signing.keychain-db"
-P12="$TMP/vorssaint-signing.p12"
+KC="$TMP/croissaint-signing.keychain-db"
+P12="$TMP/croissaint-signing.p12"
 
 echo "$SIGNING_CERT_P12" | base64 --decode > "$P12"
 security create-keychain -p "$KCPASS" "$KC"
