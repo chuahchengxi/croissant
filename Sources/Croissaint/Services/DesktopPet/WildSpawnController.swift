@@ -209,6 +209,12 @@ private enum ThrowPhysics {
     static let depthScale: CGFloat = 0.55   // ball size once it reaches the pokemon
     static let maxFlightTime: CGFloat = 4
 
+    // Every throw tumbles: the base roll the ball carries no matter how it
+    // was flicked, plus a little extra for faster throws.
+    static let baseFlightRoll: CGFloat = 950        // deg/s
+    static let rollPerSpeed: CGFloat = 0.35         // extra deg/s per pt/s of launch speed
+    static let aimRollPerPoint: CGFloat = 2.2       // deg of roll per point dragged sideways
+
     // Sidespin (Magnus effect): how much of the flick's lateral speed becomes
     // spin, and how hard that spin bends the flight path. A sideways-flicking
     // throw curves through the air instead of flying straight.
@@ -412,7 +418,11 @@ struct WildPokemonView: View {
         DragGesture(minimumDistance: 8, coordinateSpace: .named("wild"))
             .onChanged { value in
                 guard phase == .ready else { return }
+                // Dragging the ball around in your hand rolls it too (read
+                // the previous point before sampleVelocity overwrites it).
+                let rollDelta = value.translation.width - lastPoint.width
                 sampleVelocity(value.translation)
+                ballSpin += Double(rollDelta * ThrowPhysics.aimRollPerPoint)
                 ballPos = value.translation
             }
             .onEnded { value in handleRelease(value) }
@@ -504,8 +514,11 @@ struct WildPokemonView: View {
         let dy = ballVel.dy * dt
         ballPos.width += dx
         ballPos.height += dy
-        // The visible roll combines the sidespin with a touch of travel roll.
-        ballSpin += Double(spinRate * dt) + Double((dx * dx + dy * dy).squareRoot()) * 0.4
+        // Visible tumble: a steady roll every throw gets, plus the live
+        // sidespin contribution while it lasts.
+        ballSpin += Double((ThrowPhysics.baseFlightRoll
+            + ballVel.length * ThrowPhysics.rollPerSpeed) * dt)
+            + Double(spinRate * dt)
         flightTime += dt
 
         let target = targetOffset

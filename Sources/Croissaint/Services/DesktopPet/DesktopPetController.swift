@@ -38,11 +38,47 @@ final class DesktopViewModel: ObservableObject {
     @Published var facingLeft = false
     @Published var walking = false
     @Published var hearts: [FloatingHeart] = []
+    @Published var zzzs: [FloatingZzz] = []
 
     func spawnHearts(_ count: Int) {
         for _ in 0..<count {
             hearts.append(FloatingHeart(x: .random(in: -40...40), size: .random(in: 10...18)))
         }
+    }
+
+    /// A sleepy "z" drifting off the buddy. Old ones are trimmed so a long
+    /// nap never accumulates views.
+    func spawnZzz() {
+        zzzs.append(FloatingZzz(x: .random(in: 24...46), size: .random(in: 9...14)))
+        if zzzs.count > 5 { zzzs.removeFirst(zzzs.count - 5) }
+    }
+}
+
+/// One drifting "z" puff while the buddy naps.
+struct FloatingZzz: Identifiable {
+    let id = UUID()
+    let x: CGFloat
+    let size: CGFloat
+}
+
+struct FloatingZzzView: View {
+    let zzz: FloatingZzz
+    let onDone: () -> Void
+    @State private var risen = false
+
+    var body: some View {
+        Text("z")
+            .font(.system(size: zzz.size, weight: .black, design: .rounded))
+            .foregroundStyle(.indigo.opacity(0.85))
+            .padding(.horizontal, 3)
+            .background(Capsule().fill(Color.white.opacity(0.75)))
+            .offset(x: zzz.x + (risen ? 8 : 0), y: risen ? -52 : 6)
+            .opacity(risen ? 0 : 0.95)
+            .scaleEffect(risen ? 1.15 : 0.7)
+            .onAppear {
+                withAnimation(.easeOut(duration: 1.6)) { risen = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.65) { onDone() }
+            }
     }
 }
 
@@ -72,6 +108,7 @@ final class DesktopPetController {
     private var boundsRect = CGRect.zero
     private var isShown = false
     private var lastSleeping = false
+    private var nextZzzAt = Date.distantPast
     private static let speed: CGFloat = 60 // px/s
 
     func start(pet: PetState) {
@@ -177,6 +214,11 @@ final class DesktopPetController {
         // While sleeping, drift to the nearest screen corner and nap there.
         if sleeping {
             glideToNearestCorner(dt)
+            // Snore on a beat: a "z" puff every couple of seconds.
+            if Date() >= nextZzzAt {
+                vm.spawnZzz()
+                nextZzzAt = Date().addingTimeInterval(Double.random(in: 1.7...2.5))
+            }
             return
         }
 
@@ -327,29 +369,52 @@ struct DesktopPetView: View {
     @EnvironmentObject private var vm: DesktopViewModel
     @EnvironmentObject private var pet: PetState
 
+    /// When the current joy dance started; nil while the buddy is calm.
+    @State private var joyStart: Date?
+
+    /// Motion only matters while walking, napping or celebrating — outside of
+    /// that the timeline is paused so a calm buddy costs no redraws.
+    private var timelinePaused: Bool {
+        !(vm.walking || pet.snapshot.sleeping || joyStart != nil)
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 Spacer()
-                Capsule()
-                    .fill(Color.black.opacity(0.14))
-                    .frame(width: 52, height: 7)
-                    .blur(radius: 3)
-                    .padding(.bottom, 26)
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: joyStart == nil)) { timeline in
+                    Capsule()
+                        .fill(Color.black.opacity(0.14))
+                        .frame(width: 52, height: 7)
+                        .blur(radius: 3)
+                        .padding(.bottom, 26)
+                        .scaleEffect(shadowScale(at: timeline.date))
+                }
             }
 
-            if pet.dexID != nil {
-                AnimatedSpriteView(
-                    id: pet.dexID!,
-                    height: 96,
-                    sleeping: pet.snapshot.sleeping
-                )
-                .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: timelinePaused)) { timeline in
+                let now = timeline.date
+                sprite
+                    .offset(y: bodyOffset(at: now))
+                    .scaleEffect(bodyScale(at: now), anchor: .bottom)
+                    .rotationEffect(.degrees(bodyRotation(at: now)), anchor: .bottom)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .pokePalCelebrate)) { _ in
+                joyStart = Date()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                    joyStart = nil
+                }
             }
 
             ForEach(vm.hearts) { heart in
                 FloatingHeartView(heart: heart) {
                     vm.hearts.removeAll { $0.id == heart.id }
+                }
+            }
+
+            ForEach(vm.zzzs) { zzz in
+                FloatingZzzView(zzz: zzz) {
+                    vm.zzzs.removeAll { $0.id == zzz.id }
                 }
             }
 
@@ -361,5 +426,75 @@ struct DesktopPetView: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    @ViewBuilder
+    private var sprite: some View {
+        if let id = pet.dexID {
+            AnimatedSpriteView(id: id, height: 96, sleeping: pet.snapshot.sleeping)
+                .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
+        }
+    }
+
+    // MARK: Body motion
+
+    private func bodyOffset(at now: Date) -> CGFloat {
+        var y = 0.0
+        let t = now.timeIntervalSinceReferenceDate
+
+        // Walking: a bouncy step hop.
+        if vm.walking, !pet.snapshot.sleeping {
+            y -= abs(sin(t * 9)) * 5
+        }
+
+        // Joyful: three quick decaying hops.
+        if let joyStart {
+            let dt = now.timeIntervalSince(joyStart)
+            if dt < 1.5 {
+                y -= max(0, sin(dt * .pi * 4)) * 16 * exp(-dt * 1.8)
+            }
+        }
+        return CGFloat(y)
+    }
+
+    private func bodyRotation(at now: Date) -> Double {
+        var angle = 0.0
+        let t = now.timeIntervalSinceReferenceDate
+
+        // Waddle: tilt side to side with each step.
+        if vm.walking, !pet.snapshot.sleeping {
+            angle += sin(t * 9) * 2.5
+        }
+
+        // Joy wiggle on top of the hops.
+        if let joyStart {
+            let dt = now.timeIntervalSince(joyStart)
+            if dt < 1.5 {
+                angle += sin(dt * .pi * 6) * 7 * exp(-dt * 2.2)
+            }
+        }
+        return angle
+    }
+
+    /// Asleep: slow breathing. Celebrating: a landing squash between hops.
+    private func bodyScale(at now: Date) -> Double {
+        if pet.snapshot.sleeping {
+            return 1 + 0.03 * sin(now.timeIntervalSinceReferenceDate * 2.2)
+        }
+        if let joyStart {
+            let dt = now.timeIntervalSince(joyStart)
+            if dt < 1.5 {
+                return 1 + 0.06 * sin(dt * .pi * 8) * exp(-dt * 2.5)
+            }
+        }
+        return 1
+    }
+
+    /// The floor shadow shrinks while airborne so hops read as real lifts.
+    private func shadowScale(at now: Date) -> Double {
+        guard let joyStart else { return 1 }
+        let dt = now.timeIntervalSince(joyStart)
+        guard dt < 1.5 else { return 1 }
+        return 1 - 0.35 * max(0, sin(dt * .pi * 4)) * exp(-dt * 1.8)
     }
 }
