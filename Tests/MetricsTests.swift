@@ -2413,6 +2413,8 @@ struct MetricsTests {
         expect(registeredDefaults[DefaultsKey.clipboardHistoryShortcut] as? String
                == GlobalShortcut.clipboardDefault.storageValue,
                "clipboard history shortcut defaults to Ctrl+Opt+Cmd+V")
+        expect(registeredDefaults[DefaultsKey.finderCutPasteShowHUD] as? Bool == true,
+               "the Finder cut and paste floating panel starts enabled")
         expect(registeredDefaults[DefaultsKey.finderRenameEnabled] as? Bool == false,
                "the Finder rename shortcut is opt-in")
         expect(registeredDefaults[DefaultsKey.finderRenameShortcut] as? String == ":120",
@@ -6661,7 +6663,7 @@ struct MetricsTests {
                "apps on a writable external volume stay updatable in place")
         let installerScript = UpdateInstallerSupport.installerScript()
         for step in ["fail-dmg-verify", "fail-tempdir", "fail-mount", "fail-no-app-in-dmg",
-                     "fail-copy", "fail-verify", "fail-swap", "note ok"] {
+                     "fail-copy", "fail-version", "fail-verify", "fail-swap", "note ok"] {
             expect(installerScript.contains(step),
                    "installer script reports the \(step) step")
         }
@@ -6674,6 +6676,9 @@ struct MetricsTests {
         expect(dmgVerification != nil && dmgMount != nil
                && dmgVerification!.lowerBound < dmgMount!.lowerBound,
                "installer proves the download is a disk image before mounting it")
+        expect(installerScript.contains("BUNDLE_VERSION=")
+               && installerScript.contains("\"$BUNDLE_VERSION\" = \"$EXPECTED_VERSION\""),
+               "installer requires the staged app to match the offered release version")
         expect(installerScript.contains("chown -R"),
                "an elevated install hands the bundle back to the user")
         expect(installerScript.contains("update-old.$PID"),
@@ -6692,11 +6697,14 @@ struct MetricsTests {
             dmgPath: "/tmp/Croissaint-update.dmg",
             pid: 123,
             resultPath: "/tmp/result",
-            uid: 501)
+            uid: 501,
+            expectedVersion: "3.3.3")
         expect(elevated.contains("nohup") && elevated.hasSuffix("&"),
                "elevated installer detaches so the app can quit")
         expect(elevated.contains("'/Applications/Croissaint.app'"),
                "elevated installer passes the app path quoted for the shell")
+        expect(elevated.contains("'3.3.3'"),
+               "elevated installer passes the expected version quoted for the shell")
 
         // MARK: - UpdateServiceSupport & SemVer channel reconciliation
 
@@ -13765,6 +13773,9 @@ struct MetricsTests {
         expect(Defaults.registeredDefaults[DefaultsKey.finderPasteImageAsFile] as? Bool == false
                 && backupKeys.contains(DefaultsKey.finderPasteImageAsFile),
                "pasting copied images as files is opt-in and travels with settings backup")
+        expect(Defaults.registeredDefaults[DefaultsKey.finderCutPasteShowHUD] as? Bool == true
+                && backupKeys.contains(DefaultsKey.finderCutPasteShowHUD),
+               "the Finder cut and paste floating panel default is on and travels with settings backup")
         expect(backupKeys.contains(DefaultsKey.windowPreviewExcludedApps)
                 && (Defaults.registeredDefaults[DefaultsKey.windowPreviewExcludedApps] as? [String]) == [],
                "the window preview exclusion list starts empty and travels with the settings backup")
