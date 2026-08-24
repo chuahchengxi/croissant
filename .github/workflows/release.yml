@@ -18,6 +18,10 @@ jobs:
     name: Build & publish DMG
     runs-on: macos-26
     timeout-minutes: 30
+    env:
+      # Mirrored so steps can branch on whether real notarization will happen;
+      # notarize.sh itself already skips quietly when these are unset.
+      NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -90,6 +94,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify notarization
+        if: env.NOTARY_API_KEY_P8 != ''
         run: |
           DMG=$(ls dist/*.dmg | head -1)
           xcrun stapler validate "$DMG"
@@ -121,7 +126,11 @@ jobs:
             echo "NOTES<<__VRSS_EOF__"
             printf '%s\n' "$NOTES"
             echo ""
-            echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+            if [[ -n "${NOTARY_API_KEY_P8:-}" ]]; then
+              echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+            else
+              echo "Ad-hoc signed build (no notarization credentials configured): on first launch, right-click the app and choose Open, or allow it under System Settings → Privacy & Security. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+            fi
             echo "__VRSS_EOF__"
             if [[ "$VERSION" =~ -(beta|rc|alpha) ]]; then
               echo "PRERELEASE=true"

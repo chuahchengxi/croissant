@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [3.4.0] - 2026-08-24
+
+### Added
+- Nailong, a custom desktop pet character drawn locally by the app, joins the buddy roster from first launch and can also appear in wild encounters.
+- Custom characters are always selectable as buddies without needing to be caught first.
+- Synced all upstream Vorssaint work through August 24, including URL Cleaner rule editing, the precise volume roller, switching Bluetooth off while asleep, adaptive macOS 26 app icons, and a batch of App Switcher fixes.
+
+### Fixed
+- The menu bar glyph no longer reaches the edge of its canvas.
+- Continuous integration builds again under the pinned Swift 6.0.3 toolchain.
+
+### Changed
+- Fork releases without Apple notarization credentials now publish an ad-hoc signed DMG instead of failing at the verification step.
+
 ## [3.3.3-beta.2] - 2026-08-22
 
 ### Added
