@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -794,25 +794,19 @@ extension Strings {
         shortcutsPageTitle: "Klavye kısayolları",
         settingsSearchPlaceholder: "Ayarlarda ara",
         donateHeading: "Croissaint'in gelişmesine destek ol",
-        donateMessage: "Croissaint ücretsiz, bağımsız ve boş zamanlarımda geliştiriliyor. Maddi destek olmak istersen Buy Me a Coffee, geliştirmeyi sürdürmeme doğrudan yardımcı olur.",
-        donateButton: "Buy Me a Coffee ile destek ol",
+        donateMessage: "Croissaint ücretsiz, bağımsız ve boş zamanlarımda geliştiriliyor. Maddi destek olmak istersen GitHub Stars, geliştirmeyi sürdürmeme doğrudan yardımcı olur.",
+        donateButton: "GitHub Stars ile destek ol",
         donateThanks: "Burada olduğun için teşekkürler. 🖤",
         supportIntroTitle: "Croissaint'in gelişmesine destek ol",
-        supportIntroMessage: "Geliştirmeye maddi destek olmak istersen bunu yapabileceğin tek yer Buy Me a Coffee.",
+        supportIntroMessage: "Geliştirmeye maddi destek olmak istersen bunu yapabileceğin tek yer GitHub Stars.",
         supportIntroStarButton: "GitHub'da Croissaint'e yıldız ver",
         supportIntroStarMessage: "Maddi destek asla beklenmez. GitHub'da verilen bir yıldız, daha fazla kişinin Croissaint'i keşfetmesine yardımcı olur ve geliştirilmesinde gerçek bir fark yaratır.",
-        supportIntroCoffeeButton: "Buy Me a Coffee ile destek ol",
+        supportIntroCoffeeButton: "GitHub Stars ile destek ol",
         supportIntroLaterButton: "Şimdi değil",
         supportIntroDoneButton: "Tamam",
-        discordIntroTitle: "Croissaint Discord topluluğu daha yeni başlıyor",
-        discordIntroMessage: "Croissaint topluluğu yeni ve hâlâ şekilleniyor. Diğer kullanıcılarla tanışmak ve uygulamanın etrafında sıcak bir alan oluşturmaya yardım etmek için erkenden katıl.",
-        discordIntroBenefitHelp: "Yardım al ve iş akışlarını paylaş",
-        discordIntroBenefitFeedback: "Hataları bildir, iyileştirmeler iste ve sıradakileri şekillendir",
-        discordIntroBenefitPreviews: "Devam eden çalışmaları, erken ön izlemeleri ve sürüm haberlerini gör",
-        discordIntroJoinButton: "Discord topluluğuna katıl",
         communityIntroTitle: "Her şeyi herkesten önce gör",
         communityIntroMessage: "Beni X'te zaten takip edenler bu güncellemedeki birçok yeniliği herkesten önce gördü. Orada sırada neler olduğuna dair ön izlemeler paylaşıyor ve nasıl çalıştıklarını gösteriyorum. Böylece güncelleme çıkmadan önce temelini öğrenebilirsin. Takip et ve sırada ne olduğunu gör!",
-        communityIntroFollowButton: "X'te @vorssaint'i takip et",
+        communityIntroFollowButton: "X'te @chuahchengxi'i takip et",
         homebrewOfficialIntroTitle: "Artık resmî Homebrew kataloğunda",
         homebrewOfficialIntroMessage: "Croissaint artık doğrudan resmî Homebrew kataloğundan kurulabilir.",
         homebrewOfficialIntroInstallLabel: "Yeni kurulum",

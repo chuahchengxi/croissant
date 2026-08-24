@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -795,25 +795,19 @@ extension Strings {
         shortcutsPageTitle: "키보드 단축키",
         settingsSearchPlaceholder: "설정 검색",
         donateHeading: "Croissaint의 성장을 도와주세요",
-        donateMessage: "Croissaint는 무료로 독립적으로 운영되며 여유 시간에 개발하고 있습니다. 금전적으로 돕고 싶다면 Buy Me a Coffee를 통한 지원이 개발을 이어 가는 데 직접 도움이 됩니다.",
-        donateButton: "Buy Me a Coffee에서 후원하기",
+        donateMessage: "Croissaint는 무료로 독립적으로 운영되며 여유 시간에 개발하고 있습니다. 금전적으로 돕고 싶다면 GitHub Stars를 통한 지원이 개발을 이어 가는 데 직접 도움이 됩니다.",
+        donateButton: "GitHub Stars에서 후원하기",
         donateThanks: "들러 주셔서 감사합니다. 🖤",
         supportIntroTitle: "Croissaint의 성장을 도와주세요",
-        supportIntroMessage: "개발을 금전적으로 돕고 싶다면 Buy Me a Coffee가 유일한 후원 창구입니다.",
+        supportIntroMessage: "개발을 금전적으로 돕고 싶다면 GitHub Stars가 유일한 후원 창구입니다.",
         supportIntroStarButton: "GitHub에서 Croissaint에 별표 남기기",
         supportIntroStarMessage: "금전적인 후원은 전혀 기대하지 않습니다. GitHub의 별표 하나가 더 많은 사람이 Croissaint를 발견하게 하고 개발에도 큰 힘이 됩니다.",
-        supportIntroCoffeeButton: "Buy Me a Coffee에서 후원하기",
+        supportIntroCoffeeButton: "GitHub Stars에서 후원하기",
         supportIntroLaterButton: "나중에",
         supportIntroDoneButton: "완료",
-        discordIntroTitle: "Croissaint Discord 커뮤니티가 이제 시작됩니다",
-        discordIntroMessage: "Croissaint 커뮤니티는 새롭게 만들어지는 중입니다. 일찍 참여해 다른 사용자와 만나고 앱을 중심으로 따뜻한 공간을 함께 만들어 주세요.",
-        discordIntroBenefitHelp: "도움을 받고 작업 흐름을 공유하세요",
-        discordIntroBenefitFeedback: "버그를 알리고 개선을 요청하며 다음 방향을 함께 정하세요",
-        discordIntroBenefitPreviews: "개발 과정과 미리보기, 새 버전 소식을 먼저 확인하세요",
-        discordIntroJoinButton: "Discord 커뮤니티 참여",
         communityIntroTitle: "누구보다 먼저 새 기능 확인",
         communityIntroMessage: "이미 X에서 저를 팔로우한 분들은 이번 업데이트의 여러 변경 사항을 누구보다 먼저 확인했습니다. X에서는 다음 기능의 미리보기와 사용 방법을 소개하므로 업데이트가 나오기 전부터 기본 사용법을 알 수 있습니다. 팔로우하고 다음 소식을 먼저 확인해 보세요!",
-        communityIntroFollowButton: "X에서 @vorssaint 팔로우",
+        communityIntroFollowButton: "X에서 @chuahchengxi 팔로우",
         homebrewOfficialIntroTitle: "이제 Homebrew 공식 카탈로그에서 제공",
         homebrewOfficialIntroMessage: "이제 Homebrew 공식 카탈로그에서 Croissaint를 바로 설치할 수 있습니다.",
         homebrewOfficialIntroInstallLabel: "새로 설치",

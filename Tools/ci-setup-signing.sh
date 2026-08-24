@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Imports the stable signing certificate into a keychain on CI so build.sh signs
 # releases with the same identity used locally. This keeps the bundle's

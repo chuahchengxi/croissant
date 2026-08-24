@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Packages the built app into a styled, distributable DMG
 # (dist/Croissaint-<version>.dmg): a window with the app icon, an arrow and

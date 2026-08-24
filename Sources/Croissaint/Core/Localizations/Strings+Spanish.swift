@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -794,25 +794,19 @@ extension Strings {
         shortcutsPageTitle: "Atajos de teclado",
         settingsSearchPlaceholder: "Buscar en ajustes",
         donateHeading: "Ayuda a que Croissaint siga creciendo",
-        donateMessage: "Croissaint es gratis, independiente y lo desarrollo en mi tiempo libre. Si quieres contribuir económicamente, Buy Me a Coffee ayuda directamente a mantener el desarrollo en marcha.",
-        donateButton: "Apoyar en Buy Me a Coffee",
+        donateMessage: "Croissaint es gratis, independiente y lo desarrollo en mi tiempo libre. Si quieres contribuir económicamente, GitHub Stars ayuda directamente a mantener el desarrollo en marcha.",
+        donateButton: "Apoyar en GitHub Stars",
         donateThanks: "Gracias por estar aquí. 🖤",
         supportIntroTitle: "Ayuda a que Croissaint siga creciendo",
-        supportIntroMessage: "Si quieres apoyar económicamente el desarrollo, Buy Me a Coffee es el único lugar para hacerlo.",
+        supportIntroMessage: "Si quieres apoyar económicamente el desarrollo, GitHub Stars es el único lugar para hacerlo.",
         supportIntroStarButton: "Dar una estrella a Croissaint en GitHub",
         supportIntroStarMessage: "Nunca se espera apoyo económico. Una estrella en GitHub ayuda a que más personas descubran Croissaint y marca una diferencia real en su desarrollo.",
-        supportIntroCoffeeButton: "Apoyar en Buy Me a Coffee",
+        supportIntroCoffeeButton: "Apoyar en GitHub Stars",
         supportIntroLaterButton: "Ahora no",
         supportIntroDoneButton: "Listo",
-        discordIntroTitle: "La comunidad de Croissaint en Discord acaba de empezar",
-        discordIntroMessage: "La comunidad de Croissaint es nueva y todavía está tomando forma. Únete desde el principio para conocer a otros usuarios y ayudar a crear un espacio acogedor alrededor de la app.",
-        discordIntroBenefitHelp: "Obtén ayuda y comparte flujos de trabajo",
-        discordIntroBenefitFeedback: "Informa de errores, pide mejoras y ayuda a decidir qué viene después",
-        discordIntroBenefitPreviews: "Sigue el desarrollo, los avances y las noticias de cada versión",
-        discordIntroJoinButton: "Unirse a la comunidad en Discord",
         communityIntroTitle: "Míralo antes que nadie",
         communityIntroMessage: "Quienes ya me seguían en X vieron varios cambios de esta actualización antes que nadie. Allí publico avances de lo que viene y muestro cómo funciona, para que conozcas lo básico antes de que salga la actualización. Sígueme y descubre lo próximo.",
-        communityIntroFollowButton: "Seguir a @vorssaint en X",
+        communityIntroFollowButton: "Seguir a @chuahchengxi en X",
         homebrewOfficialIntroTitle: "Ahora en el catálogo oficial de Homebrew",
         homebrewOfficialIntroMessage: "Croissaint ya se puede instalar directamente desde el catálogo oficial de Homebrew.",
         homebrewOfficialIntroInstallLabel: "Nueva instalación",

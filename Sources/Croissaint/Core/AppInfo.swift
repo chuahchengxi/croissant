@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
 /// Static identity of the app, shared by UI, notifications and tooling.
 enum AppInfo {
     static let name = "Croissaint"
-    static let copyright = "© 2026 Vorssaint"
-    static let websiteURL = URL(string: "https://vorssaint.com")!
-    static let repositoryURL = URL(string: "https://github.com/vorssaint/vorssaint-utils")!
-    static let coffeeURL = URL(string: "https://buymeacoffee.com/vorssaint")!
-    static let discordURL = URL(string: "https://discord.gg/M6BwWH4BJp")!
-    static let socialURL = URL(string: "https://x.com/vorssaint")!
+    static let copyright = "© 2026 chuahchengxi"
+    static let websiteURL = URL(string: "https://github.com/chuahchengxi/croissant")!
+    static let repositoryURL = URL(string: "https://github.com/chuahchengxi/croissant")!
+    /// Financial support points at the GitHub project page (star/sponsor).
+    static let coffeeURL = URL(string: "https://github.com/chuahchengxi/croissant")!
+    static let socialURL = URL(string: "https://github.com/chuahchengxi/croissant")!
 
     /// The bundle version. The fallback only applies to the bare binary
     /// (e.g. `--selftest`), never the shipped app, which reads its Info.plist.

@@ -26,14 +26,14 @@ done
 if (( DEV )); then
     APP_NAME="Croissaint (Developer)"
     EXECUTABLE="CroissaintDeveloper"
-    APP_BUNDLE_ID="com.vorssaint.utils.dev"
-    BUILD_VARIANT_FLAGS=(-D VORSSAINT_DEVELOPMENT)
+    APP_BUNDLE_ID="com.croissaint.utils.dev"
+    BUILD_VARIANT_FLAGS=(-D CROISSAINT_DEVELOPMENT)
     APP_OPTIMIZATION_FLAGS=(-Onone)
     BUILD_CONFIGURATION="debug"
 else
     APP_NAME="Croissaint"
     EXECUTABLE="Croissaint"
-    APP_BUNDLE_ID="com.vorssaint.utils"
+    APP_BUNDLE_ID="com.croissaint.utils"
     BUILD_VARIANT_FLAGS=()
     APP_OPTIMIZATION_FLAGS=(-O)
     BUILD_CONFIGURATION="release"
@@ -115,8 +115,8 @@ finalize_installed_bundle_after_child() {
     echo "✓ Signature ready: $bundle"
 }
 
-if (( INSTALL && ! TEST )) && [[ "${VORSSAINT_INSTALL_CHILD:-0}" != "1" ]]; then
-    VORSSAINT_INSTALL_CHILD=1 "$0" "$@"
+if (( INSTALL && ! TEST )) && [[ "${CROISSAINT_INSTALL_CHILD:-0}" != "1" ]]; then
+    CROISSAINT_INSTALL_CHILD=1 "$0" "$@"
     child_status=$?
     if (( child_status != 0 )); then
         exit "$child_status"
@@ -136,11 +136,11 @@ else
     SDK="$(xcrun --show-sdk-path)"
 fi
 SDK_COMPAT_FLAGS=()
-VM_STATISTICS_COMPAT_FLAGS=(-I Sources/VMStatisticsCompat)
 if [[ "$SDK" == "$PINNED_SDK" ]]; then
     # Swift 6.4 can read the SDK 26 interfaces when given their compiler version.
     SDK_COMPAT_FLAGS=(-Xfrontend -interface-compiler-version -Xfrontend 6.3.2)
 fi
+VM_STATISTICS_COMPAT_FLAGS=(-I Sources/VMStatisticsCompat)
 
 # --test: compile and run the standalone unit tests (pure helpers only: metrics,
 # Homebrew parsing, defaults, localization contracts; no app, no UI, no IOKit),
@@ -162,6 +162,7 @@ if (( TEST )); then
         Sources/Croissaint/Core/ShortcutSettingsStrings.swift \
         Sources/Croissaint/Core/SettingsBackupSupport.swift \
         Sources/Croissaint/Core/BackupStrings.swift \
+        Sources/Croissaint/Core/BluetoothSleepStrings.swift \
         Sources/Croissaint/Core/SnippetStrings.swift \
         Sources/Croissaint/Core/BrightnessStrings.swift \
         Sources/Croissaint/Core/MediaImageStrings.swift \
@@ -181,7 +182,6 @@ if (( TEST )); then
         Sources/Croissaint/Core/AppearanceStrings.swift \
         Sources/Croissaint/Core/BatteryTimeStrings.swift \
         Sources/Croissaint/Core/KeepAwakeStrings.swift \
-        Sources/Croissaint/Core/BluetoothSleepStrings.swift \
         Sources/Croissaint/Core/PermissionGuideStrings.swift \
         Sources/Croissaint/Core/FanControlStrings.swift \
         Sources/Croissaint/Services/FanControl/FanControlSupport.swift \
@@ -212,11 +212,9 @@ if (( TEST )); then
         Sources/Croissaint/Services/GeneralPasteboardAccess.swift \
         Sources/Croissaint/Services/Audio/MixerRoutingSupport.swift \
         Sources/Croissaint/Services/Audio/MusicLaunchSupport.swift \
-        Sources/Croissaint/Services/Bluetooth/BluetoothSleepSupport.swift \
         Sources/Croissaint/UI/MenuPanel/MixerPercentNativeTextField.swift \
         Sources/Croissaint/Services/Audio/BoostLimiter.swift \
         Sources/Croissaint/Services/Audio/MixerRender.swift \
-        Sources/Croissaint/Services/Audio/PreciseVolumeRollerSupport.swift \
         Sources/Croissaint/Services/DockPreview/DockPreviewSupport.swift \
         Sources/Croissaint/Services/Homebrew/HomebrewSupport.swift \
         Sources/Croissaint/Services/AppUpdates/AppUpdatesSupport.swift \
@@ -278,7 +276,6 @@ if (( TEST )); then
         Sources/Croissaint/Services/Switcher/SpaceHopSupport.swift \
         Sources/Croissaint/Services/Switcher/WindowUseOrder.swift \
         Sources/Croissaint/Services/Metrics/MetricFormat.swift \
-        Sources/Croissaint/Services/Metrics/VMStatisticsDecoder.swift \
         Sources/Croissaint/Services/KeepAwakeAutomationSupport.swift \
         Sources/Croissaint/Services/SudoersSupport.swift \
         Sources/Croissaint/Services/Metrics/BatteryTimeSupport.swift \
@@ -299,10 +296,13 @@ if (( TEST )); then
         Sources/Croissaint/Services/Display/ExtraBrightnessSupport.swift \
         Sources/Croissaint/Services/Display/BrightnessSupport.swift \
         Sources/Croissaint/Services/Cleaner/CleanerSupport.swift \
+        Sources/Croissaint/Services/Audio/PreciseVolumeRollerSupport.swift \
+        Sources/Croissaint/Services/Bluetooth/BluetoothSleepSupport.swift \
         Sources/Croissaint/Services/Cleaner/CleanerPolicy.swift \
         Sources/Croissaint/Services/Cleaner/CleanerSchedule.swift \
         Sources/Croissaint/Services/Uninstall/UninstallerSupport.swift \
         Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift \
+        Sources/Croissaint/Services/Metrics/VMStatisticsDecoder.swift \
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift \
         Tests/MetricsTests.swift \
@@ -382,7 +382,7 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" \
     "$STAGE/Contents/Library/LaunchDaemons" "$STAGE/Contents/Library/LaunchServices"
 cp "build/$EXECUTABLE" "$STAGE/Contents/MacOS/$EXECUTABLE"
 cp "build/$FAN_HELPER_ID" "$STAGE/Contents/Library/LaunchServices/$FAN_HELPER_ID"
-cp Resources/com.vorssaint.utils.fan-control.plist \
+cp Resources/com.croissaint.utils.fan-control.plist \
     "$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
 cp CHANGELOG.md "$STAGE/Contents/Resources/CHANGELOG.md"
@@ -392,14 +392,14 @@ done
 if (( DEV )); then
     # A distinct identity so the Developer build installs and runs next to the
     # official app, with its own permissions, preferences and login item.
-    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.vorssaint.utils.dev" "$STAGE/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.croissaint.utils.dev" "$STAGE/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Set :CFBundleName Croissaint (Developer)" "$STAGE/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Croissaint (Developer)" "$STAGE/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $EXECUTABLE" "$STAGE/Contents/Info.plist"
     FAN_PLIST="$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
     /usr/libexec/PlistBuddy -c "Set :Label $FAN_HELPER_ID" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Set :BundleProgram Contents/Library/LaunchServices/$FAN_HELPER_ID" "$FAN_PLIST"
-    /usr/libexec/PlistBuddy -c "Delete :MachServices:com.vorssaint.utils.fan-control" "$FAN_PLIST"
+    /usr/libexec/PlistBuddy -c "Delete :MachServices:com.croissaint.utils.fan-control" "$FAN_PLIST"
     /usr/libexec/PlistBuddy -c "Add :MachServices:$FAN_HELPER_ID bool true" "$FAN_PLIST"
     # Stamp the source commit + build time so the running dev app shows (in About)
     # exactly which code it was compiled from. Lets you verify it matches HEAD before

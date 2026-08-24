@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -794,25 +794,19 @@ extension Strings {
         shortcutsPageTitle: "キーボードショートカット",
         settingsSearchPlaceholder: "設定を検索",
         donateHeading: "Croissaint の成長を支える",
-        donateMessage: "Croissaint は無料で独立したアプリとして、わたしの空き時間に開発しています。金銭的に支援したい場合は、Buy Me a Coffee が開発の継続に直接役立ちます。",
-        donateButton: "Buy Me a Coffee で支援する",
+        donateMessage: "Croissaint は無料で独立したアプリとして、わたしの空き時間に開発しています。金銭的に支援したい場合は、GitHub Stars が開発の継続に直接役立ちます。",
+        donateButton: "GitHub Stars で支援する",
         donateThanks: "来てくれてありがとう。🖤",
         supportIntroTitle: "Croissaint の成長を支える",
-        supportIntroMessage: "開発を金銭的に支援したい場合は、Buy Me a Coffee が唯一の窓口です。",
+        supportIntroMessage: "開発を金銭的に支援したい場合は、GitHub Stars が唯一の窓口です。",
         supportIntroStarButton: "GitHub で Croissaint にスターを付ける",
         supportIntroStarMessage: "金銭的な支援は決して必要ではありません。GitHub のスターは、より多くの人が Croissaint を見つける助けになり、開発にも大きな力になります。",
-        supportIntroCoffeeButton: "Buy Me a Coffee で支援する",
+        supportIntroCoffeeButton: "GitHub Stars で支援する",
         supportIntroLaterButton: "今はしない",
         supportIntroDoneButton: "完了",
-        discordIntroTitle: "CroissaintのDiscordコミュニティが始まります",
-        discordIntroMessage: "Croissaint コミュニティは新しく、まだ成長の途中です。早い段階から参加して他のユーザーと出会い、アプリを囲む心地よい場所を一緒につくりましょう。",
-        discordIntroBenefitHelp: "助けを得て、使い方やワークフローを共有",
-        discordIntroBenefitFeedback: "バグを報告し、改善を提案して今後を一緒に形づくる",
-        discordIntroBenefitPreviews: "開発中の内容、先行プレビュー、リリース情報を確認",
-        discordIntroJoinButton: "Discord コミュニティに参加",
         communityIntroTitle: "誰よりも先に新機能をチェック",
         communityIntroMessage: "すでにXでフォローしてくれていた人は、今回のアップデートに含まれるいくつもの変更を誰よりも早く知っていました。Xでは次に登場する機能のプレビューや使い方を紹介しているので、アップデートの公開前から基本を知ることができます。フォローして次の新機能をチェックしてください！",
-        communityIntroFollowButton: "Xで@vorssaintをフォロー",
+        communityIntroFollowButton: "Xで@chuahchengxiをフォロー",
         homebrewOfficialIntroTitle: "Homebrew 公式カタログに登場",
         homebrewOfficialIntroMessage: "Croissaint を Homebrew 公式カタログから直接インストールできるようになりました。",
         homebrewOfficialIntroInstallLabel: "新規インストール",

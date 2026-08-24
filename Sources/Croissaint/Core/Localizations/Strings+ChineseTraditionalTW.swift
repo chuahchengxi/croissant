@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -795,25 +795,19 @@ extension Strings {
         shortcutsPageTitle: "鍵盤快速鍵",
         settingsSearchPlaceholder: "搜尋設定",
         donateHeading: "幫助 Croissaint 繼續成長",
-        donateMessage: "Croissaint 免費、獨立，由我利用空閒時間開發。如果你願意提供經濟支援，Buy Me a Coffee 會直接幫助我繼續推進開發。",
-        donateButton: "透過 Buy Me a Coffee 支援",
+        donateMessage: "Croissaint 免費、獨立，由我利用空閒時間開發。如果你願意提供經濟支援，GitHub Stars 會直接幫助我繼續推進開發。",
+        donateButton: "透過 GitHub Stars 支援",
         donateThanks: "謝謝你來到這裡。🖤",
         supportIntroTitle: "幫助 Croissaint 繼續成長",
-        supportIntroMessage: "如果你願意在經濟上支援開發，Buy Me a Coffee 是唯一的支援方式。",
+        supportIntroMessage: "如果你願意在經濟上支援開發，GitHub Stars 是唯一的支援方式。",
         supportIntroStarButton: "在 GitHub 為 Croissaint 加星",
         supportIntroStarMessage: "我們從不期待經濟支援。在 GitHub 加一顆星能讓更多人發現 Croissaint，也會實際幫助它持續發展。",
-        supportIntroCoffeeButton: "透過 Buy Me a Coffee 支援",
+        supportIntroCoffeeButton: "透過 GitHub Stars 支援",
         supportIntroLaterButton: "稍後再說",
         supportIntroDoneButton: "完成",
-        discordIntroTitle: "Croissaint Discord 社群剛剛起步",
-        discordIntroMessage: "Croissaint 社群才剛成立，仍在持續完善。現在加入，認識其他使用者，並一起打造一個圍繞這款 App 的友善空間。",
-        discordIntroBenefitHelp: "獲得協助並分享工作流程",
-        discordIntroBenefitFeedback: "回報問題、提出改進建議並參與決定下一步",
-        discordIntroBenefitPreviews: "了解開發進度、搶先預覽和版本動態",
-        discordIntroJoinButton: "加入 Discord 社群",
         communityIntroTitle: "搶先看到每個新功能",
         communityIntroMessage: "已經在 X 上追蹤我的人，早在其他人之前就看到了這次更新中的多項變化。我會在那裡發佈即將推出的新功能預覽並示範使用方式，讓你在更新推出前就了解基本操作。追蹤我，搶先看看接下來有什麼！",
-        communityIntroFollowButton: "在 X 上追蹤 @vorssaint",
+        communityIntroFollowButton: "在 X 上追蹤 @chuahchengxi",
         homebrewOfficialIntroTitle: "現已加入 Homebrew 官方目錄",
         homebrewOfficialIntroMessage: "現在可以直接從 Homebrew 官方目錄安裝 Croissaint。",
         homebrewOfficialIntroInstallLabel: "全新安裝",

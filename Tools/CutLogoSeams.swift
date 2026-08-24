@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 //
 // Regenerates Resources/Brand/logo.png from logo-source.png (the flat-colour
 // croissant art). The app tints the mark as a TEMPLATE image, which flattens

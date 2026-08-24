@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Read-only UI smoke test for the installed Developer build. Drives the real
 # app through Accessibility (menu panel, quick panel, Settings), captures

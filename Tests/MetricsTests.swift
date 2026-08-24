@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Croissaint
+// Copyright (C) 2026 chuahchengxi
 
 import AppKit
 import Carbon.HIToolbox
@@ -2334,29 +2334,25 @@ struct MetricsTests {
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "3.3.3-beta.2", lastSeenVersion: nil)
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "3.5.0", lastSeenVersion: nil),
                "support prompt never leaks into another release")
-        expect(SupportUpdateIntroStep.discord.next == .social
-               && SupportUpdateIntroStep.social.next == .support
+        expect(SupportUpdateIntroStep.social.next == .support
                && SupportUpdateIntroStep.support.next == nil,
-               "update intro moves from Discord to social updates and support")
-        expect(SupportUpdateIntroStep.discord.previous == nil
-               && SupportUpdateIntroStep.social.previous == .discord
+               "update intro moves from social updates to support")
+        expect(SupportUpdateIntroStep.social.previous == nil
                && SupportUpdateIntroStep.support.previous == .social,
                "update intro navigates back without closing")
-        expect(SupportUpdateIntroStep.allCases == [.discord, .social, .support],
+        expect(SupportUpdateIntroStep.allCases == [.social, .support],
                "update intro page indicators follow the navigation order")
-        expect(AppInfo.discordURL.absoluteString == "https://discord.gg/M6BwWH4BJp",
-               "the community action uses the permanent Discord invitation")
-        expect(AppInfo.coffeeURL.absoluteString == "https://buymeacoffee.com/vorssaint",
-               "financial support uses Buy Me a Coffee")
-        expect(AppInfo.socialURL.absoluteString == "https://x.com/vorssaint",
-               "social previews keep the official X profile")
+        expect(AppInfo.coffeeURL.absoluteString == "https://github.com/chuahchengxi/croissant",
+               "financial support points at the GitHub project page")
+        expect(AppInfo.socialURL.absoluteString == "https://github.com/chuahchengxi/croissant",
+               "social previews keep the official repository")
         // AppInfo.version falls back to "dev" in this bare harness, so read
         // the plist the shipped app will actually carry. The pin is a
         // per-release decision: this check fails on every version bump so the
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "3.4.0",
+        expect(plistVersion == "3.4.1",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -6730,8 +6726,8 @@ struct MetricsTests {
                "beta is not newer than the released final version")
 
         // Release candidate selection
-        let dummyDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4/Croissaint.dmg")!
-        let dummyBetaDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4-beta.1/Croissaint.dmg")!
+        let dummyDMG = URL(string: "https://github.com/chuahchengxi/croissant/releases/download/v3.3.4/Croissaint.dmg")!
+        let dummyBetaDMG = URL(string: "https://github.com/chuahchengxi/croissant/releases/download/v3.3.4-beta.1/Croissaint.dmg")!
 
         let candidateList = [
             UpdateServiceSupport.ReleaseCandidate(tagName: "v3.3.4-beta.1", isPrerelease: true, isDraft: false, dmgURL: dummyBetaDMG, dmgExpectedBytes: 1000, body: "Beta notes"),
@@ -9198,26 +9194,18 @@ struct MetricsTests {
                 strings.supportIntroStarButton,
                 strings.supportIntroStarMessage,
                 strings.supportIntroCoffeeButton,
-                strings.discordIntroTitle,
-                strings.discordIntroMessage,
-                strings.discordIntroBenefitHelp,
-                strings.discordIntroBenefitFeedback,
-                strings.discordIntroBenefitPreviews,
-                strings.discordIntroJoinButton,
                 strings.communityIntroTitle,
                 strings.communityIntroMessage,
                 strings.communityIntroFollowButton,
             ]
             expect(supportCommunityStrings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
                    "\(prefix) support and community strings are complete without em dash")
-            expect(strings.donateButton.contains("Buy Me a Coffee")
-                   && strings.supportIntroCoffeeButton.contains("Buy Me a Coffee"),
-                   "\(prefix) financial support points only to Buy Me a Coffee")
+            expect(strings.donateButton.contains("GitHub")
+                   && strings.supportIntroCoffeeButton.contains("GitHub"),
+                   "\(prefix) financial support points only to the GitHub project")
             expect(strings.supportIntroStarMessage.localizedCaseInsensitiveContains("GitHub")
-                   && strings.discordIntroJoinButton.localizedCaseInsensitiveContains("Discord"),
+                   && strings.supportIntroStarButton.localizedCaseInsensitiveContains("GitHub"),
                    "\(prefix) non-financial support and community actions name their destinations")
-            expect(strings.discordIntroMessage.count <= 320,
-                   "\(prefix) Discord introduction stays concise")
             expect(!strings.communityIntroMessage.isEmpty
                    && strings.communityIntroMessage.contains("X"),
                    "\(prefix) community intro invites users to follow previews on X")
@@ -9232,15 +9220,6 @@ struct MetricsTests {
             expect(!strings.communityIntroMessage.contains("—")
                    && strings.communityIntroMessage.count <= 320,
                    "\(prefix) community intro stays concise and has no em dash")
-            if language == .enUS {
-                expect(strings.discordIntroMessage.contains("new")
-                       && strings.discordIntroMessage.contains("still being built"),
-                       "English Discord introduction says the community is new and in development")
-            } else if language == .ptBR {
-                expect(strings.discordIntroMessage.contains("nova")
-                       && strings.discordIntroMessage.contains("em desenvolvimento"),
-                       "Portuguese Discord introduction says the community is new and in development")
-            }
             expect(!strings.updateShowcaseTitle.isEmpty, "\(prefix) update showcase title is present")
             expect(!strings.updateShowcaseMessage.isEmpty, "\(prefix) update showcase message is present")
             expect(!strings.updateShowcaseUnavailable.isEmpty, "\(prefix) update showcase fallback is present")
