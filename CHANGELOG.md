@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [3.4.1] - 2026-08-24
+
+### Changed
+- The app is now fully its own: every link (website, repository, support, community) points at `github.com/chuahchengxi/croissant`, and the Buy Me a Coffee page is gone — the in-app support actions open the GitHub project instead.
+- The self-updater polls this repository's releases, so new versions arrive directly inside the app.
+
+### Fixed
+- 420 source files rebranded from Vorssaint to chuahchengxi, including localized support copy, sudoers documentation and tests.
+
 ## [3.4.0] - 2026-08-24
 
 ### Added
