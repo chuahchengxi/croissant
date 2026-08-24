@@ -16091,7 +16091,12 @@ struct MetricsTests {
 
         // MARK: Pokedex catalog
 
-        expect(speciesCatalog.count == 1025, "the catalog covers the whole National Dex")
+        // Custom characters (Nailong and friends) live past the dex at 10000+,
+        // so coverage is asserted over the real National Dex range only.
+        expect(speciesCatalog.filter { $0.baseID <= 1025 }.count == 1025,
+               "the catalog covers the whole National Dex")
+        expect(speciesCatalog.allSatisfy { $0.baseID <= 1025 || $0.baseID >= 10_000 },
+               "custom species stay clear of real dex numbers")
         expect(Set(speciesCatalog.map(\.key)).count == speciesCatalog.count,
                "every species key is unique")
         expect(speciesCatalog.allSatisfy { $0.names.count == $0.evoIDs.count && !$0.names.isEmpty },
