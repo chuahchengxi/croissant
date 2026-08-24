@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [beta-2] - 2026-08-24
+
+### Added
+- Synced the latest upstream Vorssaint work, including a correction to how Memory Used is accounted so it matches Activity Monitor, and an App Switcher fix that slows overflow-row hover to one icon at a time.
+
 ## [3.4.1] - 2026-08-24
 
 ### Changed

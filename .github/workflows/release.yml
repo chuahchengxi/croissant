@@ -38,7 +38,9 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)"
-          if [[ "$APP_VERSION" != "$VERSION" ]]; then
+          # Compare with separators (-, ., space) removed so a tag like vbeta-2
+          # matches an app version of "beta 2".
+          if [[ "${VERSION//[-. ]/}" != "${APP_VERSION//[-. ]/}" ]]; then
             echo "Tag $GITHUB_REF_NAME does not match app version $APP_VERSION" >&2
             exit 1
           fi
@@ -118,7 +120,7 @@ jobs:
               echo "Ad-hoc signed build (no notarization credentials configured): on first launch, right-click the app and choose Open, or allow it under System Settings → Privacy & Security. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
             fi
             echo "__VRSS_EOF__"
-            if [[ "$VERSION" =~ -(beta|rc|alpha) ]]; then
+            if [[ "$VERSION" =~ (beta|rc|alpha) ]]; then
               echo "PRERELEASE=true"
               echo "MAKE_LATEST=false"
             else
