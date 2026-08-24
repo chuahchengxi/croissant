@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 Croissaint
 
 import AppKit
 import Carbon.HIToolbox
@@ -9,6 +9,7 @@ import CoreGraphics
 import Darwin
 import Foundation
 import ImageIO
+import VMStatisticsCompat
 
 // Standalone unit tests for pure helpers. Compiled without IOKit or UI by
 // `./build.sh --test`, so they run fast and deterministically on any machine.
@@ -1369,14 +1370,48 @@ struct MetricsTests {
         // MARK: Memory used
 
         let used = MetricFormat.memoryUsed(totalBytes: 16 * 1024,
+                                           appBytes: 5 * 1024,
                                            pageSize: 1024,
-                                           freePages: 1,
-                                           speculativePages: 2,
-                                           fileBackedPages: 3)
-        expect(used == 10 * 1024, "memory used excludes free, speculative and file-backed pages")
-        expect(MetricFormat.memoryUsed(totalBytes: 16, pageSize: 1,
-                                       freePages: 20, speculativePages: 0, fileBackedPages: 0) == 0,
-               "memory used clamps impossible available memory")
+                                           wiredPages: 2,
+                                           compressorPages: 1,
+                                           tagStoragePages: 1)
+        expect(used == 9 * 1024, "memory used includes app, wired, compressed and tagged storage")
+        expect(MetricFormat.memoryUsed(totalBytes: 16, appBytes: 20,
+                                       pageSize: 1, wiredPages: 0,
+                                       compressorPages: 0, tagStoragePages: 0) == 16,
+               "memory used clamps impossible used memory")
+
+        var vmStats = vorssaint_vm_statistics64_rev3_t()
+        vmStats.wire_count = 2
+        vmStats.purgeable_count = 3
+        vmStats.compressor_page_count = 4
+        vmStats.external_page_count = 5
+        vmStats.internal_page_count = 6
+        vmStats.total_tag_storage_pages = 7
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev1Count - 1) == nil,
+               "VM statistics rejects a truncated legacy payload")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev1Count) ==
+                   VMStatisticsSnapshot(wiredPages: 2,
+                                        purgeablePages: 3,
+                                        compressorPages: 4,
+                                        externalPages: 5,
+                                        internalPages: 6,
+                                        tagStoragePages: 0),
+               "VM statistics decodes the typed legacy prefix")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev2Count)?.tagStoragePages == 0,
+               "VM statistics does not read tagged storage from a rev2 payload")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev3Count)?.tagStoragePages == 7,
+               "VM statistics reads tagged storage from a rev3 payload")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(2, totalBytes: 16, pageSize: 4) == 2,
+               "VM statistics accepts plausible tagged storage")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(5, totalBytes: 16, pageSize: 4) == 0,
+               "VM statistics rejects tagged storage larger than physical memory")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(1, totalBytes: 16, pageSize: 0) == 0,
+               "VM statistics rejects tagged storage without a page size")
 
         // MARK: App memory
 
@@ -7700,6 +7735,64 @@ struct MetricsTests {
                                                                  selectedIndex: 2,
                                                                  delta: 1) == 2,
                "App Switcher icon-row window navigation stays put when the app has one window")
+        expect(SwitcherSupport.iconRowEdgeHoverInterval > SwitcherSupport.iconRowEdgeHoverAnimationDuration
+               && SwitcherSupport.iconRowEdgeHoverRepeatInterval >= SwitcherSupport.iconRowEdgeHoverAnimationDuration
+               && SwitcherSupport.iconRowEdgeHoverRepeatInterval < SwitcherSupport.iconRowEdgeHoverInterval
+               && SwitcherSupport.iconRowEdgeHoverAnimationDuration > 0.15,
+               "App Switcher overflow hover waits to start, then steps with the slide")
+        expect(SwitcherSupport.clampedIconRowFirstVisibleIndex(itemCount: 12,
+                                                              visibleCount: 6,
+                                                              firstVisibleIndex: -2) == 0
+               && SwitcherSupport.clampedIconRowFirstVisibleIndex(itemCount: 12,
+                                                                 visibleCount: 6,
+                                                                 firstVisibleIndex: 20) == 6
+               && SwitcherSupport.clampedIconRowFirstVisibleIndex(itemCount: 5,
+                                                                 visibleCount: 6,
+                                                                 firstVisibleIndex: 3) == 0,
+               "App Switcher overflow row never scrolls past either end")
+        expect(SwitcherSupport.iconRowFirstVisibleIndex(revealing: 8,
+                                                        itemCount: 12,
+                                                        visibleCount: 6,
+                                                        currentFirstVisibleIndex: 0) == 3
+               && SwitcherSupport.iconRowFirstVisibleIndex(revealing: 1,
+                                                           itemCount: 12,
+                                                           visibleCount: 6,
+                                                           currentFirstVisibleIndex: 3) == 1
+               && SwitcherSupport.iconRowFirstVisibleIndex(revealing: 4,
+                                                           itemCount: 12,
+                                                           visibleCount: 6,
+                                                           currentFirstVisibleIndex: 3) == 3,
+               "App Switcher overflow row slides just far enough to keep the selection visible")
+        expect(SwitcherSupport.iconRowEdgeHoverDelta(hoveredIndex: 5,
+                                                     firstVisibleIndex: 0,
+                                                     visibleCount: 6,
+                                                     itemCount: 12) == 1
+               && SwitcherSupport.iconRowEdgeHoverDelta(hoveredIndex: 3,
+                                                        firstVisibleIndex: 3,
+                                                        visibleCount: 6,
+                                                        itemCount: 12) == -1
+               && SwitcherSupport.iconRowEdgeHoverDelta(hoveredIndex: 2,
+                                                        firstVisibleIndex: 0,
+                                                        visibleCount: 6,
+                                                        itemCount: 12) == nil
+               && SwitcherSupport.iconRowEdgeHoverDelta(hoveredIndex: 5,
+                                                        firstVisibleIndex: 6,
+                                                        visibleCount: 6,
+                                                        itemCount: 12) == nil
+               && SwitcherSupport.iconRowEdgeHoverDelta(hoveredIndex: 3,
+                                                        firstVisibleIndex: 0,
+                                                        visibleCount: 6,
+                                                        itemCount: 5) == nil,
+               "App Switcher overflow hover only steps from the last visible icon on a side")
+        expect(SwitcherSupport.iconRowIndexAfterEdgeHoverStep(firstVisibleIndex: 1,
+                                                              visibleCount: 6,
+                                                              itemCount: 12,
+                                                              delta: 1) == 6
+               && SwitcherSupport.iconRowIndexAfterEdgeHoverStep(firstVisibleIndex: 2,
+                                                                 visibleCount: 6,
+                                                                 itemCount: 12,
+                                                                 delta: -1) == 2,
+               "App Switcher overflow hover lands on the newly revealed last visible icon")
         let frontmostScoped = SwitcherSupport.frontmostAppWindows(allItems: groupedSwitcherItems,
                                                                     frontmostPID: 101)
         expect(frontmostScoped.count == 2
