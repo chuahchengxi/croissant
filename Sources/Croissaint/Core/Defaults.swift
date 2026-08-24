@@ -613,13 +613,11 @@ enum SupportUpdateIntroInfo {
 }
 
 enum SupportUpdateIntroStep: CaseIterable, Hashable {
-    case discord
     case social
     case support
 
     var next: SupportUpdateIntroStep? {
         switch self {
-        case .discord: return .social
         case .social: return .support
         case .support: return nil
         }
@@ -627,8 +625,7 @@ enum SupportUpdateIntroStep: CaseIterable, Hashable {
 
     var previous: SupportUpdateIntroStep? {
         switch self {
-        case .discord: return nil
-        case .social: return .discord
+        case .social: return nil
         case .support: return .social
         }
     }
