@@ -183,7 +183,6 @@ enum SettingsDirectory {
                 SettingsDirectoryItem(page: .releaseNotes, title: s.tabReleaseNotes, icon: "sparkles"),
                 SettingsDirectoryItem(page: .support, title: s.tabSupport, icon: "heart.fill",
                                       keywords: [s.donateButton, s.supportIntroStarButton,
-                                                 s.discordIntroJoinButton,
                                                  s.communityIntroFollowButton]),
             ]),
         ]

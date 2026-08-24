@@ -942,12 +942,6 @@ struct Strings {
     let supportIntroCoffeeButton: String
     let supportIntroLaterButton: String
     let supportIntroDoneButton: String
-    let discordIntroTitle: String
-    let discordIntroMessage: String
-    let discordIntroBenefitHelp: String
-    let discordIntroBenefitFeedback: String
-    let discordIntroBenefitPreviews: String
-    let discordIntroJoinButton: String
     let communityIntroTitle: String
     let communityIntroMessage: String
     let communityIntroFollowButton: String
@@ -1902,12 +1896,6 @@ extension Strings {
         supportIntroCoffeeButton: "Apoiar no GitHub Stars",
         supportIntroLaterButton: "Agora não",
         supportIntroDoneButton: "Concluir",
-        discordIntroTitle: "A comunidade do Croissaint no Discord está começando",
-        discordIntroMessage: "A comunidade do Croissaint é nova e ainda está em desenvolvimento. Entre desde o começo para conhecer outros usuários e ajudar a construir um espaço acolhedor em torno do app.",
-        discordIntroBenefitHelp: "Tire dúvidas e compartilhe fluxos de trabalho",
-        discordIntroBenefitFeedback: "Relate bugs, peça melhorias e ajude a decidir o que vem depois",
-        discordIntroBenefitPreviews: "Acompanhe o desenvolvimento, prévias e novidades de versões",
-        discordIntroJoinButton: "Entrar na comunidade no Discord",
         communityIntroTitle: "Vem ver antes de todo mundo",
         communityIntroMessage: "Quem já me seguia no X viu várias novidades desta atualização antes de todo mundo. Lá eu posto prévias do que vem depois e mostro como funciona, para você já saber o básico antes mesmo da atualização sair. Segue lá e veja o que vem depois!",
         communityIntroFollowButton: "Seguir @chuahchengxi no X",
@@ -2857,12 +2845,6 @@ extension Strings {
         supportIntroCoffeeButton: "Support on GitHub Stars",
         supportIntroLaterButton: "Not now",
         supportIntroDoneButton: "Done",
-        discordIntroTitle: "The Croissaint Discord community is just getting started",
-        discordIntroMessage: "The Croissaint community is new and still being built. Join early to meet other users and help build a welcoming space around the app.",
-        discordIntroBenefitHelp: "Get help and share workflows",
-        discordIntroBenefitFeedback: "Report bugs, request improvements and shape what comes next",
-        discordIntroBenefitPreviews: "See work in progress, early previews and release news",
-        discordIntroJoinButton: "Join the Discord community",
         communityIntroTitle: "See it before everyone else",
         communityIntroMessage: "People who already followed me on X saw several changes in this update before anyone else. I post previews of what is coming and show how it works, so you already know the basics before the update ships. Follow along and see what comes next!",
         communityIntroFollowButton: "Follow @chuahchengxi on X",
