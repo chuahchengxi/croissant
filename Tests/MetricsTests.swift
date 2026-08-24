@@ -6660,13 +6660,18 @@ struct MetricsTests {
                                                                  volumeIsReadOnly: { _ in false }),
                "apps on a writable external volume stay updatable in place")
         let installerScript = UpdateInstallerSupport.installerScript()
-        for step in ["fail-tempdir", "fail-mount", "fail-no-app-in-dmg",
+        for step in ["fail-dmg-verify", "fail-tempdir", "fail-mount", "fail-no-app-in-dmg",
                      "fail-copy", "fail-verify", "fail-swap", "note ok"] {
             expect(installerScript.contains(step),
                    "installer script reports the \(step) step")
         }
         expect(installerScript.contains("spctl --status"),
                "installer script skips Gatekeeper assessment when the user disabled it")
+        let dmgVerification = installerScript.range(of: "DMG_VERIFY_REQ")
+        let dmgMount = installerScript.range(of: "/usr/bin/hdiutil attach")
+        expect(dmgVerification != nil && dmgMount != nil
+               && dmgVerification!.lowerBound < dmgMount!.lowerBound,
+               "installer verifies the release signer before mounting the DMG")
         expect(installerScript.contains("chown -R"),
                "an elevated install hands the bundle back to the user")
         expect(installerScript.contains("update-old.$PID"),
@@ -6743,6 +6748,14 @@ struct MetricsTests {
 
         let selectedFromHigherBeta = UpdateServiceSupport.selectUpdate(from: candidateList, currentVersion: "3.3.4-beta.1", includeBetas: false)
         expect(selectedFromHigherBeta == nil, "user on beta turning off betas does not downgrade to older stable")
+
+        let knownDigest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        expect(UpdateServiceSupport.sha256Matches(Data("abc".utf8), expectedHex: knownDigest),
+               "update media accepts its pinned SHA-256 digest")
+        expect(!UpdateServiceSupport.sha256Matches(Data("altered".utf8), expectedHex: knownDigest),
+               "update media rejects content that does not match its pinned digest")
+        expect(!UpdateServiceSupport.sha256Matches(Data("abc".utf8), expectedHex: "invalid"),
+               "update media rejects a malformed pinned digest")
 
         // Defaults registered
         expect(Defaults.registeredDefaults[DefaultsKey.includeBetaUpdates] as? Bool == false,
