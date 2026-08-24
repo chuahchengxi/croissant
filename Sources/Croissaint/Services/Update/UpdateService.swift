@@ -307,11 +307,11 @@ final class UpdateService: ObservableObject {
     }
 
     /// Hands the swap to a detached shell script: it waits for this process to
-    /// quit, mounts the DMG, replaces the bundle, clears quarantine and
-    /// relaunches. Running it outside the app means the bundle can be replaced
-    /// safely while we exit. When the app's folder is not writable by this
-    /// user (standard account with the app in /Applications), the script runs
-    /// through an admin prompt instead of failing silently.
+    /// quit, verifies and mounts the DMG, replaces the bundle, clears
+    /// quarantine and relaunches. Running it outside the app means the bundle
+    /// can be replaced safely while we exit. When the app's folder is not
+    /// writable by this user (standard account with the app in /Applications),
+    /// the script runs through an admin prompt instead of failing silently.
     private func launchInstaller(dmgPath: String, offered: String?) {
         let appPath = Bundle.main.bundlePath
         let pid = ProcessInfo.processInfo.processIdentifier

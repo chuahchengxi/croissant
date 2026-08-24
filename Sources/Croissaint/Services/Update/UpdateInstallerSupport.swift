@@ -17,9 +17,9 @@ enum UpdateInstallerSupport {
         return trimmed
     }
 
-    /// The installer: waits for the app to exit, mounts the DMG, stages a
-    /// copy of the new bundle, verifies its signature, swaps it in and
-    /// relaunches. Arguments: $1 app path, $2 dmg path, $3 pid to wait for,
+    /// The installer: waits for the app to exit, verifies and mounts the DMG,
+    /// stages and verifies the new bundle, swaps it in and relaunches.
+    /// Arguments: $1 app path, $2 dmg path, $3 pid to wait for,
     /// $4 result marker path, $5 uid to relaunch as (used when running as
     /// root, where a plain `open` could launch the app as root).
     static func installerScript() -> String {
@@ -61,6 +61,15 @@ enum UpdateInstallerSupport {
             /usr/bin/open "$1"
         }
         while kill -0 "$PID" 2>/dev/null; do sleep 0.3; done
+        note fail-dmg-verify
+        DMG_VERIFY_REQ='anchor apple generic and certificate leaf[subject.OU] = "3D485NHW29"'
+        if ! /usr/bin/codesign -v --strict -R="$DMG_VERIFY_REQ" "$DMG" 2>/dev/null; then
+            /bin/rm -f "$DMG"
+            finalize
+            relaunch "$APP"
+            cleanup_script
+            exit 1
+        fi
         note fail-tempdir
         MNT="$(/usr/bin/mktemp -d)" || { /bin/rm -f "$DMG"; finalize; relaunch "$APP"; cleanup_script; exit 1; }
         note fail-mount
