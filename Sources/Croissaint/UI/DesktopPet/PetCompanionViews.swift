@@ -170,6 +170,7 @@ extension PetItemKind {
         case .greatBall: return .blue
         case .ultraBall: return .yellow
         case .berry: return .orange
+        case .everStone: return .mint
         }
     }
 
@@ -179,6 +180,9 @@ extension PetItemKind {
         case .greatBall: return 30
         case .ultraBall: return 80
         case .berry: return 8
+        // Shop-only on purpose: the stone is never a random drop, so pausing
+        // evolution is always a deliberate purchase.
+        case .everStone: return 120
         }
     }
 }
@@ -268,6 +272,10 @@ struct ItemCard: View {
             Image(systemName: "carrot.fill")
                 .font(.system(size: 20))
                 .foregroundStyle(Color.orange)
+        } else if kind == .everStone {
+            Image(systemName: "leaf.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(Color.mint)
         } else {
             PokeBallIcon(size: 24, tint: kind.tint)
         }
@@ -466,19 +474,26 @@ struct PetPanel: View {
                     ItemCard(
                         kind: kind,
                         count: pet.count(of: kind),
-                        selected: isBall(kind) && pet.activeBall == kind
+                        selected: isSelected(kind)
                     ) {
                         if isBall(kind), pet.count(of: kind) > 0 {
                             pet.setActiveBall(kind)
                             showToast("\(kind.displayName) selected")
                         } else if kind == .berry {
                             useBerry()
+                        } else if kind == .everStone {
+                            toggleEverStone()
                         }
                     }
                 }
             }
 
-            if isBall(pet.activeBall) {
+            if pet.evolutionBlocked {
+                Text("Ever Stone held — evolution paused")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Color.mint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else if isBall(pet.activeBall) {
                 Text("Active throw ball: \(pet.activeBall.displayName)")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
@@ -514,6 +529,24 @@ struct PetPanel: View {
 
     private func isBall(_ kind: PetItemKind) -> Bool {
         kind == .pokeBall || kind == .greatBall || kind == .ultraBall
+    }
+
+    private func isSelected(_ kind: PetItemKind) -> Bool {
+        if kind == .everStone { return pet.evolutionBlocked }
+        return isBall(kind) && pet.activeBall == kind
+    }
+
+    /// Hold or put down the Ever Stone. The stone itself is never consumed —
+    /// holding it just pauses evolution until it's put back in the bag.
+    private func toggleEverStone() {
+        if pet.evolutionBlocked {
+            _ = pet.setEvolutionHeld(false)
+            showToast("Evolution resumed")
+        } else if pet.setEvolutionHeld(true) {
+            showToast("Evolution paused")
+        } else {
+            showToast("Buy an Ever Stone in the shop first!")
+        }
     }
 
     private func buy(_ kind: PetItemKind) {
@@ -606,6 +639,7 @@ struct PetPanel: View {
     }
 
     private var evoText: String {
+        if pet.evolutionBlocked { return "Ever Stone stops evolution" }
         guard let next = pet.nextEvolutionLevel else {
             return pet.species?.supportsEvolution == true ? "Final form" : "No evolution"
         }
@@ -771,14 +805,37 @@ struct BuddyChooser: View {
     let initial: Bool
     let onPicked: () -> Void
 
+    /// The classic first-partner Pokémon, one per region. These (plus Dedenne,
+    /// the default companion) are selectable from the start; every other
+    /// species joins the roster once the player catches it in the wild.
+    static let starterDexIDs: Set<Int> = [
+        1, 4, 7,            // Kanto
+        152, 155, 158,      // Johto
+        252, 255, 258,      // Hoenn
+        387, 390, 393,      // Sinnoh
+        495, 498, 501,      // Unova
+        650, 653, 656,      // Kalos
+        722, 725, 728,      // Alola (Rowlet, Litten, Popplio)
+        810, 813, 816,      // Galar
+        906, 909, 912       // Paldea
+    ]
+
     @EnvironmentObject private var pet: PetState
     @State private var query = ""
     @FocusState private var searchFocused: Bool
 
+    /// Every species the player is currently allowed to pick.
+    private var roster: [SpeciesDef] {
+        var ids = Self.starterDexIDs
+        ids.insert(702) // Dedenne
+        ids.formUnion(pet.caughtSpeciesIDs)
+        return speciesCatalog.filter { ids.contains($0.baseID) }
+    }
+
     private var filtered: [SpeciesDef] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return speciesCatalog }
-        return speciesCatalog.filter { $0.name.lowercased().contains(q) }
+        guard !q.isEmpty else { return roster }
+        return roster.filter { $0.name.lowercased().contains(q) }
     }
 
     var body: some View {
@@ -786,6 +843,10 @@ struct BuddyChooser: View {
             Text(initial ? "Choose your buddy" : "Switch buddy")
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .padding(.top, 16)
+
+            Text("Starters are always here — catch a wild Pokémon to unlock it")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
 
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")

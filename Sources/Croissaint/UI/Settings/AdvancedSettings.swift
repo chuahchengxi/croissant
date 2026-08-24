@@ -8,6 +8,7 @@ import SwiftUI
 /// to this app (see `SelfUninstall`).
 struct AdvancedSettings: View {
     @ObservedObject private var l10n = L10n.shared
+    @AppStorage(DefaultsKey.privacyIndicatorCloakEnabled) private var indicatorCloakEnabled = false
     @State private var showClearConfirm = false
     @State private var showUninstallConfirm = false
     @State private var working = false
@@ -23,6 +24,17 @@ struct AdvancedSettings: View {
 
     var body: some View {
         Form {
+            Section("Menu bar privacy") {
+                Toggle("Hide recording & camera indicators", isOn: $indicatorCloakEnabled)
+                    .onChange(of: indicatorCloakEnabled) { _, _ in
+                        IndicatorCloakService.shared.syncWithPreferences()
+                    }
+                Text("Covers the purple screen-recording dot and the camera/microphone indicators with a patch of the surrounding menu bar while something is capturing. Nothing about capture changes — only what you see. No extra permission needed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section(backup.title) {
                 Text(backup.description)
                     .font(.caption)
