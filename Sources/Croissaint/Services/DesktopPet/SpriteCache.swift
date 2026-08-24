@@ -66,7 +66,10 @@ enum SpriteCache {
     static func prefetch(ids: [Int], done: (() -> Void)?) {
         let group = DispatchGroup()
         var any = false
-        for id in ids where !FileManager.default.fileExists(atPath: localURL(id).path) {
+        // Custom characters are re-rendered from code every launch so sprite
+        // art updates reach players whose on-disk GIF is from an older build.
+        for id in ids where !FileManager.default.fileExists(atPath: localURL(id).path)
+            || id >= CustomPetSprites.idLowerBound {
             any = true
             group.enter()
             fetch(id) { group.leave() }

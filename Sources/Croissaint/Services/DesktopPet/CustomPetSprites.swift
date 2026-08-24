@@ -23,85 +23,138 @@ enum CustomPetSprites {
 
     // MARK: - Nailong
 
-    /// Chubby sunny-yellow dragon: one round blob of a body, big duang-duang
-    /// belly, oversized eyes, no ears, tongue lolling out. The idle loop is a
-    /// gentle six-frame bounce with a little squash at the bottom.
+    /// Pixel-art take on the chubby golden "milk dragon": one huge egg head,
+    /// green eyes with a glint, cream belly, stubby clawed arms and feet. The
+    /// 40x40 map was designed against reference stills of the character and is
+    /// rendered nearest-neighbour at 3px per cell onto the 128px canvas. The
+    /// idle loop bounces with a squash on landing and sneaks a blink into
+    /// every second cycle.
     private static func nailongFrames() -> [CGImage] {
-        (0..<6).compactMap { frame -> CGImage? in
-            let t = CGFloat(frame) / 6 * 2 * .pi
-            let rise = sin(t)
-            return render(size: 128) { ctx in
-                ctx.saveGState()
-                ctx.translateBy(x: 64, y: 20)
-                ctx.scaleBy(x: 1 + max(0, -rise) * 0.025, y: 1 - max(0, -rise) * 0.05)
-                ctx.translateBy(x: -64, y: -20)
-                ctx.translateBy(x: 0, y: rise * 3)
-                drawNailong(in: ctx)
-                ctx.restoreGState()
+        // (rise, widthScale, heightScale) per beat; scales keep the feet planted.
+        let bounce: [(rise: Int, sx: CGFloat, sy: CGFloat)] = [
+            (0, 1.00, 1.00),   // rest
+            (2, 1.00, 1.00),   // lift
+            (3, 1.00, 1.00),   // apex
+            (2, 1.00, 1.00),   // fall
+            (0, 1.00, 1.00),   // land
+            (0, 1.05, 0.94),   // squash
+        ]
+        var frames: [CGImage] = []
+        for cycle in 0..<2 {
+            for (index, beat) in bounce.enumerated() {
+                let blink = cycle == 1 && index >= 4
+                if let frame = renderPixelFrame(map: nailongMap, blink: blink, beat: beat) {
+                    frames.append(frame)
+                }
+            }
+        }
+        return frames
+    }
+
+    /// One cell per art pixel, designed against reference stills of the
+    /// character. Palette keys live in `nailongPalette`.
+    private static let nailongMap: [String] = [
+        "............DDDYYYYYYYYYYDDD............",
+        "..........DDYYYYYYYYYYYYYYYYDD..........",
+        ".........DYYYYYYYYYYYYYYYYYYYYD.........",
+        "........DYYYYYYYYYYYYYYYYYYYYYYD........",
+        ".......DYYYYYYYYYYYYYYYYYYYYYYYYD.......",
+        "......DYYYYYYYYYYYYYYYYYYYYYYYYYYD......",
+        "......DYYYYYYYYYYYYYYYYYYYYYYYYYYD......",
+        ".....DYYYYYYYYYYYYYYYYYYYYYYYYYYYYD.....",
+        ".....DYYYYYYYWWWWYYYYYYWWWWYYYYYYYD.....",
+        ".....DYYYYYYWWWWWYYYYYYWWWWWYYYYYYD.....",
+        ".....DYYYYYYWWGGGWYYYYWGGGWWYYYYYYD.....",
+        ".....DYYYYYYWWKKKGYYYYWKKKGWYYYYYYD.....",
+        ".....DYYYYYYWGKKKGYYYYGKKKGWYYYYYYD.....",
+        ".....DYYYYYYWWGKGYYYYYYGKGWWYYYYYYD.....",
+        ".....DYYYYYYYWWWYYYYYYYYWWWYYYYYYYD.....",
+        "......DYYYYYYYYYYYYMMYYYYYYYYYYYYD......",
+        "......DYYYYYYYYYYYMPPMYYYYYYYYYYYD......",
+        ".......DYYYYYYYYYYYPPYYYYYYYYYYYD.......",
+        "........DYYYYYYYYYYYYYYYYYYYYYYD........",
+        ".....DDD.DYYYYYYYYYYYYYYYYYYYYD.DDD.....",
+        "....DYYYD.DDYYYYYYYYYYYYYYYYDD.DYYYD....",
+        "...DKYYYYDDYYYYYYYYYYYYYYYYYYDDYYYYKD...",
+        "..DYYKYYYDYYYYYYYYYYYYYYYYYYYYDYYYKYYD..",
+        "..DYYYYYYDYYYYYYYYCCCCYYYYYYYYDYYYYYYD..",
+        "..DYYYYYYYYYYYYCCCCCCCCCCYYYYYYYYYYYYD..",
+        "..DYYYYYYYYYYYCCCCCCCCCCCCYYYYYYYYYYYD..",
+        "..DYYYYYYYYYYCCCCCCCCCCCCCCYYYYYYYYYYD..",
+        "...DYYYDYYYYCCCCCCCCCCCCCCCCYYYYDYYYD...",
+        "....DDDDYYYYCCCCCCCCCCCCCCCCYYYYDDDD....",
+        "........DYYYCCCCCCCCCCCCCCCCYYYD........",
+        "........DYYYCCCCCCCCCCCCCCCCYYYD........",
+        ".........DYYYCCCCCCCCCCCCCCYYYD.........",
+        ".........DOYYYCCCCCCCCCCCCYYYOD.........",
+        "..........DOYYYCCCCCCCCCCYYYOD..........",
+        "...........DYYYYYYCCCCYYYYYYD...........",
+        "..........DYYYYYYYYYYYYYYYYYYD..........",
+        "..........DYYYYYYYOOOOYYYYYYYD..........",
+        "..........DOOYYYOODDDDOOYYYOOD..........",
+        "...........DKKOODD....DDOOOKKD..........",
+        "............DDDD........DDDDD...........",
+    ]
+
+    private static let nailongPalette: [Character: CGColor] = [
+        "D": CGColor(srgbRed: 0.478, green: 0.290, blue: 0.071, alpha: 1),
+        "Y": CGColor(srgbRed: 1.000, green: 0.851, blue: 0.361, alpha: 1),
+        "O": CGColor(srgbRed: 0.941, green: 0.659, blue: 0.231, alpha: 1),
+        "C": CGColor(srgbRed: 1.000, green: 0.953, blue: 0.824, alpha: 1),
+        "W": CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
+        "G": CGColor(srgbRed: 0.290, green: 0.639, blue: 0.290, alpha: 1),
+        "K": CGColor(srgbRed: 0.125, green: 0.149, blue: 0.106, alpha: 1),
+        "M": CGColor(srgbRed: 0.420, green: 0.227, blue: 0.122, alpha: 1),
+        "P": CGColor(srgbRed: 0.941, green: 0.502, blue: 0.549, alpha: 1),
+    ]
+
+    /// Renders one animation frame: optionally swaps the eyes for closed
+    /// lids, then stamps the map bottom-centre with squash scaling and an
+    /// upward offset. Cells stay axis-aligned rectangles so the pixel grid
+    /// never blurs.
+    private static func renderPixelFrame(
+        map: [String], blink: Bool, beat: (rise: Int, sx: CGFloat, sy: CGFloat)
+    ) -> CGImage? {
+        var cells = map
+        if blink {
+            for (y, row) in map.enumerated() {
+                var chars = Array(row)
+                for x in 0..<chars.count where "WGK".contains(chars[x]) {
+                    let inLeftEye = (11...18).contains(x) && (7...15).contains(y)
+                    let inRightEye = (21...28).contains(x) && (7...15).contains(y)
+                    if inLeftEye || inRightEye { chars[x] = "Y" }
+                }
+                for x in 12...18 where (11...12).contains(y) && chars[x] == "Y" { chars[x] = "O" }
+                for x in 21...27 where (11...12).contains(y) && chars[x] == "Y" { chars[x] = "O" }
+                cells[y] = String(chars)
+            }
+        }
+        let cell: CGFloat = 3
+        let side = CGFloat(cells.count) * cell
+        let width = side * beat.sx
+        let height = side * beat.sy
+        let originX = (CGFloat(canvas) - width) / 2
+        let originY = CGFloat(canvas) - 4 - height - CGFloat(beat.rise)
+        return render(size: canvas) { ctx in
+            ctx.setShouldAntialias(false)
+            for (y, row) in cells.enumerated() {
+                for (x, char) in row.enumerated() {
+                    guard let color = nailongPalette[char] else { continue }
+                    ctx.setFillColor(color)
+                    ctx.fill(CGRect(
+                        x: originX + CGFloat(x) * cell * beat.sx,
+                        y: originY + CGFloat(cells.count - 1 - y) * cell * beat.sy,
+                        width: cell * beat.sx,
+                        height: cell * beat.sy
+                    ))
+                }
             }
         }
     }
 
-    private static func drawNailong(in ctx: CGContext) {
-        let yellow = rgb(255, 217, 61)
-        let shade = rgb(240, 196, 42)
-        let cream = rgb(255, 245, 199)
-        let ink = rgb(43, 32, 18)
-        let blush = rgb(255, 158, 176, alpha: 0.6)
-        let mouth = rgb(122, 62, 31)
-        let tongue = rgb(255, 122, 133)
-
-        // Tail nub and stubby arms peek out from behind the body.
-        fill(ctx, yellow, ellipse(94, 34, w: 18, h: 18))
-        fillRotated(ctx, yellow, center: (25, 62), size: (15, 22), radians: .pi / 7)
-        fillRotated(ctx, yellow, center: (103, 62), size: (15, 22), radians: -.pi / 7)
-
-        // The whole dragon is essentially one plump egg.
-        fill(ctx, yellow, ellipse(26, 20, w: 76, h: 92))
-        fill(ctx, shade, ellipse(26, 20, w: 76, h: 14))
-        fill(ctx, cream, ellipse(39, 24, w: 50, h: 42))
-
-        // Feet tucked under the belly.
-        fill(ctx, yellow, ellipse(41, 17, w: 20, h: 13))
-        fill(ctx, yellow, ellipse(67, 17, w: 20, h: 13))
-
-        // Blush, eyes with a glint, and the open tongue-out grin.
-        fill(ctx, blush, ellipse(33, 70, w: 12, h: 9))
-        fill(ctx, blush, ellipse(83, 70, w: 12, h: 9))
-        fill(ctx, ink, ellipse(45, 80, w: 13, h: 17))
-        fill(ctx, ink, ellipse(70, 80, w: 13, h: 17))
-        fill(ctx, .white, ellipse(49, 86, w: 5, h: 5))
-        fill(ctx, .white, ellipse(74, 86, w: 5, h: 5))
-        fill(ctx, mouth, ellipse(49, 64, w: 30, h: 17))
-        fill(ctx, tongue, ellipse(57, 57, w: 16, h: 12))
-    }
+    private static let canvas = 128
 
     // MARK: - Drawing helpers
-
-    private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, alpha: CGFloat = 1) -> CGColor {
-        CGColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: alpha)
-    }
-
-    private static func ellipse(_ x: CGFloat, _ y: CGFloat, w: CGFloat, h: CGFloat) -> CGRect {
-        CGRect(x: x, y: y, width: w, height: h)
-    }
-
-    private static func fill(_ ctx: CGContext, _ color: CGColor, _ rect: CGRect) {
-        ctx.setFillColor(color)
-        ctx.fillEllipse(in: rect)
-    }
-
-    private static func fillRotated(
-        _ ctx: CGContext, _ color: CGColor,
-        center: (x: CGFloat, y: CGFloat), size: (w: CGFloat, h: CGFloat), radians: CGFloat
-    ) {
-        ctx.saveGState()
-        ctx.translateBy(x: center.x, y: center.y)
-        ctx.rotate(by: radians)
-        ctx.setFillColor(color)
-        ctx.fillEllipse(in: CGRect(x: -size.w / 2, y: -size.h / 2, width: size.w, height: size.h))
-        ctx.restoreGState()
-    }
 
     private static func render(size: Int, _ draw: (CGContext) -> Void) -> CGImage? {
         guard
