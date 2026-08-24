@@ -316,7 +316,9 @@ final class UpdateService: ObservableObject {
         let pid = ProcessInfo.processInfo.processIdentifier
         let fm = FileManager.default
 
-        guard let resultURL = Self.installResultURL else {
+        // The offered release tag doubles as the expected version: the
+        // installer refuses to swap in a bundle whose plist disagrees.
+        guard let resultURL = Self.installResultURL, let expectedVersion = offered else {
             abortInstall(dmgPath: dmgPath, offered: offered)
             return
         }
@@ -330,18 +332,19 @@ final class UpdateService: ObservableObject {
         if fm.isWritableFile(atPath: appDirectory),
            !UpdateInstallerSupport.shouldForceAdminInstall(afterFailureCode: lastFailure) {
             launchUserInstaller(appPath: appPath, dmgPath: dmgPath, pid: pid,
-                                resultPath: resultURL.path, offered: offered)
+                                resultPath: resultURL.path, expectedVersion: expectedVersion)
         } else {
             // Either the folder is not writable, or the last attempt died at
             // the copy/swap step: retry with admin rights instead of failing
             // the same way twice.
             launchAdminInstaller(appPath: appPath, dmgPath: dmgPath, pid: pid,
-                                 resultPath: resultURL.path, offered: offered)
+                                 resultPath: resultURL.path, offered: offered,
+                                 expectedVersion: expectedVersion)
         }
     }
 
     private func launchUserInstaller(appPath: String, dmgPath: String, pid: Int32,
-                                     resultPath: String, offered: String?) {
+                                     resultPath: String, expectedVersion: String) {
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("croissaint-update-\(pid)-\(UUID().uuidString).sh")
         do {
@@ -354,7 +357,8 @@ final class UpdateService: ObservableObject {
 
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = [scriptURL.path, appPath, dmgPath, "\(pid)", resultPath, "\(getuid())"]
+        task.arguments = [scriptURL.path, appPath, dmgPath, "\(pid)", resultPath,
+                          "\(getuid())", expectedVersion]
         do {
             try task.run()
         } catch {
@@ -375,12 +379,14 @@ final class UpdateService: ObservableObject {
     /// with nohup so the prompt returns while the installer waits for our
     /// exit.
     private func launchAdminInstaller(appPath: String, dmgPath: String, pid: Int32,
-                                      resultPath: String, offered: String?) {
+                                      resultPath: String, offered: String?,
+                                      expectedVersion: String) {
         let command = UpdateInstallerSupport.elevatedInstallCommand(appPath: appPath,
                                                                     dmgPath: dmgPath,
                                                                     pid: pid,
                                                                     resultPath: resultPath,
-                                                                    uid: getuid())
+                                                                    uid: getuid(),
+                                                                    expectedVersion: expectedVersion)
         AdminShell.runInProcess(command, prompt: L10n.shared.s.adminPromptUpdate) { [weak self] granted in
             DispatchQueue.main.async {
                 guard let self else { return }
