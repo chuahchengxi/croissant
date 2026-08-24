@@ -45,7 +45,7 @@
 		<string>MacOSX</string>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>81</string>
+	<string>82</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
@@ -58,25 +58,25 @@
 	<string>Croissaint taps individual app audio only to adjust each app's volume in the mixer. Nothing is recorded or leaves your Mac.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Croissaint uses Bluetooth only to read the battery level of connected peripherals. Nothing leaves your Mac.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Croissaint records your microphone only when you turn it on for a screen recording. The audio stays on your Mac unless you choose to create a temporary link.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Croissaint shows your camera only in the preview window you open, so you can check how you look before a call. Nothing is recorded or leaves your Mac.</string>
-	<key>NSDownloadsFolderUsageDescription</key>
-	<string>Croissaint checks local metadata in Downloads to review, organize or trash only confirmed WhatsApp files you choose.</string>
+	<key>NSCameraUseContinuityCameraDeviceType</key>
+	<true/>
 	<key>NSDesktopFolderUsageDescription</key>
 	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
-	<key>NSNetworkVolumesUsageDescription</key>
-	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
-	<key>NSRemovableVolumesUsageDescription</key>
-	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
-	<key>NSCameraUseContinuityCameraDeviceType</key>
-	<true/>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Croissaint checks local metadata in Downloads to review, organize or trash only confirmed WhatsApp files you choose.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Croissaint</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Croissaint records your microphone only when you turn it on for a screen recording. The audio stays on your Mac unless you choose to create a temporary link.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Croissaint organizes confirmed WhatsApp downloads in a destination folder you explicitly choose.</string>
 </dict>
 </plist>
