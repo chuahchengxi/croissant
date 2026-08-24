@@ -122,7 +122,7 @@ enum CustomPetSprites {
     private static func encodeGIF(_ frames: [CGImage], frameDelay: Double, to url: URL) -> Bool {
         guard !frames.isEmpty,
               let dest = CGImageDestinationCreateWithURL(
-                  url as CFURL, "public.gif" as CFString, frames.count, nil
+                  url as CFURL, "com.compuserve.gif" as CFString, frames.count, nil
               )
         else { return false }
         var firstFrame: [CFString: Any] = [kCGImagePropertyGIFDelayTime: frameDelay]

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Vorssaint
 
 import AppKit
+import ImageIO
 
 enum SpriteCache {
     static let dir: URL = {
@@ -22,17 +23,32 @@ enum SpriteCache {
 
     /// All frames of the cached sprite (animated GIFs yield many; PNG fallback yields one).
     /// Returns nil while the sprite is still downloading (fetch kicked off automatically).
+    ///
+    /// Frames come from ImageIO rather than NSImage.representations: current
+    /// AppKit collapses an animated GIF into a single representation, which
+    /// silently turned every pet into a still image.
     static func frames(for id: Int) -> [CGImage]? {
         if let cached = frameCache[id] { return cached }
-        guard let img = NSImage(contentsOf: localURL(id)) else {
-            prefetch(ids: [id], done: nil)
-            return nil
+        let url = localURL(id)
+        var cgs: [CGImage] = []
+        if let src = CGImageSourceCreateWithURL(url as CFURL, nil) {
+            for index in 0..<CGImageSourceGetCount(src) {
+                if let frame = CGImageSourceCreateImageAtIndex(src, index, nil) {
+                    cgs.append(frame)
+                }
+            }
         }
-        let reps = img.representations.compactMap { $0 as? NSBitmapImageRep }
-        let cgs = reps.compactMap { $0.cgImage }
-        guard !cgs.isEmpty else { return nil }
-        frameCache[id] = cgs
-        return cgs
+        if !cgs.isEmpty {
+            frameCache[id] = cgs
+            return cgs
+        }
+        // A file that exists but cannot be parsed is worse than no file: it
+        // would block every future fetch. Drop it so the refetch starts clean.
+        if FileManager.default.fileExists(atPath: url.path) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        prefetch(ids: [id], done: nil)
+        return nil
     }
 
     /// Drops cached frames so a re-downloaded sprite gets picked up.
