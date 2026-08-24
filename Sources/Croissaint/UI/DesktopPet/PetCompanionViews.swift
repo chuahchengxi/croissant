@@ -606,11 +606,13 @@ struct PetPanel: View {
     }
 
     private var evoText: String {
-        if pet.species?.supportsEvolution != true { return "No evolution" }
-        if let next = pet.nextEvolutionLevel {
-            return "Evolves at Lv \(next)"
+        guard let next = pet.nextEvolutionLevel else {
+            return pet.species?.supportsEvolution == true ? "Final form" : "No evolution"
         }
-        return "Final form"
+        if let name = pet.nextEvolutionName {
+            return "\(name) at Lv \(next)"
+        }
+        return "Evolves at Lv \(next)"
     }
 
     // MARK: Actions
@@ -657,7 +659,7 @@ struct PetPanel: View {
 
     private var stageLabel: String {
         let names = ["Stage 1", "Stage 2", "Final"]
-        var label = "\(pet.species?.displayName ?? "") · \(names[min(pet.stage, 2)])"
+        var label = "\(pet.species?.name(at: pet.stage) ?? "") · \(names[min(pet.stage, 2)])"
         if pet.caught > 0 { label += " · Caught \(pet.caught)" }
         return label
     }
@@ -810,7 +812,7 @@ struct BuddyChooser: View {
             .padding(.horizontal, 14)
 
             ScrollView(.horizontal, showsIndicators: true) {
-                HStack(spacing: 10) {
+                LazyHStack(spacing: 10) {
                     ForEach(filtered) { def in
                         card(def)
                     }
@@ -860,7 +862,7 @@ struct BuddyChooser: View {
                 Text(def.name)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .lineLimit(1)
-                Text(def.supportsEvolution ? "Evolves" : "No evolution")
+                Text(def.tagline)
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
             }

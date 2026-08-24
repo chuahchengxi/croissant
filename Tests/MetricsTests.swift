@@ -9525,7 +9525,7 @@ struct MetricsTests {
 
         // MARK: Features hub catalog
 
-        expect(AppFeature.allCases.count == 53, "feature catalog has 53 features")
+        expect(AppFeature.allCases.count == 54, "feature catalog has 54 features")
         expect(Set(AppFeature.allCases.map(\.rawValue)).count == AppFeature.allCases.count,
                "feature ids are unique")
         expect(AppFeature.allCases.map(\.rawValue) == [
@@ -9539,6 +9539,7 @@ struct MetricsTests {
             "quickLauncher", "quickToggles", "colorPicker", "screenOCR", "cleaningMode", "mediaTools",
             "cleaner", "uninstaller", "homebrew", "appUpdates", "screenshot", "cameraPreview",
             "radialMenu", "scratchpad", "commandBar", "screenRecorder", "killProcess",
+            "desktopPet",
             "monitorCPU", "monitorGPU", "monitorMemory", "monitorNetwork", "monitorDisk", "monitorPower",
             "fanControl",
         ], "feature ids are stable (they persist inside availability keys)")
@@ -9551,7 +9552,7 @@ struct MetricsTests {
                 && (AppFeature.availabilityDefaults[AppFeature.killProcess.availabilityKey] as? Bool) == false
                 && AppFeature.allCases.filter {
                     $0 != .focusFollowsMouse && $0 != .fanControl && $0 != .diskImageInstaller
-                        && $0 != .killProcess
+                        && $0 != .killProcess && $0 != .desktopPet
                 }.allSatisfy {
                     (AppFeature.availabilityDefaults[$0.availabilityKey] as? Bool) == true
                 },
@@ -16087,6 +16088,33 @@ struct MetricsTests {
         expect(privateMode(privateRoot) == 0o700,
                "a container an earlier version left world readable is tightened on the next write")
         try? FileManager.default.removeItem(at: privateRoot)
+
+        // MARK: Pokedex catalog
+
+        expect(speciesCatalog.count == 1025, "the catalog covers the whole National Dex")
+        expect(Set(speciesCatalog.map(\.key)).count == speciesCatalog.count,
+               "every species key is unique")
+        expect(speciesCatalog.allSatisfy { $0.names.count == $0.evoIDs.count && !$0.names.isEmpty },
+               "every species has one name per evolution stage")
+        expect(speciesCatalog.allSatisfy { $0.evoIDs.count <= 3 },
+               "no chain runs past the three stages the level thresholds cover")
+
+        // The bug this catalog replaced: an evolved buddy kept its base name.
+        let rowlet = SpeciesDef.lookup("rowlet")
+        expectEqual(rowlet?.names.joined(separator: "/") ?? "", "Rowlet/Dartrix/Decidueye",
+                    "Rowlet's line is named per stage")
+        expect(rowlet?.evoIDs == [722, 723, 724], "Rowlet's line keeps its dex IDs")
+        expectEqual(rowlet?.name(at: 2) ?? "", "Decidueye", "the final stage reports Decidueye")
+        expectEqual(rowlet?.name(at: 9) ?? "", "Decidueye", "a stage past the end clamps to the final name")
+
+        // Picking a mid-line form keeps only the rest of its family.
+        expect(SpeciesDef.lookup("dartrix")?.evoIDs == [723, 724], "Dartrix starts mid-line")
+        expect(SpeciesDef.lookup("decidueye")?.evoIDs == [724], "a final form has nowhere left to go")
+
+        // Punctuation-stripped keys, including the one genuine name clash.
+        expectEqual(SpeciesDef.normalizedKey("Mr. Mime"), "mrmime", "punctuation is stripped from keys")
+        expect(SpeciesDef.lookup("nidoran")?.baseID == 29, "the first Nidoran keeps the plain key")
+        expect(SpeciesDef.lookup("nidoran32")?.baseID == 32, "the clashing Nidoran is suffixed with its ID")
 
         // MARK: Result
 

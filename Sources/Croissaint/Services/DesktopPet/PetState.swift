@@ -5,43 +5,6 @@ import Foundation
 import Combine
 import AppKit
 
-struct SpeciesDef: Identifiable {
-    let key: String
-    let name: String
-    let evoIDs: [Int]
-    let tagline: String
-
-    var id: String { key }
-    var displayName: String { name }
-    var baseID: Int { evoIDs[0] }
-    var supportsEvolution: Bool { evoIDs.count > 1 }
-    var spriteIDs: [Int] { evoIDs }
-
-    static func lookup(_ key: String) -> SpeciesDef? {
-        speciesCatalog.first { $0.key == key }
-    }
-}
-
-let speciesCatalog: [SpeciesDef] = [
-    SpeciesDef(key: "dedenne", name: "Dedenne", evoIDs: [702], tagline: "Electric & cheeky"),
-    SpeciesDef(key: "bulbasaur", name: "Bulbasaur", evoIDs: [1, 2, 3], tagline: "Chill starter"),
-    SpeciesDef(key: "charmander", name: "Charmander", evoIDs: [4, 5, 6], tagline: "Fiery & playful"),
-    SpeciesDef(key: "squirtle", name: "Squirtle", evoIDs: [7, 8, 9], tagline: "Cool & curious"),
-    SpeciesDef(key: "pikachu", name: "Pikachu", evoIDs: [25, 26], tagline: "Static surprise"),
-    SpeciesDef(key: "eevee", name: "Eevee", evoIDs: [133], tagline: "Full of potential"),
-    SpeciesDef(key: "jigglypuff", name: "Jigglypuff", evoIDs: [39, 40], tagline: "Sleepy songwriter"),
-    SpeciesDef(key: "psyduck", name: "Psyduck", evoIDs: [54, 55], tagline: "Perpetual headache"),
-    SpeciesDef(key: "meowth", name: "Meowth", evoIDs: [52, 53], tagline: "Coin collector"),
-    SpeciesDef(key: "growlithe", name: "Growlithe", evoIDs: [58, 59], tagline: "Loyal pup"),
-    SpeciesDef(key: "vulpix", name: "Vulpix", evoIDs: [37, 38], tagline: "Six-tailed charm"),
-    SpeciesDef(key: "togepi", name: "Togepi", evoIDs: [175, 176], tagline: "Bundle of joy"),
-    SpeciesDef(key: "slowpoke", name: "Slowpoke", evoIDs: [79, 80], tagline: "Very relaxed"),
-    SpeciesDef(key: "snorlax", name: "Snorlax", evoIDs: [143], tagline: "Professional napper"),
-    SpeciesDef(key: "lapras", name: "Lapras", evoIDs: [131], tagline: "Gentle giant"),
-    SpeciesDef(key: "dratini", name: "Dratini", evoIDs: [147, 148, 149], tagline: "Dragon in waiting"),
-    SpeciesDef(key: "rowlet", name: "Rowlet", evoIDs: [722, 723, 724], tagline: "Leafy little owl")
-]
-
 extension Notification.Name {
     static let spriteCacheDidUpdate = Notification.Name("PokePal.spriteCacheDidUpdate")
     static let pokePalCelebrate = Notification.Name("PokePal.celebrate")
@@ -188,8 +151,14 @@ final class PetState: ObservableObject {
         snapshot.species.flatMap { SpeciesDef.lookup($0) }
     }
 
+    /// The buddy's display name. A nickname the player typed sticks; otherwise
+    /// the name tracks the current evolution stage (Rowlet -> Dartrix -> Decidueye).
     var name: String {
-        get { snapshot.name.isEmpty ? (species?.displayName ?? "") : snapshot.name }
+        get {
+            guard let s = species else { return snapshot.name }
+            if snapshot.name.isEmpty || s.names.contains(snapshot.name) { return s.name(at: stage) }
+            return snapshot.name
+        }
         set {
             snapshot.name = newValue
             save()
@@ -201,18 +170,21 @@ final class PetState: ObservableObject {
 
     var stage: Int {
         guard let s = species else { return 0 }
-        if !s.supportsEvolution { return 0 }
-        return level >= 14 ? 2 : (level >= 6 ? 1 : 0)
+        return min(level >= 14 ? 2 : (level >= 6 ? 1 : 0), s.evoIDs.count - 1)
     }
 
-    var dexID: Int? {
-        guard let s = species else { return nil }
-        return s.evoIDs[min(stage, s.evoIDs.count - 1)]
-    }
+    var dexID: Int? { species?.evoIDs[stage] }
 
+    /// Level at which the next stage unlocks, nil once the chain is exhausted.
     var nextEvolutionLevel: Int? {
-        guard species?.supportsEvolution == true else { return nil }
-        return stage == 0 ? 6 : (stage == 1 ? 14 : nil)
+        guard let s = species, stage < s.evoIDs.count - 1 else { return nil }
+        return stage == 0 ? 6 : 14
+    }
+
+    /// Name of the stage the buddy is growing into, nil at the final stage.
+    var nextEvolutionName: String? {
+        guard let s = species, stage < s.names.count - 1 else { return nil }
+        return s.names[stage + 1]
     }
 
     var mood: PetMood {
@@ -230,7 +202,7 @@ final class PetState: ObservableObject {
         guard let def = SpeciesDef.lookup(key), snapshot.species != key else { return }
         let fresh = snapshot.species == nil
         snapshot.species = def.key
-        snapshot.name = def.name
+        snapshot.name = ""
         if fresh {
             snapshot.hunger = 85
             snapshot.happiness = 85

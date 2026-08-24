@@ -297,6 +297,8 @@ if (( TEST )); then
         Sources/Croissaint/Services/Cleaner/CleanerSchedule.swift \
         Sources/Croissaint/Services/Uninstall/UninstallerSupport.swift \
         Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift \
+        Sources/Croissaint/Services/DesktopPet/SpeciesCatalog.swift \
+        Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift \
         Tests/MetricsTests.swift \
         -o build/metrics-tests
     ./build/metrics-tests

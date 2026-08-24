@@ -4,28 +4,11 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Wild species pool (all have animated Gen-5 sprites)
+// MARK: - Wild species pool
 
-struct WildSpecies {
-    let id: Int
-    let name: String
-}
-
-let wildPool: [WildSpecies] = [
-    WildSpecies(id: 25, name: "Pikachu"),
-    WildSpecies(id: 39, name: "Jigglypuff"),
-    WildSpecies(id: 52, name: "Meowth"),
-    WildSpecies(id: 54, name: "Psyduck"),
-    WildSpecies(id: 63, name: "Abra"),
-    WildSpecies(id: 79, name: "Slowpoke"),
-    WildSpecies(id: 92, name: "Gastly"),
-    WildSpecies(id: 129, name: "Magikarp"),
-    WildSpecies(id: 131, name: "Lapras"),
-    WildSpecies(id: 133, name: "Eevee"),
-    WildSpecies(id: 143, name: "Snorlax"),
-    WildSpecies(id: 147, name: "Dratini"),
-    WildSpecies(id: 175, name: "Togepi")
-]
+/// Any species in the dex can show up in the wild. Sprites are fetched on
+/// demand, so the full pool costs nothing until one actually spawns.
+let wildPool: [(id: Int, name: String)] = speciesCatalog.map { (id: $0.baseID, name: $0.name) }
 
 // MARK: - View model
 
@@ -64,7 +47,6 @@ final class WildSpawnController {
     func start(pet: PetState) {
         guard spawnTimer == nil else { return }
         self.pet = pet
-        SpriteCache.prefetch(ids: wildPool.map(\.id), done: nil)
         schedule(after: Double.random(in: 45...120))
     }
 
@@ -213,6 +195,26 @@ final class WildSpawnController {
 
 // MARK: - Throw view (Pokemon GO style)
 
+/// Tuning knobs for the throw arc, in panel points and points/second with y
+/// negative upward. Sim runs at a fixed step so the feel doesn't change with
+/// frame rate.
+private enum ThrowPhysics {
+    static let gravity: CGFloat = 1700      // downward pull
+    static let airDrag: CGFloat = 0.9       // horizontal velocity lost per second
+    static let step: CGFloat = 1.0 / 60
+    static let minFlickSpeed: CGFloat = 260 // a limp drag just drops back
+    static let hitRadius: CGFloat = 34      // half the sprite's width
+    static let depthScale: CGFloat = 0.55   // ball size once it reaches the pokemon
+    static let spinPerPoint: Double = 1.1   // degrees of roll per point travelled
+    static let maxFlightTime: CGFloat = 3
+}
+
+private struct Vec {
+    var dx: CGFloat = 0
+    var dy: CGFloat = 0
+    var length: CGFloat { (dx * dx + dy * dy).squareRoot() }
+}
+
 struct WildPokemonView: View {
     let controller: WildSpawnController
     @EnvironmentObject private var vm: WildViewModel
@@ -221,15 +223,37 @@ struct WildPokemonView: View {
     private enum Phase { case ready, flying, resolving }
     @State private var phase: Phase = .ready
 
-    @State private var throwOffset: CGSize = .zero
-    @State private var flyingScale: CGFloat = 1
+    // Ball body: position is an offset from its docked spot.
+    @State private var ballPos: CGSize = .zero
+    @State private var ballVel = Vec()
     @State private var ballSpin: Double = 0
+    @State private var flight: Timer?
+    @State private var flightTime: CGFloat = 0
+
+    // Flick speed, measured from the drag itself: predictedEndTranslation is
+    // inertia-based and stays ~0 for a plain mouse drag.
+    @State private var dragVel = Vec()
+    @State private var lastPoint: CGSize = .zero
+    @State private var lastTime = Date.distantPast
+
     @State private var wobbleAngle: Double = 0
     @State private var ballVisible = true
 
     @State private var spriteGone = false
     @State private var gotcha = false
     @State private var message: String?
+
+    // Measured so the aim stays honest if the layout changes.
+    @State private var targetRect: CGRect = .zero
+    @State private var dockRect: CGRect = .zero
+
+    /// Where the pokemon sits relative to the ball's resting spot.
+    private var targetOffset: CGSize {
+        CGSize(
+            width: targetRect.midX - dockRect.midX,
+            height: targetRect.midY - dockRect.midY
+        )
+    }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -242,6 +266,7 @@ struct WildPokemonView: View {
 
             encounterArea
                 .frame(height: 104)
+                .background(frameReader { targetRect = $0 })
 
             ballSelector
                 .padding(.horizontal, 12)
@@ -250,6 +275,7 @@ struct WildPokemonView: View {
 
             dockedBall
                 .frame(height: 56)
+                .background(frameReader { dockRect = $0 })
 
             Text("flick up to throw")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
@@ -257,12 +283,20 @@ struct WildPokemonView: View {
                 .padding(.bottom, 6)
         }
         .padding(.top, 10)
+        .coordinateSpace(name: "wild")
         .overlay {
             ForEach(vm.hearts) { heart in
                 FloatingHeartView(heart: heart) {
                     vm.hearts.removeAll { $0.id == heart.id }
                 }
             }
+        }
+        .onDisappear { stopFlight() }
+    }
+
+    private func frameReader(_ assign: @escaping (CGRect) -> Void) -> some View {
+        GeometryReader { g in
+            Color.clear.onAppear { assign(g.frame(in: .named("wild"))) }
         }
     }
 
@@ -341,37 +375,68 @@ struct WildPokemonView: View {
         }
     }
 
+    /// How small the ball looks at its current depth, i.e. how far along the
+    /// line from the dock to the pokemon it has travelled.
+    private var depthScale: CGFloat {
+        let span = targetOffset.height
+        guard span < 0 else { return 1 }
+        let t = min(1, max(0, ballPos.height / span))
+        return 1 - (1 - ThrowPhysics.depthScale) * t
+    }
+
     /// The throwable ball at the bottom.
     private var dockedBall: some View {
-        ZStack {
-            PokeBallIcon(size: 36, tint: pet.activeBall.tint)
-                .shadow(color: .black.opacity(0.25), radius: 2, y: 2)
-        }
-        .offset(x: throwOffset.width, y: throwOffset.height)
-        .rotationEffect(.degrees(ballSpin))
-        .rotationEffect(.degrees(wobbleAngle))
-        .scaleEffect(flyingScale)
-        .opacity(ballVisible ? 1 : 0)
-        .gesture(throwGesture)
+        PokeBallIcon(size: 36, tint: pet.activeBall.tint)
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 2)
+            .rotationEffect(.degrees(ballSpin))
+            .rotationEffect(.degrees(wobbleAngle))
+            .scaleEffect(depthScale)
+            .offset(x: ballPos.width, y: ballPos.height)
+            .opacity(ballVisible ? 1 : 0)
+            .gesture(throwGesture)
     }
 
     private var throwGesture: some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("wild"))
             .onChanged { value in
                 guard phase == .ready else { return }
-                throwOffset = value.translation
-                flyingScale = min(1.15, 1 + (-value.translation.height / 400))
+                sampleVelocity(value.translation)
+                ballPos = value.translation
             }
-            .onEnded { value in handleRelease(value.translation) }
+            .onEnded { value in handleRelease(value) }
     }
 
     // MARK: Throw logic
 
-    private func handleRelease(_ t: CGSize) {
+    /// Smoothed pointer velocity over the last couple of drag events.
+    private func sampleVelocity(_ point: CGSize) {
+        let now = Date()
+        let dt = CGFloat(now.timeIntervalSince(lastTime))
+        if dt > 0.001, dt < 0.1 {
+            let instant = Vec(dx: (point.width - lastPoint.width) / dt,
+                              dy: (point.height - lastPoint.height) / dt)
+            dragVel = Vec(dx: (dragVel.dx + instant.dx) / 2, dy: (dragVel.dy + instant.dy) / 2)
+        } else if dt >= 0.1 {
+            dragVel = Vec()   // the pointer stalled; a resumed drag starts fresh
+        }
+        lastPoint = point
+        lastTime = now
+    }
+
+    private func handleRelease(_ value: DragGesture.Value) {
         guard phase == .ready else { return }
 
-        // Must be an upward flick toward the pokemon.
-        guard t.height < -40 else {
+        var vel = dragVel
+        if vel.length < 1 {
+            // No usable samples (a one-event drag): fall back to SwiftUI's
+            // inertial projection, spread over the 0.35s window it models.
+            vel = Vec(
+                dx: (value.predictedEndTranslation.width - value.translation.width) / 0.35,
+                dy: (value.predictedEndTranslation.height - value.translation.height) / 0.35
+            )
+        }
+
+        guard vel.dy < 0, vel.length >= ThrowPhysics.minFlickSpeed else {
             springBack()
             return
         }
@@ -385,16 +450,78 @@ struct WildPokemonView: View {
 
         phase = .flying
         controller.interactionLock = true
+        ballPos = value.translation
+        ballVel = vel
+        flightTime = 0
+        startFlight(kind: kind)
+    }
 
-        // Fly to the pokemon.
-        withAnimation(.easeIn(duration: 0.32)) {
-            throwOffset = CGSize(width: t.width * 0.25, height: -118)
-            flyingScale = 0.62
-            ballSpin = 540
+    private func startFlight(kind: PetItemKind) {
+        stopFlight()
+        let t = Timer(timeInterval: TimeInterval(ThrowPhysics.step), repeats: true) { _ in
+            stepFlight(kind: kind)
+        }
+        RunLoop.main.add(t, forMode: .common)
+        flight = t
+    }
+
+    private func stopFlight() {
+        flight?.invalidate()
+        flight = nil
+    }
+
+    /// One fixed physics step: gravity, a little air drag, then a check for
+    /// whether the ball just crossed the pokemon's plane close enough to hit.
+    private func stepFlight(kind: PetItemKind) {
+        let dt = ThrowPhysics.step
+        let previous = ballPos
+
+        ballVel.dy += ThrowPhysics.gravity * dt
+        ballVel.dx *= (1 - ThrowPhysics.airDrag * dt)
+
+        let dx = ballVel.dx * dt
+        let dy = ballVel.dy * dt
+        ballPos.width += dx
+        ballPos.height += dy
+        ballSpin += Double((dx * dx + dy * dy).squareRoot()) * ThrowPhysics.spinPerPoint
+        flightTime += dt
+
+        let target = targetOffset
+        // Crossing the pokemon's depth on the way up is the only way to land a hit.
+        if previous.height > target.height, ballPos.height <= target.height {
+            stopFlight()
+            // Interpolate to the exact crossing point so aim doesn't depend on
+            // where the frame boundary happened to fall.
+            let span = previous.height - ballPos.height
+            let t = span > 0 ? (previous.height - target.height) / span : 1
+            let crossX = previous.width + (ballPos.width - previous.width) * t
+            if abs(crossX - target.width) <= ThrowPhysics.hitRadius {
+                ballPos = target
+                resolveThrow(with: kind)
+            } else {
+                missedEntirely()
+            }
+            return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
-            resolveThrow(with: kind)
+        // Sailed off the panel, dropped back past the dock, or ran out of time.
+        if flightTime > ThrowPhysics.maxFlightTime
+            || abs(ballPos.width) > dockRect.width / 2
+            || ballPos.height > 60 {
+            stopFlight()
+            missedEntirely()
+        }
+    }
+
+    /// The ball never reached the pokemon — no capture roll, but the throw
+    /// still counts so a run of bad aim can't stall the encounter forever.
+    private func missedEntirely() {
+        phase = .resolving
+        controller.noteMiss()
+        withAnimation(.easeOut(duration: 0.12)) { ballVisible = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            resetBall()
+            flash("Missed!")
         }
     }
 
@@ -412,7 +539,6 @@ struct WildPokemonView: View {
         phase = .resolving
         // Pokemon gets pulled into the ball.
         withAnimation(.easeIn(duration: 0.15)) { spriteGone = true }
-        withAnimation(.easeOut(duration: 0.1)) { ballSpin = 0 }
 
         // Wobble... wobble... click!
         let steps: [(Double, Double)] = [(0.15, 24), (0.45, -18), (0.75, 11), (1.05, 0)]
@@ -448,9 +574,10 @@ struct WildPokemonView: View {
     // MARK: Helpers
 
     private func springBack() {
+        dragVel = Vec()
+        lastTime = .distantPast
         withAnimation(.spring(response: 0.3, dampingFraction: 0.55)) {
-            throwOffset = .zero
-            flyingScale = 1
+            ballPos = .zero
         }
     }
 
@@ -458,8 +585,10 @@ struct WildPokemonView: View {
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
-            throwOffset = .zero
-            flyingScale = 1
+            ballPos = .zero
+            ballVel = Vec()
+            dragVel = Vec()
+            lastTime = .distantPast
             ballSpin = 0
             wobbleAngle = 0
             ballVisible = true
@@ -469,19 +598,13 @@ struct WildPokemonView: View {
     }
 
     private func resetAll() {
+        resetBall()
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
-            throwOffset = .zero
-            flyingScale = 1
-            ballSpin = 0
-            wobbleAngle = 0
-            ballVisible = true
             spriteGone = false
             gotcha = false
         }
-        phase = .ready
-        controller.interactionLock = false
     }
 
     private func flash(_ text: String) {
