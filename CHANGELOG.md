@@ -13,6 +13,11 @@ Croissaint 0.0.1 is the first release of the fork's own versioning line, carryin
 - Automatic updates now follow stable releases only. Running a beta build no longer switches the update channel on its own; betas arrive solely through explicit opt-in in Settings.
 - The versioning restarts at 0.0.1 for the fork's independent release line.
 
+## [beta-2] - 2026-08-24
+
+### Added
+- Synced the latest upstream Vorssaint work, including a correction to how Memory Used is accounted so it matches Activity Monitor, and an App Switcher fix that slows overflow-row hover to one icon at a time.
+
 ## [3.4.1] - 2026-08-24
 
 ### Changed
