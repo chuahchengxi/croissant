@@ -61,6 +61,12 @@ enum SpriteCache {
     }
 
     private static func fetch(_ id: Int, completion: @escaping () -> Void) {
+        // Custom characters are drawn locally, never fetched.
+        if id >= CustomPetSprites.idLowerBound {
+            if CustomPetSprites.generate(id: id, to: localURL(id)) { notifyUpdated() }
+            completion()
+            return
+        }
         let animated = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/versions/generation-v/black-white/animated/\(id).gif"
         download(animated, to: localURL(id)) { ok in
             if ok { notifyUpdated(); completion(); return }

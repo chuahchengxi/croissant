@@ -85,11 +85,15 @@ struct GlassIconButton: View {
 
     var body: some View {
         Group {
+            #if compiler(>=6.2)
             if #available(macOS 26.0, *) {
                 glassChip
             } else {
                 legacyChip
             }
+            #else
+            legacyChip
+            #endif
         }
         .onHover { hovered = $0 }
         .help(helpText ?? "")
@@ -98,6 +102,7 @@ struct GlassIconButton: View {
 
     // MARK: macOS 26+
 
+    #if compiler(>=6.2)
     @available(macOS 26.0, *)
     private var glassChip: some View {
         Button(action: action) {
@@ -131,6 +136,7 @@ struct GlassIconButton: View {
             }
         }
     }
+    #endif
 
     // MARK: Fallback (macOS 14–25)
 
@@ -198,10 +204,14 @@ extension View {
     /// way, so callers pass their shape and nothing else changes.
     @ViewBuilder
     func hudGlassBackground<S: Shape>(in shape: S) -> some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             self.glassEffect(.regular, in: shape)
         } else {
             self.background(.regularMaterial, in: shape)
         }
+        #else
+        self.background(.regularMaterial, in: shape)
+        #endif
     }
 }

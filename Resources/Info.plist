@@ -12,6 +12,8 @@
 	<string>Croissaint</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.croissaint.utils</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -73,7 +75,7 @@
 	<key>NSCameraUseContinuityCameraDeviceType</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Vorssaint</string>
+	<string>© 2026 Croissaint</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
