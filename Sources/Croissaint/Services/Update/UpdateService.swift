@@ -50,7 +50,9 @@ final class UpdateService: ObservableObject {
             if let explicit = UserDefaults.standard.object(forKey: DefaultsKey.includeBetaUpdates) as? Bool {
                 return explicit
             }
-            return AppInfo.isBeta
+            // Automatic updates follow stable releases only; betas are opt-in
+            // through Settings, never a default.
+            return false
         }
         set {
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.includeBetaUpdates)
@@ -62,9 +64,6 @@ final class UpdateService: ObservableObject {
     /// Called at launch: checks shortly after start and then daily, if enabled.
     func startAutomaticChecks() {
         consumeInstallResult()
-        if AppInfo.isBeta && UserDefaults.standard.object(forKey: DefaultsKey.includeBetaUpdates) == nil {
-            UserDefaults.standard.set(true, forKey: DefaultsKey.includeBetaUpdates)
-        }
         // The local dev build never auto-updates, but can simulate the
         // "update available" UI via the `simulateUpdate` default, for testing.
         if AppInfo.isDeveloperBuild {

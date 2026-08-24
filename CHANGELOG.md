@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.1] - 2026-08-24
+
+### Summary
+Croissaint 0.0.1 is the first release of the fork's own versioning line, carrying every feature of Vorssaint 3.4.1 plus all fork work: the Nailong desktop pet with accurate pixel-art sprites and wild encounters, full de-branding to Croissaint with the self-updater pointed at this repository, and Discord removal.
+
+### Changed
+- Automatic updates now follow stable releases only. Running a beta build no longer switches the update channel on its own; betas arrive solely through explicit opt-in in Settings.
+- The versioning restarts at 0.0.1 for the fork's independent release line.
+
 ## [3.4.1] - 2026-08-24
 
 ### Changed
