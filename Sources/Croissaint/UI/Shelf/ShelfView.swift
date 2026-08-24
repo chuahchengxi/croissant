@@ -123,11 +123,15 @@ struct ShelfView: View {
     /// pointer crosses them; older systems draw the same two chips separately.
     @ViewBuilder
     private var headerControls: some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             GlassEffectContainer(spacing: 6) { chips }
         } else {
             chips
         }
+        #else
+        chips
+        #endif
     }
 
     @ViewBuilder

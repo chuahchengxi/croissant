@@ -118,6 +118,7 @@ struct HUDBackdrop: View {
     }
 
     var body: some View {
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             LiquidGlassPanelMaterial(cornerRadius: cornerRadius,
                                      opacity: materialOpacity,
@@ -131,9 +132,18 @@ struct HUDBackdrop: View {
                         .opacity(plateOpacity)
                 )
         }
+        #else
+        HUDBackdropMaterial(cornerRadius: cornerRadius, opacity: materialOpacity)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(colorScheme == .dark ? Color.black : Color.white)
+                    .opacity(plateOpacity)
+            )
+        #endif
     }
 }
 
+#if compiler(>=6.2)
 /// The Liquid Glass rendering of the floating-panel backdrop, on macOS 26 and
 /// newer. Glass replaces the `hudWindow` material wholesale — it samples the
 /// content behind the window the same way, follows light and dark on its own,
@@ -160,6 +170,7 @@ private struct LiquidGlassPanelMaterial: View {
             )
     }
 }
+#endif
 
 /// The material itself.
 ///

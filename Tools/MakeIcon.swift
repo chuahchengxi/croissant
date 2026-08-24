@@ -103,18 +103,21 @@ func renderAppIcon(px: Int) -> Data? {
 
 // MARK: - Menu bar glyph (template)
 
-// The mark is ~1.97:1, so fitting it into a fixed box made the width the
-// limiting side and left the height unused, rendering it far shorter than the
-// menu bar icons around it. Size from the height and let the width follow.
-let menuBarGlyphHeight: CGFloat = 12.5
-// Centered geometrically the mark reads high, since the thin ring tails carry
-// the bounding box below the planet body. Drop it onto the same visual floor
-// as its neighbours.
+// The croissant mark is ~2.06:1, so fitting it into a fixed box made the width
+// the limiting side and left the height unused, rendering it far shorter than
+// the menu bar icons around it. Size from the height and let the width follow.
+let menuBarGlyphHeight: CGFloat = 12
+// Centered geometrically the mark reads high, since the thin tails carry the
+// bounding box below the body. Drop it onto the same visual floor as its
+// neighbours.
 let menuBarGlyphDrop: CGFloat = 1
-// Taller than the mark needs: the same canvas holds the compact Keep Awake
-// symbols. Keep in sync with BlackHoleGlyph.pointSize in
-// Sources/Croissaint/App/StatusItemController.swift; `--selftest` enforces it.
-let menuBarCanvas = (width: 26, height: 20)
+// Taller and wider than the mark needs: at 12 pt tall the mark spans ~24.8 pt,
+// leaving ~1.6 pt of clear margin per side so antialiasing never reaches the
+// canvas edge. The same canvas holds the compact Keep Awake symbols. Keep in
+// sync with BlackHoleGlyph.pointSize in
+// Sources/Croissaint/App/StatusItemController.swift; `--selftest` enforces both
+// the size agreement and the margin.
+let menuBarCanvas = (width: 28, height: 20)
 
 func renderMenuBarIcon(scale: Int) -> Data? {
     let width = menuBarCanvas.width * scale, height = menuBarCanvas.height * scale
@@ -124,7 +127,7 @@ func renderMenuBarIcon(scale: Int) -> Data? {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = ctx
     // Height-limited target spanning the full canvas width: drawMark keeps the
-    // aspect ratio and centers, landing the mark at 24.6×12.5 pt. Coordinates
+    // aspect ratio and centers, landing the mark at ~24.8×12 pt. Coordinates
     // are bottom-up, so dropping it lowers y.
     let ink = menuBarGlyphHeight * CGFloat(scale)
     let y = (CGFloat(height) - ink) / 2 - menuBarGlyphDrop * CGFloat(scale)
