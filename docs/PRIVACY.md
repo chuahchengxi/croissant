@@ -53,4 +53,4 @@ This page describes how the current version of Croissaint behaves. If the app's 
 
 ## Questions
 
-If anything here is unclear, open a question in [GitHub issues](https://github.com/vorssaint/vorssaint-utils/issues), or have a look at [support](../SUPPORT.md).
+If anything here is unclear, open a question in [GitHub issues](https://github.com/chuahchengxi/croissant/issues), or have a look at [support](../SUPPORT.md).

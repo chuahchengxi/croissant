@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Cleanly removes Croissaint and every piece of system state it created:
 # the login item, TCC permissions, preferences, saved state and (if present)

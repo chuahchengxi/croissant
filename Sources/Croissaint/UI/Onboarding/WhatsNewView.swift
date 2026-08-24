@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import AppKit
 import AVKit
@@ -470,7 +470,7 @@ private struct UpdateSupportContent: View {
                 openURL(AppInfo.coffeeURL)
             } label: {
                 Label(l10n.s.supportIntroCoffeeButton,
-                      systemImage: "cup.and.saucer.fill")
+                      systemImage: "star.fill")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)

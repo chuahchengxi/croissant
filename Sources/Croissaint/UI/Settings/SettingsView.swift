@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import AppKit
 import SwiftUI
@@ -1386,7 +1386,7 @@ struct SupportSettings: View {
                 Button {
                     openURL(AppInfo.coffeeURL)
                 } label: {
-                    Label(l10n.s.donateButton, systemImage: "cup.and.saucer.fill")
+                    Label(l10n.s.donateButton, systemImage: "star.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)

@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Creates a stable, self-signed code-signing identity named "Croissaint Utils
 # Signing" in a dedicated keychain. build.sh uses it automatically, giving every

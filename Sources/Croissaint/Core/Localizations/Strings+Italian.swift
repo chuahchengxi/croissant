@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -794,14 +794,14 @@ extension Strings {
         shortcutsPageTitle: "Abbreviazioni da tastiera",
         settingsSearchPlaceholder: "Cerca nelle impostazioni",
         donateHeading: "Aiuta Croissaint a continuare a crescere",
-        donateMessage: "Croissaint è gratuito, indipendente e sviluppato nel mio tempo libero. Se vuoi contribuire economicamente, Buy Me a Coffee aiuta direttamente a portare avanti lo sviluppo.",
-        donateButton: "Sostieni su Buy Me a Coffee",
+        donateMessage: "Croissaint è gratuito, indipendente e sviluppato nel mio tempo libero. Se vuoi contribuire economicamente, GitHub Stars aiuta direttamente a portare avanti lo sviluppo.",
+        donateButton: "Sostieni su GitHub Stars",
         donateThanks: "Grazie di essere qui. 🖤",
         supportIntroTitle: "Aiuta Croissaint a continuare a crescere",
-        supportIntroMessage: "Se vuoi sostenere economicamente lo sviluppo, Buy Me a Coffee è l’unico posto in cui farlo.",
+        supportIntroMessage: "Se vuoi sostenere economicamente lo sviluppo, GitHub Stars è l’unico posto in cui farlo.",
         supportIntroStarButton: "Dai una stella a Croissaint su GitHub",
         supportIntroStarMessage: "Il sostegno economico non è mai richiesto. Una stella su GitHub aiuta più persone a scoprire Croissaint e fa davvero la differenza per il suo sviluppo.",
-        supportIntroCoffeeButton: "Sostieni su Buy Me a Coffee",
+        supportIntroCoffeeButton: "Sostieni su GitHub Stars",
         supportIntroLaterButton: "Non ora",
         supportIntroDoneButton: "Fatto",
         discordIntroTitle: "La community di Croissaint su Discord è appena nata",
@@ -812,7 +812,7 @@ extension Strings {
         discordIntroJoinButton: "Entra nella community su Discord",
         communityIntroTitle: "Guarda tutto prima degli altri",
         communityIntroMessage: "Chi mi seguiva già su X ha visto molte novità di questo aggiornamento prima di tutti. Lì pubblico anteprime di ciò che arriverà e mostro come funziona, così conosci già le basi prima ancora dell'uscita dell'aggiornamento. Seguimi e scopri cosa arriverà!",
-        communityIntroFollowButton: "Segui @vorssaint su X",
+        communityIntroFollowButton: "Segui @chuahchengxi su X",
         homebrewOfficialIntroTitle: "Ora nel catalogo ufficiale di Homebrew",
         homebrewOfficialIntroMessage: "Croissaint ora può essere installato direttamente dal catalogo ufficiale di Homebrew.",
         homebrewOfficialIntroInstallLabel: "Nuova installazione",

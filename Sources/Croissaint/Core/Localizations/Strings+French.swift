@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import Foundation
 
@@ -794,14 +794,14 @@ extension Strings {
         shortcutsPageTitle: "Raccourcis clavier",
         settingsSearchPlaceholder: "Rechercher dans les réglages",
         donateHeading: "Aidez Croissaint à continuer de grandir",
-        donateMessage: "Croissaint est gratuit, indépendant et développé pendant mon temps libre. Si vous souhaitez contribuer financièrement, Buy Me a Coffee aide directement à poursuivre son développement.",
-        donateButton: "Soutenir sur Buy Me a Coffee",
+        donateMessage: "Croissaint est gratuit, indépendant et développé pendant mon temps libre. Si vous souhaitez contribuer financièrement, GitHub Stars aide directement à poursuivre son développement.",
+        donateButton: "Soutenir sur GitHub Stars",
         donateThanks: "Merci d’être là. 🖤",
         supportIntroTitle: "Aidez Croissaint à continuer de grandir",
-        supportIntroMessage: "Si vous souhaitez soutenir financièrement le développement, Buy Me a Coffee est l’unique endroit pour le faire.",
+        supportIntroMessage: "Si vous souhaitez soutenir financièrement le développement, GitHub Stars est l’unique endroit pour le faire.",
         supportIntroStarButton: "Ajouter une étoile à Croissaint sur GitHub",
         supportIntroStarMessage: "Un soutien financier n’est jamais attendu. Une étoile sur GitHub aide davantage de personnes à découvrir Croissaint et fait une vraie différence pour son développement.",
-        supportIntroCoffeeButton: "Soutenir sur Buy Me a Coffee",
+        supportIntroCoffeeButton: "Soutenir sur GitHub Stars",
         supportIntroLaterButton: "Pas maintenant",
         supportIntroDoneButton: "Terminer",
         discordIntroTitle: "La communauté Croissaint sur Discord ne fait que commencer",
@@ -812,7 +812,7 @@ extension Strings {
         discordIntroJoinButton: "Rejoindre la communauté sur Discord",
         communityIntroTitle: "Voyez tout avant tout le monde",
         communityIntroMessage: "Les personnes qui me suivaient déjà sur X ont découvert plusieurs changements de cette mise à jour avant tout le monde. J’y publie des aperçus des prochaines nouveautés et montre leur fonctionnement, pour que vous connaissiez déjà l’essentiel avant leur sortie. Suivez-moi pour voir la suite !",
-        communityIntroFollowButton: "Suivre @vorssaint sur X",
+        communityIntroFollowButton: "Suivre @chuahchengxi sur X",
         homebrewOfficialIntroTitle: "Maintenant dans le catalogue officiel de Homebrew",
         homebrewOfficialIntroMessage: "Croissaint peut maintenant être installé directement depuis le catalogue officiel de Homebrew.",
         homebrewOfficialIntroInstallLabel: "Nouvelle installation",

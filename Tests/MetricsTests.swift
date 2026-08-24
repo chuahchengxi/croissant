@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 import AppKit
 import Carbon.HIToolbox
@@ -2309,19 +2309,19 @@ struct MetricsTests {
                "update intro navigates back without closing")
         expect(SupportUpdateIntroStep.allCases == [.discord, .social, .support],
                "update intro page indicators follow the navigation order")
-        expect(AppInfo.discordURL.absoluteString == "https://discord.gg/M6BwWH4BJp",
-               "the community action uses the permanent Discord invitation")
-        expect(AppInfo.coffeeURL.absoluteString == "https://buymeacoffee.com/vorssaint",
-               "financial support uses Buy Me a Coffee")
-        expect(AppInfo.socialURL.absoluteString == "https://x.com/vorssaint",
-               "social previews keep the official X profile")
+        expect(AppInfo.discordURL.absoluteString == "https://github.com/chuahchengxi/croissant",
+               "the community action points at the project repository")
+        expect(AppInfo.coffeeURL.absoluteString == "https://github.com/chuahchengxi/croissant",
+               "financial support points at the GitHub project page")
+        expect(AppInfo.socialURL.absoluteString == "https://github.com/chuahchengxi/croissant",
+               "social previews keep the official repository")
         // AppInfo.version falls back to "dev" in this bare harness, so read
         // the plist the shipped app will actually carry. The pin is a
         // per-release decision: this check fails on every version bump so the
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "3.4.0",
+        expect(plistVersion == "3.4.1",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -6695,8 +6695,8 @@ struct MetricsTests {
                "beta is not newer than the released final version")
 
         // Release candidate selection
-        let dummyDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4/Croissaint.dmg")!
-        let dummyBetaDMG = URL(string: "https://github.com/vorssaint/vorssaint-utils/releases/download/v3.3.4-beta.1/Croissaint.dmg")!
+        let dummyDMG = URL(string: "https://github.com/chuahchengxi/croissant/releases/download/v3.3.4/Croissaint.dmg")!
+        let dummyBetaDMG = URL(string: "https://github.com/chuahchengxi/croissant/releases/download/v3.3.4-beta.1/Croissaint.dmg")!
 
         let candidateList = [
             UpdateServiceSupport.ReleaseCandidate(tagName: "v3.3.4-beta.1", isPrerelease: true, isDraft: false, dmgURL: dummyBetaDMG, dmgExpectedBytes: 1000, body: "Beta notes"),
@@ -9175,9 +9175,9 @@ struct MetricsTests {
             ]
             expect(supportCommunityStrings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
                    "\(prefix) support and community strings are complete without em dash")
-            expect(strings.donateButton.contains("Buy Me a Coffee")
-                   && strings.supportIntroCoffeeButton.contains("Buy Me a Coffee"),
-                   "\(prefix) financial support points only to Buy Me a Coffee")
+            expect(strings.donateButton.contains("GitHub")
+                   && strings.supportIntroCoffeeButton.contains("GitHub"),
+                   "\(prefix) financial support points only to the GitHub project")
             expect(strings.supportIntroStarMessage.localizedCaseInsensitiveContains("GitHub")
                    && strings.discordIntroJoinButton.localizedCaseInsensitiveContains("Discord"),
                    "\(prefix) non-financial support and community actions name their destinations")

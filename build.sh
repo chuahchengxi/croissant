@@ -1,6 +1,6 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Vorssaint
+# Copyright (C) 2026 chuahchengxi
 
 # Builds Croissaint, assembles the .app bundle, signs it and (with --install)
 # installs it into /Applications.

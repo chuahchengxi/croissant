@@ -13,20 +13,19 @@
 </p>
 
 <p align="center">
-  <a href="https://vorssaint.com">Website</a> ·
+  <a href="https://github.com/chuahchengxi/croissant">Website</a> ·
   <a href="#what-this-build-changes">This build</a> ·
   <a href="#install">Install</a> ·
   <a href="#everything-it-does">Features</a> ·
   <a href="#private-by-default">Privacy</a> ·
   <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="mailto:hello@vorssaint.com">Contact</a> ·
-  <a href="https://buymeacoffee.com/vorssaint">Buy Me a Coffee</a>
+  <a href="https://github.com/chuahchengxi/croissant/issues">Contact</a> ·
+  <a href="https://github.com/chuahchengxi/croissant">Buy Me a Coffee</a>
 </p>
 
 <p align="center">
   <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-black" alt="macOS 14 and newer, Apple Silicon"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License GPL 3.0 or later"></a>
-  <a href="https://github.com/vorssaint/vorssaint-utils"><img src="https://img.shields.io/badge/fork%20of-Vorssaint-f0a03c" alt="A fork of Vorssaint"></a>
 </p>
 
 <p align="center">
@@ -37,7 +36,7 @@
 
 <p align="center">
   For partnerships or anything private, email
-  <a href="mailto:hello@vorssaint.com"><strong>hello@vorssaint.com</strong></a>.
+  <a href="https://github.com/chuahchengxi/croissant/issues"><strong>GitHub Issues</strong></a>.
 </p>
 
 <p align="center">
@@ -51,7 +50,7 @@ Per app volume, a real system monitor, a better app switcher, window snapping, D
 
 ## What this build changes
 
-Croissaint is a personal fork of [Vorssaint](https://github.com/vorssaint/vorssaint-utils), rebaked under its own name and its own croissant mark, exactly as upstream's [trademark policy](TRADEMARKS.md) asks a fork to do. Same GPL source underneath, same features, plus:
+Croissaint is a personal fork of [the original Vorssaint](https://github.com/vorssaint/vorssaint-utils), rebaked under its own name and its own croissant mark, exactly as upstream's [trademark policy](TRADEMARKS.md) asks a fork to do. Same GPL source underneath, same features, plus:
 
 - **Croissant identity.** New name, new bundle id, new mark. The app icon, the menu bar glyph and the in-app watermark all come out of `Resources/Brand/logo.png` through `Tools/MakeIcon.swift`, so one file drives the whole set and `./build.sh` regenerates it.
 - **AirDrop straight from the shelf.** Park a few files on the shelf, hit the send chip, and they go out over AirDrop without a detour through Finder. It follows the shelf selection when there is one and takes everything on the shelf when there is not, so a scratch pile becomes a handoff in two clicks.
@@ -60,7 +59,11 @@ Croissaint is a personal fork of [Vorssaint](https://github.com/vorssaint/vorssa
 - **SwiftUI app lifecycle.** A bundled launch runs through a SwiftUI `App`, while bare binary runs, `swift run` or an Xcode package scheme, keep the old AppKit run loop, which SwiftUI cannot start without a bundle identity.
 - **`--selftest` outside a bundle.** The menu bar glyph size check now only runs where the PNG is actually bundled, so a bare run stops failing on an asset it was never given.
 
-Croissaint is not published anywhere: the Homebrew cask and the releases page below belong to upstream Vorssaint, which installs alongside this one under its own bundle id. To run this one, build it with `./build.sh` and open `build/stage/Croissaint.app`.
+Croissaint ships through its own Homebrew tap and GitHub releases:
+
+```
+brew install --cask chuahchengxi/tap/croissaint
+```
 
 ## Install only what you use
 
@@ -168,10 +171,10 @@ Croissaint ships from source, and `--install` puts it in Applications for you:
 
 Local builds are signed ad-hoc unless you set up an identity with `Tools/setup-signing.sh`, so the first launch goes through the usual right click, Open.
 
-Upstream Vorssaint, signed and notarized, installs separately with [Homebrew](https://brew.sh) and keeps its own settings and permissions:
+Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per machine:
 
 ```sh
-brew install --cask vorssaint
+brew install --cask chuahchengxi/tap/croissaint
 ```
 
 ## Uninstall
@@ -212,13 +215,13 @@ The shelf and almost every quick toggle need no permission at all. Finder cut an
 ### Build it yourself
 
 ```sh
-git clone https://github.com/vorssaint/vorssaint-utils.git
-cd vorssaint-utils
+git clone https://github.com/chuahchengxi/croissant.git
+cd croissant
 ./build.sh            # compile, generate the icon, assemble the signed bundle
 ./build.sh --install  # the same, then install into Applications and launch
 ```
 
-Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source, while the Vorssaint name, icon and look stay with upstream under [TRADEMARKS.md](TRADEMARKS.md), which is why this fork carries a croissant instead.
+Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the original Vorssaint name and look stay with upstream under [TRADEMARKS.md](TRADEMARKS.md), which is why this fork carries a croissant instead.
 
 ## When something misbehaves
 
@@ -235,14 +238,14 @@ The [troubleshooting guide](docs/TROUBLESHOOTING.md) walks through the common ca
 
 ## Community
 
-Vorssaint, the app this one is baked from, went from first commit to the front of GitHub trending in three days, top of the Swift charts, and issues and pull requests have shaped every release since. Anything that is not specific to the croissant belongs [upstream](https://github.com/vorssaint/vorssaint-utils), where it helps everyone.
+Croissaint started as a fork of [Vorssaint](https://github.com/vorssaint/vorssaint-utils) — credit to the original author for the foundation; everything croissant-specific happens here.
 
-Croissaint is free and will stay that way. If it earned its place in your menu bar, a [coffee](https://buymeacoffee.com/vorssaint) keeps the upstream maintainer awake, with or without the Keep awake feature.
+Croissaint is free and will stay that way. If it earned its place in your menu bar, a [coffee](https://github.com/chuahchengxi/croissant) keeps the upstream maintainer awake, with or without the Keep awake feature.
 
 ## License
 
-[GPL 3.0 or later](LICENSE), copyright 2026 Vorssaint, plus the changes in this fork. The license covers the source code; the Vorssaint name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md), and are not used here.
+[GPL 3.0 or later](LICENSE), copyright the original author, plus the changes in this fork. The license covers the source code; the Vorssaint name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md), and are not used here.
 
 <p align="center">
-  <sub>Croissaint is a fork of Vorssaint, made by <a href="https://x.com/vorssaint">@vorssaint</a></sub>
+  <sub>Croissaint — maintained by <a href="https://github.com/chuahchengxi">chuahchengxi</a></sub>
 </p>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Vorssaint
+// Copyright (C) 2026 chuahchengxi
 
 // Assembles a folder of PNG frames into the animated GIF used by the release
 // tour. Consecutive identical frames collapse into one longer beat, so a hold
