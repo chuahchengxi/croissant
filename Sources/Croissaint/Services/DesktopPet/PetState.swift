@@ -16,6 +16,7 @@ enum PetItemKind: String, Codable, CaseIterable {
     case greatBall
     case ultraBall
     case berry
+    case everStone
 
     var displayName: String {
         switch self {
@@ -23,6 +24,7 @@ enum PetItemKind: String, Codable, CaseIterable {
         case .greatBall: return "Great Ball"
         case .ultraBall: return "Ultra Ball"
         case .berry: return "Oran Berry"
+        case .everStone: return "Ever Stone"
         }
     }
 }
@@ -60,9 +62,17 @@ struct PetSnapshot: Codable {
     var posX: Double?
     var posY: Double?
     var caughtCount: Int?
+    /// National Dex ids of every wild species ever caught; each one unlocks
+    /// its catalog entry as a selectable buddy.
+    var caughtSpecies: [Int]?
     var inventory: [String: Int]?
     var activeBall: String?
     var coins: Int?
+    /// True while the buddy holds an Ever Stone (shop-only item): its stage is
+    /// frozen so it stops evolving until the stone is put down.
+    var evolutionHeld: Bool?
+    /// The stage the buddy was at when the stone was picked up.
+    var frozenStage: Int?
 }
 
 final class PetState: ObservableObject {
@@ -170,13 +180,26 @@ final class PetState: ObservableObject {
 
     var stage: Int {
         guard let s = species else { return 0 }
-        return min(level >= 14 ? 2 : (level >= 6 ? 1 : 0), s.evoIDs.count - 1)
+        let natural = min(level >= 14 ? 2 : (level >= 6 ? 1 : 0), s.evoIDs.count - 1)
+        // An Ever Stone freezes the buddy at the stage it was when picked up;
+        // it can never fall behind the level-based stage, only hold it back.
+        if evolutionBlocked, let frozen = snapshot.frozenStage {
+            return min(natural, frozen)
+        }
+        return natural
+    }
+
+    /// True while an Ever Stone is held (and one is actually in the bag).
+    var evolutionBlocked: Bool {
+        snapshot.evolutionHeld == true && count(of: .everStone) > 0
     }
 
     var dexID: Int? { species?.evoIDs[stage] }
 
-    /// Level at which the next stage unlocks, nil once the chain is exhausted.
+    /// Level at which the next stage unlocks, nil once the chain is exhausted
+    /// or an Ever Stone is holding evolution back.
     var nextEvolutionLevel: Int? {
+        guard !evolutionBlocked else { return nil }
         guard let s = species, stage < s.evoIDs.count - 1 else { return nil }
         return stage == 0 ? 6 : 14
     }
@@ -203,6 +226,9 @@ final class PetState: ObservableObject {
         let fresh = snapshot.species == nil
         snapshot.species = def.key
         snapshot.name = ""
+        // A new buddy doesn't inherit the old one's Ever Stone.
+        snapshot.evolutionHeld = false
+        snapshot.frozenStage = nil
         if fresh {
             snapshot.hunger = 85
             snapshot.happiness = 85
@@ -359,14 +385,22 @@ final class PetState: ObservableObject {
         return true
     }
 
-    /// Reward for catching a wild pokemon, plus item drops.
+    /// Reward for catching a wild pokemon, plus item drops. The caught
+    /// species is remembered so it becomes a selectable buddy.
     @discardableResult
-    func catchReward() -> Bool {
+    func catchReward(speciesID: Int? = nil) -> Bool {
         guard snapshot.species != nil else { return false }
         if snapshot.sleeping { snapshot.sleeping = false }
         snapshot.happiness += 8
         snapshot.xp += 12
         snapshot.caughtCount = (snapshot.caughtCount ?? 0) + 1
+        if let speciesID {
+            var caught = snapshot.caughtSpecies ?? []
+            if !caught.contains(speciesID) {
+                caught.append(speciesID)
+                snapshot.caughtSpecies = caught
+            }
+        }
         addItem(.pokeBall, 2)
         addItem(.berry, 1)
         if Double.random(in: 0..<1) < 0.25 { addItem(.greatBall, 1) }
@@ -376,6 +410,25 @@ final class PetState: ObservableObject {
     }
 
     var caught: Int { snapshot.caughtCount ?? 0 }
+
+    /// Every wild species ever caught (National Dex ids).
+    var caughtSpeciesIDs: Set<Int> { Set(snapshot.caughtSpecies ?? []) }
+
+    /// Puts an Ever Stone in the buddy's paws, or takes it back. Only works
+    /// while the bag actually holds one; the stone is never consumed.
+    @discardableResult
+    func setEvolutionHeld(_ on: Bool) -> Bool {
+        if on {
+            guard count(of: .everStone) > 0 else { return false }
+            snapshot.frozenStage = stage
+        } else {
+            snapshot.frozenStage = nil
+        }
+        snapshot.evolutionHeld = on
+        save()
+        objectWillChange.send()
+        return true
+    }
 
     // MARK: - Desktop companion
 

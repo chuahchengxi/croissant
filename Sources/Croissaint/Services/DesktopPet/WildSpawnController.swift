@@ -19,7 +19,7 @@ final class WildViewModel: ObservableObject {
 
     func spawnHearts(_ count: Int) {
         for _ in 0..<count {
-            hearts.append(FloatingHeart(x: .random(in: -40...40), size: .random(in: 10...18)))
+            hearts.append(FloatingHeart(x: .random(in: -70...70), size: .random(in: 12...22)))
         }
     }
 }
@@ -85,7 +85,7 @@ final class WildSpawnController {
 
     func completeCatch(id: Int) {
         let name = wildPool.first { $0.id == id }?.name ?? "Pokémon"
-        _ = pet?.catchReward()
+        _ = pet?.catchReward(speciesID: id)
         vm.spawnHearts(6)
         NotificationCenter.default.post(name: .pokePalCelebrate, object: nil)
         NotificationCenter.default.post(
@@ -162,7 +162,9 @@ final class WildSpawnController {
 
     private func setupPanelIfNeeded() {
         guard panel == nil else { return }
-        let size = NSSize(width: 190, height: 260)
+        // Generous stage: the whole point of the throw is watching the ball
+        // fly, so the arc gets real vertical room.
+        let size = NSSize(width: 280, height: 430)
         let p = FloatingPanel.make(size: size)
 
         // Plain container: SwiftUI gestures receive events directly,
@@ -199,14 +201,27 @@ final class WildSpawnController {
 /// negative upward. Sim runs at a fixed step so the feel doesn't change with
 /// frame rate.
 private enum ThrowPhysics {
-    static let gravity: CGFloat = 1700      // downward pull
+    static let gravity: CGFloat = 1500      // downward pull — floaty enough to watch the arc
     static let airDrag: CGFloat = 0.9       // horizontal velocity lost per second
     static let step: CGFloat = 1.0 / 60
-    static let minFlickSpeed: CGFloat = 260 // a limp drag just drops back
-    static let hitRadius: CGFloat = 34      // half the sprite's width
+    static let minFlickSpeed: CGFloat = 320 // a limp drag just drops back
+    static let hitRadius: CGFloat = 56      // half the sprite's width
     static let depthScale: CGFloat = 0.55   // ball size once it reaches the pokemon
-    static let spinPerPoint: Double = 1.1   // degrees of roll per point travelled
-    static let maxFlightTime: CGFloat = 3
+    static let maxFlightTime: CGFloat = 4
+
+    // Every throw tumbles: the base roll the ball carries no matter how it
+    // was flicked, plus a little extra for faster throws.
+    static let baseFlightRoll: CGFloat = 950        // deg/s
+    static let rollPerSpeed: CGFloat = 0.35         // extra deg/s per pt/s of launch speed
+    static let aimRollPerPoint: CGFloat = 2.2       // deg of roll per point dragged sideways
+
+    // Sidespin (Magnus effect): how much of the flick's lateral speed becomes
+    // spin, and how hard that spin bends the flight path. A sideways-flicking
+    // throw curves through the air instead of flying straight.
+    static let spinFromFlick: CGFloat = 1.1     // deg/s of spin per pt/s of lateral flick
+    static let maxSpin: CGFloat = 1500          // deg/s ceiling
+    static let curvePerSpin: CGFloat = 0.22     // lateral pt/s² per deg/s of spin
+    static let spinDecay: CGFloat = 1.3         // fraction of spin lost per second
 }
 
 private struct Vec {
@@ -227,6 +242,9 @@ struct WildPokemonView: View {
     @State private var ballPos: CGSize = .zero
     @State private var ballVel = Vec()
     @State private var ballSpin: Double = 0
+    /// Sidespin carried by the ball, in deg/s. Positive curves right and rolls
+    /// the ball clockwise; it comes from the flick's lateral speed.
+    @State private var spinRate: CGFloat = 0
     @State private var flight: Timer?
     @State private var flightTime: CGFloat = 0
 
@@ -256,33 +274,33 @@ struct WildPokemonView: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             Text("WILD!")
-                .font(.system(size: 10, weight: .heavy, design: .rounded))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
+                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3)
                 .background(Capsule().fill(Color.yellow.opacity(0.95)))
                 .foregroundStyle(Color.black.opacity(0.7))
 
             encounterArea
-                .frame(height: 104)
+                .frame(height: 210)
                 .background(frameReader { targetRect = $0 })
 
             ballSelector
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
 
             Spacer(minLength: 0)
 
             dockedBall
-                .frame(height: 56)
+                .frame(height: 76)
                 .background(frameReader { dockRect = $0 })
 
             Text("flick up to throw")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
                 .foregroundStyle(Color.black.opacity(0.5))
-                .padding(.bottom, 6)
+                .padding(.bottom, 8)
         }
-        .padding(.top, 10)
+        .padding(.top, 12)
         .coordinateSpace(name: "wild")
         .overlay {
             ForEach(vm.hearts) { heart in
@@ -304,11 +322,11 @@ struct WildPokemonView: View {
 
     private var encounterArea: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 18)
                 .fill(Color.primary.opacity(0.06))
 
             if let id = vm.dexID {
-                AnimatedSpriteView(id: id, height: 88)
+                AnimatedSpriteView(id: id, height: 160)
                     .scaleEffect(spriteGone ? 0.05 : 1)
                     .opacity(spriteGone ? 0 : 1)
                     .scaleEffect(vm.missPulse ? 0.86 : 1)
@@ -319,9 +337,9 @@ struct WildPokemonView: View {
 
             if gotcha {
                 Text("Gotcha!")
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
+                    .font(.system(size: 19, weight: .heavy, design: .rounded))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
                     .background(Capsule().fill(Color.yellow.opacity(0.95)))
                     .foregroundStyle(Color.black.opacity(0.75))
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
@@ -329,16 +347,16 @@ struct WildPokemonView: View {
 
             if let message {
                 Text(message)
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     .background(Capsule().fill(Color.white.opacity(0.85)))
                     .foregroundStyle(Color.black.opacity(0.65))
                     .transition(.opacity)
-                    .offset(y: 38)
+                    .offset(y: 72)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .animation(.easeInOut(duration: 0.18), value: gotcha)
     }
 
@@ -348,15 +366,15 @@ struct WildPokemonView: View {
                 Button {
                     guard phase == .ready else { return }
                     if controller.ballCount(for: kind) > 0 { pet.setActiveBall(kind) }
-                } label: {
-                    VStack(spacing: 2) {
-                        PokeBallIcon(size: 17, tint: kind.tint)
+                }                 label: {
+                    VStack(spacing: 3) {
+                        PokeBallIcon(size: 22, tint: kind.tint)
                         Text("\(controller.ballCount(for: kind))")
-                            .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
                             .foregroundStyle(Color.black.opacity(0.55))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     .background(
                         Capsule().fill(
                             pet.activeBall == kind ? Color.white.opacity(0.8) : Color.white.opacity(0.35)
@@ -386,8 +404,8 @@ struct WildPokemonView: View {
 
     /// The throwable ball at the bottom.
     private var dockedBall: some View {
-        PokeBallIcon(size: 36, tint: pet.activeBall.tint)
-            .shadow(color: .black.opacity(0.25), radius: 2, y: 2)
+        PokeBallIcon(size: 48, tint: pet.activeBall.tint)
+            .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
             .rotationEffect(.degrees(ballSpin))
             .rotationEffect(.degrees(wobbleAngle))
             .scaleEffect(depthScale)
@@ -400,7 +418,11 @@ struct WildPokemonView: View {
         DragGesture(minimumDistance: 8, coordinateSpace: .named("wild"))
             .onChanged { value in
                 guard phase == .ready else { return }
+                // Dragging the ball around in your hand rolls it too (read
+                // the previous point before sampleVelocity overwrites it).
+                let rollDelta = value.translation.width - lastPoint.width
                 sampleVelocity(value.translation)
+                ballSpin += Double(rollDelta * ThrowPhysics.aimRollPerPoint)
                 ballPos = value.translation
             }
             .onEnded { value in handleRelease(value) }
@@ -452,6 +474,11 @@ struct WildPokemonView: View {
         controller.interactionLock = true
         ballPos = value.translation
         ballVel = vel
+        // A sideways component of the flick puts sidespin on the ball, which
+        // bends the arc — pure vertical flicks still fly straight.
+        spinRate = min(max(vel.dx * ThrowPhysics.spinFromFlick,
+                           -ThrowPhysics.maxSpin),
+                       ThrowPhysics.maxSpin)
         flightTime = 0
         startFlight(kind: kind)
     }
@@ -470,20 +497,28 @@ struct WildPokemonView: View {
         flight = nil
     }
 
-    /// One fixed physics step: gravity, a little air drag, then a check for
-    /// whether the ball just crossed the pokemon's plane close enough to hit.
+    /// One fixed physics step: gravity, air drag, Magnus curve from the
+    /// sidespin, then a check for whether the ball just crossed the pokemon's
+    /// plane close enough to hit.
     private func stepFlight(kind: PetItemKind) {
         let dt = ThrowPhysics.step
         let previous = ballPos
 
+        // Spin decays with the air it grips, and bends the flight sideways.
+        spinRate *= (1 - ThrowPhysics.spinDecay * dt)
         ballVel.dy += ThrowPhysics.gravity * dt
         ballVel.dx *= (1 - ThrowPhysics.airDrag * dt)
+        ballVel.dx += ThrowPhysics.curvePerSpin * spinRate * dt
 
         let dx = ballVel.dx * dt
         let dy = ballVel.dy * dt
         ballPos.width += dx
         ballPos.height += dy
-        ballSpin += Double((dx * dx + dy * dy).squareRoot()) * ThrowPhysics.spinPerPoint
+        // Visible tumble: a steady roll every throw gets, plus the live
+        // sidespin contribution while it lasts.
+        ballSpin += Double((ThrowPhysics.baseFlightRoll
+            + ballVel.length * ThrowPhysics.rollPerSpeed) * dt)
+            + Double(spinRate * dt)
         flightTime += dt
 
         let target = targetOffset
@@ -507,7 +542,7 @@ struct WildPokemonView: View {
         // Sailed off the panel, dropped back past the dock, or ran out of time.
         if flightTime > ThrowPhysics.maxFlightTime
             || abs(ballPos.width) > dockRect.width / 2
-            || ballPos.height > 60 {
+            || ballPos.height > 90 {
             stopFlight()
             missedEntirely()
         }
@@ -589,6 +624,7 @@ struct WildPokemonView: View {
             ballVel = Vec()
             dragVel = Vec()
             lastTime = .distantPast
+            spinRate = 0
             ballSpin = 0
             wobbleAngle = 0
             ballVisible = true

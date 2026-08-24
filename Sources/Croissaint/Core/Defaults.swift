@@ -177,6 +177,7 @@ enum DefaultsKey {
     static let killProcessSortBy = "killProcessSortBy" // cpu | memory | name | pid
     static let killProcessSortAscending = "killProcessSortAscending"
     static let desktopPetEnabled = "desktopPetEnabled"  // buddy walks the screen while the feature is installed
+    static let privacyIndicatorCloakEnabled = "privacyIndicatorCloakEnabled"  // hide the recording/camera/mic menu-bar dots
     static let panelUtilityCleaner = "panelUtilityCleaner"
     static let panelUtilityHomebrew = "panelUtilityHomebrew"
     static let panelUtilityAppUpdates = "panelUtilityAppUpdates"
@@ -754,6 +755,7 @@ enum Defaults {
         DefaultsKey.keepAwakeIconTint: KeepAwakeIconTint.orange.rawValue,
         DefaultsKey.keepAwakeActiveIcon: KeepAwakeActiveIcon.croissaint.rawValue,
         DefaultsKey.showCountdown: false,
+        DefaultsKey.privacyIndicatorCloakEnabled: false,
         DefaultsKey.scrollInverterEnabled: false,
         DefaultsKey.scrollInverterHorizontalEnabled: false,
         DefaultsKey.focusFollowsMouseEnabled: false,
