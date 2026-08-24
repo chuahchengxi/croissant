@@ -62,8 +62,11 @@ enum UpdateInstallerSupport {
         }
         while kill -0 "$PID" 2>/dev/null; do sleep 0.3; done
         note fail-dmg-verify
-        DMG_VERIFY_REQ='anchor apple generic and certificate leaf[subject.OU] = "3D485NHW29"'
-        if ! /usr/bin/codesign -v --strict -R="$DMG_VERIFY_REQ" "$DMG" 2>/dev/null; then
+        # Fork releases ship an unsigned disk image, so there is no Apple
+        # signature to demand here. hdiutil validates the image's internal
+        # checksums while mounting; this preflight only proves the downloaded
+        # file really is a disk image before anything is mounted from it.
+        if ! /usr/bin/hdiutil imageinfo -format "$DMG" >/dev/null 2>&1; then
             /bin/rm -f "$DMG"
             finalize
             relaunch "$APP"
@@ -109,10 +112,15 @@ enum UpdateInstallerSupport {
                 elif /usr/sbin/spctl -a -t exec "$STAGE" >/dev/null 2>&1; then
                     GATEKEEPER_OK=1
                 fi
-                VERIFY_REQ='identifier "com.croissaint.utils" and anchor apple generic and certificate leaf[subject.OU] = "3D485NHW29"'
+                VERIFY_REQ='identifier "com.croissaint.utils"'
                 note fail-verify
+                # A Developer ID build passes Gatekeeper assessment directly.
+                # The fork's ad-hoc build carries TeamIdentifier=adhoc and can
+                # never satisfy spctl, so it is accepted on the strength of the
+                # full strict signature validation instead.
+                SIGNED_ADHOC="$(/usr/bin/codesign -dv "$STAGE" 2>&1 | /usr/bin/grep -c 'TeamIdentifier=adhoc')"
                 if /usr/bin/codesign -v --deep --strict -R="$VERIFY_REQ" "$STAGE" 2>/dev/null \
-                    && [ "$GATEKEEPER_OK" = 1 ]; then
+                    && { [ "$GATEKEEPER_OK" = 1 ] || [ "$SIGNED_ADHOC" -ge 1 ]; }; then
                     note fail-swap
                     # The backup name is unique per run: after an elevated
                     # install the old bundle is root-owned, a later user-run

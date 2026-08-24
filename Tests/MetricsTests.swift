@@ -2352,7 +2352,7 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "0.0.1",
+        expect(plistVersion == "0.0.2",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -6667,11 +6667,13 @@ struct MetricsTests {
         }
         expect(installerScript.contains("spctl --status"),
                "installer script skips Gatekeeper assessment when the user disabled it")
-        let dmgVerification = installerScript.range(of: "DMG_VERIFY_REQ")
+        expect(installerScript.contains("TeamIdentifier=adhoc"),
+               "installer accepts the fork's ad-hoc signed builds that spctl always rejects")
+        let dmgVerification = installerScript.range(of: "hdiutil imageinfo")
         let dmgMount = installerScript.range(of: "/usr/bin/hdiutil attach")
         expect(dmgVerification != nil && dmgMount != nil
                && dmgVerification!.lowerBound < dmgMount!.lowerBound,
-               "installer verifies the release signer before mounting the DMG")
+               "installer proves the download is a disk image before mounting it")
         expect(installerScript.contains("chown -R"),
                "an elevated install hands the bundle back to the user")
         expect(installerScript.contains("update-old.$PID"),

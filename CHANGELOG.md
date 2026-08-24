@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.2] - 2026-08-24
+
+### Fixed
+- Pressing Update now actually installs the new version. The in-app updater still demanded Vorssaint's Apple Developer ID signature on the download and the staged app, which this fork's ad-hoc signed, unnotarized releases can never satisfy, so every install silently aborted and relaunched the old app. Verification now proves the download is a valid disk image, checks the app bundle's full signature integrity and its own bundle identifier, and accepts ad-hoc signatures explicitly.
+
 ## [0.0.1] - 2026-08-24
 
 ### Summary
