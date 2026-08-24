@@ -828,6 +828,11 @@ struct BuddyChooser: View {
     private var roster: [SpeciesDef] {
         var ids = Self.starterDexIDs
         ids.insert(702) // Dedenne
+        // Custom characters (Nailong and friends) are not Pokémon you catch —
+        // they belong to the player from the start.
+        ids.formUnion(speciesCatalog
+            .filter { $0.baseID >= CustomPetSprites.idLowerBound }
+            .map(\.baseID))
         ids.formUnion(pet.caughtSpeciesIDs)
         return speciesCatalog.filter { ids.contains($0.baseID) }
     }
