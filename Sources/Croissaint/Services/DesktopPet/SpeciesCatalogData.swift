@@ -1032,4 +1032,7 @@ let speciesCatalogData = """
 1023|Iron Crown|Steel · Psychic|
 1024|Terapagos|Normal|
 1025|Pecharunt|Poison · Ghost|
+// Custom characters (not in the National Dex). IDs must stay >= 10000 so they
+// never collide with a real dex number; SpriteCache draws these locally.
+10001|Nailong|Dragon · Snack|
 """
