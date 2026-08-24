@@ -3,7 +3,13 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 permissions:
   contents: read
@@ -47,6 +53,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Unit tests
+        run: ./build.sh --test
+
       - name: Build
         run: ./build.sh
 
@@ -55,9 +64,6 @@ jobs:
 
       - name: Package DMG
         run: ./Tools/make-dmg.sh
-
-      - name: Unit tests
-        run: ./build.sh --test
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
