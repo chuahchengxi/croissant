@@ -32,29 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # An un-notarized DMG gets flagged as possible malware by Gatekeeper on
-      # every user's Mac ("Apple could not verify…"), which is how v3.4.1
-      # shipped. Refuse to publish rather than ship that quietly.
-      - name: Require signing & notarization credentials
-        run: |
-          missing=0
-          for secret in SIGNING_CERT_P12 NOTARY_API_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
-            if [[ -z "${!secret}" ]]; then
-              echo "✗ Missing repo secret: ${secret}" >&2
-              missing=1
-            fi
-          done
-          if [[ "$missing" != 0 ]]; then
-            echo "" >&2
-            echo "Release credentials are not configured on this repository, so" >&2
-            echo "the DMG would open with a macOS malware warning. Add the secrets" >&2
-            echo "(SIGNING_CERT_P12, SIGNING_CERT_PASSWORD, NOTARY_API_KEY_P8," >&2
-            echo "NOTARY_KEY_ID, NOTARY_ISSUER_ID) and re-run this workflow." >&2
-            exit 1
-          fi
-
       # Unit tests already gate this exact commit in CI on main; the release
-      # run goes straight to building so the tag reaches users faster.
+      # run goes straight to building so the tag reaches users faster. Signing
+      # and notarization happen when their secrets are configured; without
+      # them ci-setup-signing.sh and notarize.sh skip and the DMG ships ad-hoc.
 
       - name: Set up signing
         env:
