@@ -2363,7 +2363,7 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "0.0.4",
+        expect(plistVersion == "0.0.5",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -6684,7 +6684,7 @@ struct MetricsTests {
         }
         expect(installerScript.contains("spctl --status"),
                "installer script skips Gatekeeper assessment when the user disabled it")
-        expect(installerScript.contains("TeamIdentifier=adhoc"),
+        expect(installerScript.contains("Signature=adhoc"),
                "installer accepts the fork's ad-hoc signed builds that spctl always rejects")
         let dmgVerification = installerScript.range(of: "hdiutil imageinfo")
         let dmgMount = installerScript.range(of: "/usr/bin/hdiutil attach")
