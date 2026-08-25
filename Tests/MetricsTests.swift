@@ -2211,20 +2211,11 @@ struct MetricsTests {
                "hiding the active app from its Dock icon is opt-in")
         expect(DockPreviewSupport.sanitizedBackgroundOpacity(0.7) == 0.7,
                "a Dock Preview background opacity inside the range is kept")
-        expect(DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: true,
-                                                 isMinimized: false, isFullscreen: false),
+        expect(DockPreviewSupport.canDragToPlace(hasWindowID: true, isFullscreen: false),
                "an ordinary preview card can be dragged out of the panel")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: false),
-               "a window on another Space cannot be dragged from the current screen")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: true, isFullscreen: false),
-               "a minimized window has no on-screen position to drag it to")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: true),
+        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isFullscreen: true),
                "a fullscreen window owns its Space and ignores a dropped position")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: false, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: false),
+        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: false, isFullscreen: false),
                "an entry without a window has nothing to move")
         // The thumbnail is derived from the card, so a constant changed on its
         // own must not silently eat into it or leave the card short.
@@ -2244,11 +2235,24 @@ struct MetricsTests {
         let dockPreviewCardSource = (try? String(
             contentsOfFile: "Sources/Croissaint/UI/Switcher/DockPreviewPanelView.swift",
             encoding: .utf8)) ?? ""
-        expect(dockPreviewCardSource.components(separatedBy: "Text(window.displayTitle)").count - 1 == 1,
+        let dockPreviewCardCode = dockPreviewCardSource
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        expect(dockPreviewCardCode.components(separatedBy: "window.displayTitle").count - 1 == 1,
                "a Dock Preview card names its window once")
-        expect(dockPreviewCardSource.components(separatedBy: "window.appIcon").count - 1 == 1,
-               "a Dock Preview card only falls back to the app icon when it has no thumbnail")
-        expect(dockPreviewCardSource.contains("window.isOnHiddenSpace"),
+        expect(!dockPreviewCardCode.contains("previewControlBar"),
+               "no control bar floats over a Dock Preview thumbnail")
+        let titleBandBody = dockPreviewCardCode
+            .components(separatedBy: "private var titleBand: some View {").last ?? ""
+        let bandDeclaration = titleBandBody.components(separatedBy: "private var").first ?? ""
+        expect(bandDeclaration.contains("closeButton") && bandDeclaration.contains("minimizeButton"),
+               "both window controls sit in the title band, beside the name")
+        expect(!DockPreviewSupport.showsCardControls(isHovering: false, isSelected: false),
+               "a card with no pointer on it and no selection draws no window controls")
+        expect(DockPreviewSupport.showsCardControls(isHovering: true, isSelected: false),
+               "the pointer summons a card's window controls")
+        expect(dockPreviewCardCode.contains("window.isOnHiddenSpace"),
                "a Dock Preview card badges a window that lives on another desktop")
 
         let dockDropScreen = CGRect(x: -1440, y: 24, width: 1440, height: 876)
@@ -6792,25 +6796,27 @@ struct MetricsTests {
 
         // MARK: Launch at login reconciliation
 
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .off,
                                                   locationIsUnstable: false) == .register,
                "a lost registration the user wants is redone at startup")
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .off,
                                                   locationIsUnstable: true) == .none,
                "no registration is redone from an unstable location")
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: true,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .enabled,
                                                   locationIsUnstable: false) == .none
-                && LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: true,
-                                                      locationIsUnstable: true) == .none,
-               "a healthy registration is left alone")
-        expect(LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: true,
+                && LaunchAtLoginSupport.startupAction(wanted: true, registration: .enabled,
+                                                      locationIsUnstable: true) == .none
+                && LaunchAtLoginSupport.startupAction(wanted: true, registration: .needsApproval,
+                                                      locationIsUnstable: false) == .none,
+               "a healthy or approval-waiting registration is left alone")
+        expect(LaunchAtLoginSupport.startupAction(wanted: false, registration: .enabled,
                                                   locationIsUnstable: false) == .adoptEnabled
-                && LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: true,
+                && LaunchAtLoginSupport.startupAction(wanted: false, registration: .enabled,
                                                       locationIsUnstable: true) == .adoptEnabled,
                "an enable made outside the app becomes the stored choice")
-        expect(LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: false, registration: .off,
                                                   locationIsUnstable: false) == .none
-                && LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: false,
+                && LaunchAtLoginSupport.startupAction(wanted: false, registration: .off,
                                                       locationIsUnstable: true) == .none,
                "startup never turns launch at login on for a user who never asked")
 
@@ -6915,13 +6921,13 @@ struct MetricsTests {
         expect(DockPreviewSupport.dockProximityBand(tileSize: 200)
                > DockPreviewSupport.dockProximityBand(tileSize: 64),
                "Dock proximity band grows with the Dock tile size")
-        let onePreviewSize = DockPreviewSupport.panelSize(itemCount: 1, screenVisibleFrame: screen)
-        let twoPreviewSize = DockPreviewSupport.panelSize(itemCount: 2, screenVisibleFrame: screen)
+        let onePreviewSize = DockPreviewSupport.panelSize(itemCount: 1, screenVisibleFrame: screen, isPinned: false)
+        let twoPreviewSize = DockPreviewSupport.panelSize(itemCount: 2, screenVisibleFrame: screen, isPinned: false)
         expect(twoPreviewSize.width > onePreviewSize.width,
                "Dock Preview panel size shrinks when a card is removed")
         expect(onePreviewSize.height == DockPreviewSupport.cardHeight
                + DockPreviewSupport.panelPadding * 2
-               + DockPreviewSupport.panelHeaderHeight,
+               + (DockPreviewSupport.showsPanelHeader(isPinned: false) ? DockPreviewSupport.panelHeaderHeight : 0),
                "Dock Preview panel reserves room for the pinned header")
         expect(DockPreviewSupport.windowPositionText(selectedWindowID: nil, windowIDs: [11]) == nil,
                "Dock Preview hides the window counter for a single window")
@@ -7021,8 +7027,9 @@ struct MetricsTests {
                     "App Switcher Small keeps the selection outline inside its icon row")
         expectClose(Double(DockPreviewSupport.cardSpacing), 6,
                     "Dock Preview Small previews tighten card spacing")
-        expectClose(Double(DockPreviewSupport.panelPadding), 9,
-                    "Dock Preview Small previews tighten panel padding")
+        expectClose(Double(DockPreviewSupport.panelPadding),
+                    Double(DockPreviewSupport.cardPadding),
+                    "Dock Preview Small previews tighten panel padding with the card's")
         UserDefaults.standard.set("xlarge", forKey: DefaultsKey.previewSize)
         let xlargeIconRowLayout = SwitcherIconRowLayout.compute(appCount: 6,
                                                                  selectedWindowCount: 1,
@@ -15808,7 +15815,7 @@ struct MetricsTests {
         for language in AppLanguage.allCases {
             let commandBarValues = Mirror(reflecting: FeatureStrings.commandBar(language)).children
                 .compactMap { $0.value as? String }
-            expect(commandBarValues.count == 146 && commandBarValues.allSatisfy { !$0.isEmpty },
+            expect(commandBarValues.count == 149 && commandBarValues.allSatisfy { !$0.isEmpty },
                    "every command bar string is set for \(language.rawValue)")
             expect(commandBarValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible command bar strings (\(language.rawValue))")
