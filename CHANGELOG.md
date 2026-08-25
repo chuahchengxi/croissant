@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.6] - 2026-08-25
+
+### Added
+- The desktop pet animation pack ships inside the app instead of being an opt-in download. Walking buddies with real legs now cover 290 species, with hand-drawn overrides for fins, coils and tentacles the detector misread; everyone else keeps the pack-free hop.
+- Sleeping pets look asleep: eyelids share the sprite's sleep tint, lid colour is sampled from the skin around each eye rather than the brow above it, and overlapping eye rectangles no longer merge into a unibrow.
+- Release builds refuse to publish when signing or notarization secrets are missing on the repository, so an un-notarized DMG can never ship quietly again.
+
+### Fixed
+- Walking pets no longer tear themselves apart. A top-left versus bottom-left coordinate flip punched the leg holes into the head; only leg rows lose pixels now, sliced at each species' real leg width so the two crops never share a column.
+
+### Changed
+- Removed the remaining old-brand references across docs, templates and source headers, and added CI and release badges to the README.
+
 ## [0.0.5] - 2026-08-25
 
 ### Fixed
