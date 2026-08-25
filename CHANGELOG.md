@@ -4,6 +4,48 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.5] - 2026-08-25
+
+### Fixed
+- In-app updates install again. The installer recognized ad-hoc signed builds by a signature string that codesign never prints ("TeamIdentifier=adhoc" instead of "Signature=adhoc"), so with Gatekeeper enabled every update passed the download, mount and copy steps and then silently aborted at verification, relaunching the old version. Verified end to end against the real release DMG.
+
+## [0.0.4] - 2026-08-25
+
+### Added
+- Synced all upstream Vorssaint work through August 25: media can now compress video and GIFs to a target file size, the Command Bar gains a compact mode, Dock Preview cards were reworked with a cleaner drag and hover controls, the Shelf shows real video-frame thumbnails, script links can run without an argument, and the first Scratchpad tab is named Scratchpad 1.
+
+### Fixed
+- Screenshot crop drafts snap to pixel boundaries.
+- Display brightness is no longer replayed as a gamma dim, and display names resolve on the main thread.
+- The App Switcher sizes its grid cards and rows from shared content width, the Shelf hides tile tooltips when the context menu opens, the Scratchpad tab strip gets the width its row has free, Launch at Login reports items waiting for approval, the Uninstaller names what a removal left behind, and the Command Bar drops the key glyph from settings actions.
+
+## [0.0.3] - 2026-08-25
+
+### Added
+- Synced all upstream Vorssaint work through August 25: media can now compress video and GIFs to a target file size, the Command Bar gains a compact mode, Dock Preview cards were reworked with a cleaner drag and hover controls, and a batch of fixes lands for display brightness, display names, Scratchpad tabs, the Shelf tooltip, App Switcher sizing, Launch at Login approval reporting and the Uninstaller.
+
+### Fixed
+- The in-app installer now verifies the offered release version before swapping bundles.
+
+## [0.0.2] - 2026-08-24
+
+### Fixed
+- Pressing Update now actually installs the new version. The in-app updater still demanded Vorssaint's Apple Developer ID signature on the download and the staged app, which this fork's ad-hoc signed, unnotarized releases can never satisfy, so every install silently aborted and relaunched the old app. Verification now proves the download is a valid disk image, checks the app bundle's full signature integrity and its own bundle identifier, and accepts ad-hoc signatures explicitly.
+
+## [0.0.1] - 2026-08-24
+
+### Summary
+Croissaint 0.0.1 is the first release of the fork's own versioning line, carrying every feature of Vorssaint 3.4.1 plus all fork work: the Nailong desktop pet with accurate pixel-art sprites and wild encounters, full de-branding to Croissaint with the self-updater pointed at this repository, and Discord removal.
+
+### Changed
+- Automatic updates now follow stable releases only. Running a beta build no longer switches the update channel on its own; betas arrive solely through explicit opt-in in Settings.
+- The versioning restarts at 0.0.1 for the fork's independent release line.
+
+## [beta-2] - 2026-08-24
+
+### Added
+- Synced the latest upstream Vorssaint work, including a correction to how Memory Used is accounted so it matches Activity Monitor, and an App Switcher fix that slows overflow-row hover to one icon at a time.
+
 ## [3.4.1] - 2026-08-24
 
 ### Changed
@@ -37,12 +79,14 @@ All notable changes to this project are documented here. The format follows
 - The radial menu editor now includes a broader built-in SF Symbol catalog with runtime availability filtering. Thanks to @ruvelro.
 - Sound Mixer now includes an option to hide inactive applications while keeping custom volume and output selections visible. Thanks to @ruvelro.
 - Sound Mixer now includes an option to use finer volume steps with keyboard volume keys and rollers. Thanks to @ruvelro.
+- Finder Cut & Paste now includes an option in Settings to show or hide the floating panel for staged files, and automatically hides the panel when Finder is in the background.
 
 ### Changed
 - Sound Mixer panel now groups audio devices and organizes preferences in a collapsible Options section.
 - Embedded utilities in the Quick Launcher now provide distinct Back and Close buttons. Thanks to @ruvelro.
 
 ### Fixed
+- System metrics now accurately report used memory by including hardware-reserved tagged memory on supported hardware. Thanks to @pergioa and @PathGao.
 - App Switcher now steps one icon at a time when hovering the edge of an overflowing icon row instead of scrolling continuously. Thanks to @BenjaminD2023.
 - App Switcher now scales windowless app icons and labels proportionally when preview size is set to small. Thanks to @Yahddyyp.
 - Screenshot editor now opens the full-resolution image when editing a file copied in Finder instead of its preview icon. Thanks to @iltonandrew.
@@ -1532,7 +1576,7 @@ Vorssaint 3.1.0 adds three optional tools: Clipboard History for saving and reus
   default, with a setting to split them into separate CPU°C, GPU°C and BAT°C
   blocks.
 
-![Menu bar temperature metrics](https://raw.githubusercontent.com/vorssaint/vorssaint-utils/main/Resources/Images/menu-bar-temperature-metrics.png)
+![Menu bar temperature metrics](https://raw.githubusercontent.com/vorssaintapp/vorssaint-utils/main/Resources/Images/menu-bar-temperature-metrics.png)
 
 ## [3.0.7] - 2026-06-20
 

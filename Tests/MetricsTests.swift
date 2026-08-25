@@ -9,6 +9,7 @@ import CoreGraphics
 import Darwin
 import Foundation
 import ImageIO
+import VMStatisticsCompat
 
 // Standalone unit tests for pure helpers. Compiled without IOKit or UI by
 // `./build.sh --test`, so they run fast and deterministically on any machine.
@@ -333,12 +334,14 @@ struct MetricsTests {
                    "\(language.rawValue) window edge snap controls are localized")
             let alertStrings = FeatureStrings.monitorAlerts(language)
             expect(alertStrings.caption.contains("12"),
-                   "\(language.rawValue) monitor alert caption explains the CPU spike window")
+                   "\(language.rawValue) monitor alert caption explains the sustained alert window")
             expectFormat(alertStrings.cpuBodyFormat, ["d"], "\(language.rawValue) CPU alert format")
             expectFormat(alertStrings.cpuTemperatureBodyFormat, ["d"],
                          "\(language.rawValue) CPU temperature alert format")
             expectFormat(alertStrings.diskBodyFormat, ["@", "d"], "\(language.rawValue) disk alert format")
             expectFormat(alertStrings.batteryBodyFormat, ["d"], "\(language.rawValue) battery alert format")
+            expectFormat(alertStrings.batteryTemperatureBodyFormat, ["d"],
+                         "\(language.rawValue) battery temperature alert format")
         }
         expect(FeatureStrings.monitorAlerts(.enUS).cooldown == "Repeat the same alert after",
                "English monitor repeat control is explicit")
@@ -1280,6 +1283,11 @@ struct MetricsTests {
         expectClose(TemperatureSensorSelector.stabilizedTemperature(
             7, cache: &batteryTemperatureCache, now: 100, maxAge: 30
         ) ?? -1, 7, "chip floor does not reject a legitimate low battery reading")
+        expectClose(TemperatureSensorSelector.stabilizedTemperature(
+            1, cache: &batteryTemperatureCache, now: 101, maxAge: 30
+        ) ?? -1, 7, "an invalid battery sample bridges the last valid reading")
+        expect(batteryTemperatureCache?.updatedAt == 100,
+               "a bridged battery temperature keeps the real sample timestamp")
         var invalidBatteryTemperatureCache: CachedSensorReading?
         expect(TemperatureSensorSelector.stabilizedTemperature(
             1, cache: &invalidBatteryTemperatureCache, now: 100, maxAge: 30
@@ -1369,14 +1377,48 @@ struct MetricsTests {
         // MARK: Memory used
 
         let used = MetricFormat.memoryUsed(totalBytes: 16 * 1024,
+                                           appBytes: 5 * 1024,
                                            pageSize: 1024,
-                                           freePages: 1,
-                                           speculativePages: 2,
-                                           fileBackedPages: 3)
-        expect(used == 10 * 1024, "memory used excludes free, speculative and file-backed pages")
-        expect(MetricFormat.memoryUsed(totalBytes: 16, pageSize: 1,
-                                       freePages: 20, speculativePages: 0, fileBackedPages: 0) == 0,
-               "memory used clamps impossible available memory")
+                                           wiredPages: 2,
+                                           compressorPages: 1,
+                                           tagStoragePages: 1)
+        expect(used == 9 * 1024, "memory used includes app, wired, compressed and tagged storage")
+        expect(MetricFormat.memoryUsed(totalBytes: 16, appBytes: 20,
+                                       pageSize: 1, wiredPages: 0,
+                                       compressorPages: 0, tagStoragePages: 0) == 16,
+               "memory used clamps impossible used memory")
+
+        var vmStats = vorssaint_vm_statistics64_rev3_t()
+        vmStats.wire_count = 2
+        vmStats.purgeable_count = 3
+        vmStats.compressor_page_count = 4
+        vmStats.external_page_count = 5
+        vmStats.internal_page_count = 6
+        vmStats.total_tag_storage_pages = 7
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev1Count - 1) == nil,
+               "VM statistics rejects a truncated legacy payload")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev1Count) ==
+                   VMStatisticsSnapshot(wiredPages: 2,
+                                        purgeablePages: 3,
+                                        compressorPages: 4,
+                                        externalPages: 5,
+                                        internalPages: 6,
+                                        tagStoragePages: 0),
+               "VM statistics decodes the typed legacy prefix")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev2Count)?.tagStoragePages == 0,
+               "VM statistics does not read tagged storage from a rev2 payload")
+        expect(VMStatisticsDecoder.decode(vmStats,
+                                          returnedCount: VMStatisticsDecoder.rev3Count)?.tagStoragePages == 7,
+               "VM statistics reads tagged storage from a rev3 payload")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(2, totalBytes: 16, pageSize: 4) == 2,
+               "VM statistics accepts plausible tagged storage")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(5, totalBytes: 16, pageSize: 4) == 0,
+               "VM statistics rejects tagged storage larger than physical memory")
+        expect(VMStatisticsDecoder.validatedTagStoragePages(1, totalBytes: 16, pageSize: 0) == 0,
+               "VM statistics rejects tagged storage without a page size")
 
         // MARK: App memory
 
@@ -2176,20 +2218,11 @@ struct MetricsTests {
                "hiding the active app from its Dock icon is opt-in")
         expect(DockPreviewSupport.sanitizedBackgroundOpacity(0.7) == 0.7,
                "a Dock Preview background opacity inside the range is kept")
-        expect(DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: true,
-                                                 isMinimized: false, isFullscreen: false),
+        expect(DockPreviewSupport.canDragToPlace(hasWindowID: true, isFullscreen: false),
                "an ordinary preview card can be dragged out of the panel")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: false),
-               "a window on another Space cannot be dragged from the current screen")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: true, isFullscreen: false),
-               "a minimized window has no on-screen position to drag it to")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: true),
+        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: true, isFullscreen: true),
                "a fullscreen window owns its Space and ignores a dropped position")
-        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: false, isOnScreen: false,
-                                                  isMinimized: false, isFullscreen: false),
+        expect(!DockPreviewSupport.canDragToPlace(hasWindowID: false, isFullscreen: false),
                "an entry without a window has nothing to move")
         // The thumbnail is derived from the card, so a constant changed on its
         // own must not silently eat into it or leave the card short.
@@ -2209,11 +2242,24 @@ struct MetricsTests {
         let dockPreviewCardSource = (try? String(
             contentsOfFile: "Sources/Croissaint/UI/Switcher/DockPreviewPanelView.swift",
             encoding: .utf8)) ?? ""
-        expect(dockPreviewCardSource.components(separatedBy: "Text(window.displayTitle)").count - 1 == 1,
+        let dockPreviewCardCode = dockPreviewCardSource
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        expect(dockPreviewCardCode.components(separatedBy: "window.displayTitle").count - 1 == 1,
                "a Dock Preview card names its window once")
-        expect(dockPreviewCardSource.components(separatedBy: "window.appIcon").count - 1 == 1,
-               "a Dock Preview card only falls back to the app icon when it has no thumbnail")
-        expect(dockPreviewCardSource.contains("window.isOnHiddenSpace"),
+        expect(!dockPreviewCardCode.contains("previewControlBar"),
+               "no control bar floats over a Dock Preview thumbnail")
+        let titleBandBody = dockPreviewCardCode
+            .components(separatedBy: "private var titleBand: some View {").last ?? ""
+        let bandDeclaration = titleBandBody.components(separatedBy: "private var").first ?? ""
+        expect(bandDeclaration.contains("closeButton") && bandDeclaration.contains("minimizeButton"),
+               "both window controls sit in the title band, beside the name")
+        expect(!DockPreviewSupport.showsCardControls(isHovering: false, isSelected: false),
+               "a card with no pointer on it and no selection draws no window controls")
+        expect(DockPreviewSupport.showsCardControls(isHovering: true, isSelected: false),
+               "the pointer summons a card's window controls")
+        expect(dockPreviewCardCode.contains("window.isOnHiddenSpace"),
                "a Dock Preview card badges a window that lives on another desktop")
 
         let dockDropScreen = CGRect(x: -1440, y: 24, width: 1440, height: 876)
@@ -2317,7 +2363,7 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "3.4.1",
+        expect(plistVersion == "0.0.5",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -2378,6 +2424,8 @@ struct MetricsTests {
         expect(registeredDefaults[DefaultsKey.clipboardHistoryShortcut] as? String
                == GlobalShortcut.clipboardDefault.storageValue,
                "clipboard history shortcut defaults to Ctrl+Opt+Cmd+V")
+        expect(registeredDefaults[DefaultsKey.finderCutPasteShowHUD] as? Bool == true,
+               "the Finder cut and paste floating panel starts enabled")
         expect(registeredDefaults[DefaultsKey.finderRenameEnabled] as? Bool == false,
                "the Finder rename shortcut is opt-in")
         expect(registeredDefaults[DefaultsKey.finderRenameShortcut] as? String == ":120",
@@ -2444,6 +2492,10 @@ struct MetricsTests {
                "the two minute alert cooldown is a valid stored choice")
         expect(Defaults.sanitizedMonitorAlertCooldown(7) == 15,
                "unknown alert cooldowns fall back to fifteen minutes")
+        expect(registeredDefaults[DefaultsKey.monitorAlertBatteryTemperature] as? Bool == false,
+               "battery temperature alerts are opt-in")
+        expect(registeredDefaults[DefaultsKey.monitorAlertBatteryTemperatureThreshold] as? Int == 40,
+               "battery temperature alerts default to forty degrees")
         expect(Defaults.sanitizedMenuBarMetricSpacing("standard") == "standard",
                "standard menu bar spacing is a valid stored choice")
         expect(Defaults.sanitizedMenuBarMetricSpacing("banana") == "compact",
@@ -6625,13 +6677,23 @@ struct MetricsTests {
                                                                  volumeIsReadOnly: { _ in false }),
                "apps on a writable external volume stay updatable in place")
         let installerScript = UpdateInstallerSupport.installerScript()
-        for step in ["fail-tempdir", "fail-mount", "fail-no-app-in-dmg",
-                     "fail-copy", "fail-verify", "fail-swap", "note ok"] {
+        for step in ["fail-dmg-verify", "fail-tempdir", "fail-mount", "fail-no-app-in-dmg",
+                     "fail-copy", "fail-version", "fail-verify", "fail-swap", "note ok"] {
             expect(installerScript.contains(step),
                    "installer script reports the \(step) step")
         }
         expect(installerScript.contains("spctl --status"),
                "installer script skips Gatekeeper assessment when the user disabled it")
+        expect(installerScript.contains("Signature=adhoc"),
+               "installer accepts the fork's ad-hoc signed builds that spctl always rejects")
+        let dmgVerification = installerScript.range(of: "hdiutil imageinfo")
+        let dmgMount = installerScript.range(of: "/usr/bin/hdiutil attach")
+        expect(dmgVerification != nil && dmgMount != nil
+               && dmgVerification!.lowerBound < dmgMount!.lowerBound,
+               "installer proves the download is a disk image before mounting it")
+        expect(installerScript.contains("BUNDLE_VERSION=")
+               && installerScript.contains("\"$BUNDLE_VERSION\" = \"$EXPECTED_VERSION\""),
+               "installer requires the staged app to match the offered release version")
         expect(installerScript.contains("chown -R"),
                "an elevated install hands the bundle back to the user")
         expect(installerScript.contains("update-old.$PID"),
@@ -6650,11 +6712,14 @@ struct MetricsTests {
             dmgPath: "/tmp/Croissaint-update.dmg",
             pid: 123,
             resultPath: "/tmp/result",
-            uid: 501)
+            uid: 501,
+            expectedVersion: "3.3.3")
         expect(elevated.contains("nohup") && elevated.hasSuffix("&"),
                "elevated installer detaches so the app can quit")
         expect(elevated.contains("'/Applications/Croissaint.app'"),
                "elevated installer passes the app path quoted for the shell")
+        expect(elevated.contains("'3.3.3'"),
+               "elevated installer passes the expected version quoted for the shell")
 
         // MARK: - UpdateServiceSupport & SemVer channel reconciliation
 
@@ -6709,27 +6774,24 @@ struct MetricsTests {
         let selectedFromHigherBeta = UpdateServiceSupport.selectUpdate(from: candidateList, currentVersion: "3.3.4-beta.1", includeBetas: false)
         expect(selectedFromHigherBeta == nil, "user on beta turning off betas does not downgrade to older stable")
 
+        let knownDigest = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        expect(UpdateServiceSupport.sha256Matches(Data("abc".utf8), expectedHex: knownDigest),
+               "update media accepts its pinned SHA-256 digest")
+        expect(!UpdateServiceSupport.sha256Matches(Data("altered".utf8), expectedHex: knownDigest),
+               "update media rejects content that does not match its pinned digest")
+        expect(!UpdateServiceSupport.sha256Matches(Data("abc".utf8), expectedHex: "invalid"),
+               "update media rejects a malformed pinned digest")
+
         // Defaults registered
         expect(Defaults.registeredDefaults[DefaultsKey.includeBetaUpdates] as? Bool == false,
                "includeBetaUpdates defaults to false in registeredDefaults")
 
+        // Running a beta build no longer turns the beta channel on by itself;
+        // automatic updates stay on the stable channel unless opted in.
         let testDefaults = UserDefaults(suiteName: "CroissaintTests.BetaActivation")!
         testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
-        Defaults.activateBetaChannelIfRunningBeta(in: testDefaults, version: "3.3.3-beta.1")
-        expect(testDefaults.bool(forKey: DefaultsKey.includeBetaUpdates) == true,
-               "beta channel is activated automatically on a beta build")
-        testDefaults.set(false, forKey: DefaultsKey.includeBetaUpdates)
-        Defaults.activateBetaChannelIfRunningBeta(in: testDefaults, version: "3.3.3-beta.1")
         expect(testDefaults.bool(forKey: DefaultsKey.includeBetaUpdates) == false,
-               "manual opt-out on a beta build is preserved across launches")
-
-        // Stable version does not activate beta channel
-        let stableDefaults = UserDefaults(suiteName: "CroissaintTests.StableActivation")!
-        stableDefaults.removePersistentDomain(forName: "CroissaintTests.StableActivation")
-        Defaults.activateBetaChannelIfRunningBeta(in: stableDefaults, version: "3.3.3")
-        expect(stableDefaults.object(forKey: DefaultsKey.includeBetaUpdates) == nil,
-               "stable release does not touch beta channel default")
-        stableDefaults.removePersistentDomain(forName: "CroissaintTests.StableActivation")
+               "beta builds keep automatic updates on the stable channel")
         testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
 
         // Localization completeness & formatting
@@ -6745,25 +6807,27 @@ struct MetricsTests {
 
         // MARK: Launch at login reconciliation
 
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .off,
                                                   locationIsUnstable: false) == .register,
                "a lost registration the user wants is redone at startup")
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .off,
                                                   locationIsUnstable: true) == .none,
                "no registration is redone from an unstable location")
-        expect(LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: true,
+        expect(LaunchAtLoginSupport.startupAction(wanted: true, registration: .enabled,
                                                   locationIsUnstable: false) == .none
-                && LaunchAtLoginSupport.startupAction(wanted: true, systemEnabled: true,
-                                                      locationIsUnstable: true) == .none,
-               "a healthy registration is left alone")
-        expect(LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: true,
+                && LaunchAtLoginSupport.startupAction(wanted: true, registration: .enabled,
+                                                      locationIsUnstable: true) == .none
+                && LaunchAtLoginSupport.startupAction(wanted: true, registration: .needsApproval,
+                                                      locationIsUnstable: false) == .none,
+               "a healthy or approval-waiting registration is left alone")
+        expect(LaunchAtLoginSupport.startupAction(wanted: false, registration: .enabled,
                                                   locationIsUnstable: false) == .adoptEnabled
-                && LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: true,
+                && LaunchAtLoginSupport.startupAction(wanted: false, registration: .enabled,
                                                       locationIsUnstable: true) == .adoptEnabled,
                "an enable made outside the app becomes the stored choice")
-        expect(LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: false,
+        expect(LaunchAtLoginSupport.startupAction(wanted: false, registration: .off,
                                                   locationIsUnstable: false) == .none
-                && LaunchAtLoginSupport.startupAction(wanted: false, systemEnabled: false,
+                && LaunchAtLoginSupport.startupAction(wanted: false, registration: .off,
                                                       locationIsUnstable: true) == .none,
                "startup never turns launch at login on for a user who never asked")
 
@@ -6868,13 +6932,13 @@ struct MetricsTests {
         expect(DockPreviewSupport.dockProximityBand(tileSize: 200)
                > DockPreviewSupport.dockProximityBand(tileSize: 64),
                "Dock proximity band grows with the Dock tile size")
-        let onePreviewSize = DockPreviewSupport.panelSize(itemCount: 1, screenVisibleFrame: screen)
-        let twoPreviewSize = DockPreviewSupport.panelSize(itemCount: 2, screenVisibleFrame: screen)
+        let onePreviewSize = DockPreviewSupport.panelSize(itemCount: 1, screenVisibleFrame: screen, isPinned: false)
+        let twoPreviewSize = DockPreviewSupport.panelSize(itemCount: 2, screenVisibleFrame: screen, isPinned: false)
         expect(twoPreviewSize.width > onePreviewSize.width,
                "Dock Preview panel size shrinks when a card is removed")
         expect(onePreviewSize.height == DockPreviewSupport.cardHeight
                + DockPreviewSupport.panelPadding * 2
-               + DockPreviewSupport.panelHeaderHeight,
+               + (DockPreviewSupport.showsPanelHeader(isPinned: false) ? DockPreviewSupport.panelHeaderHeight : 0),
                "Dock Preview panel reserves room for the pinned header")
         expect(DockPreviewSupport.windowPositionText(selectedWindowID: nil, windowIDs: [11]) == nil,
                "Dock Preview hides the window counter for a single window")
@@ -6974,8 +7038,9 @@ struct MetricsTests {
                     "App Switcher Small keeps the selection outline inside its icon row")
         expectClose(Double(DockPreviewSupport.cardSpacing), 6,
                     "Dock Preview Small previews tighten card spacing")
-        expectClose(Double(DockPreviewSupport.panelPadding), 9,
-                    "Dock Preview Small previews tighten panel padding")
+        expectClose(Double(DockPreviewSupport.panelPadding),
+                    Double(DockPreviewSupport.cardPadding),
+                    "Dock Preview Small previews tighten panel padding with the card's")
         UserDefaults.standard.set("xlarge", forKey: DefaultsKey.previewSize)
         let xlargeIconRowLayout = SwitcherIconRowLayout.compute(appCount: 6,
                                                                  selectedWindowCount: 1,
@@ -10210,6 +10275,8 @@ struct MetricsTests {
                "no alerts and no schedule means notifications are unused")
         expect(activeSet(.notifications, on: [DefaultsKey.monitorAlertCPUTemperature]) == [.monitorCPU],
                "a CPU temperature alert marks the CPU monitor as notifying")
+        expect(activeSet(.notifications, on: [DefaultsKey.monitorAlertBatteryTemperature]) == [.monitorPower],
+               "a battery temperature alert marks the power monitor as notifying")
         expect(activeSet(.notifications,
                          available: Set(AppFeature.allCases).subtracting([.monitorCPU]),
                          on: [DefaultsKey.monitorAlertCPU]) == [],
@@ -10277,6 +10344,16 @@ struct MetricsTests {
         expect(AppFeature.anyMonitorAlertEnabled(isAvailable: { _ in true },
                                                  boolFor: { $0 == DefaultsKey.monitorAlertDisk }),
                "one alert on an available metric arms the alert service")
+        expect(AppFeature.anyMonitorAlertEnabled(isAvailable: { _ in true },
+                                                 boolFor: {
+                                                     $0 == DefaultsKey.monitorAlertBatteryTemperature
+                                                 }),
+               "a battery temperature alert arms the alert service")
+        expect(!AppFeature.anyMonitorAlertEnabled(isAvailable: { $0 != .monitorPower },
+                                                  boolFor: {
+                                                      $0 == DefaultsKey.monitorAlertBatteryTemperature
+                                                  }),
+               "a battery temperature alert stays disarmed without the power metric")
         expect(!AppFeature.anyMonitorAlertEnabled(isAvailable: { $0 != .monitorDisk },
                                                   boolFor: { $0 == DefaultsKey.monitorAlertDisk }),
                "an alert with its metric off in the hub stays disarmed")
@@ -11872,6 +11949,53 @@ struct MetricsTests {
                 && !ScreenshotSupport.isClick(from: .zero, to: CGPoint(x: 12, y: 0)),
                "a tiny drag is a click, a real drag is not")
 
+        // The crop chrome, the loupe cross and the image applyCrop produces are
+        // three drawings of one edge. They agree only while pixelSnappedCropRect
+        // is the single thing deciding where that edge is.
+        let snapBounds = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let looseDraft = CGRect(x: 100.4, y: 60.4, width: 100, height: 100)
+        let snappedDraft = ScreenshotSupport.pixelSnappedCropRect(looseDraft, within: snapBounds)
+        expect(snappedDraft == CGRect(x: 100, y: 60, width: 100, height: 100),
+               "a crop draft rounds each edge to the nearest pixel boundary")
+        expect(snappedDraft.maxX == 200,
+               "a crop draft does not grow outward the way CGRect.integral would")
+        expect(ScreenshotSupport.pixelSnappedCropRect(snappedDraft, within: snapBounds)
+                == snappedDraft,
+               "snapping a crop draft that already sits on pixels changes nothing")
+        expect(ScreenshotSupport.pixelSnappedCropRect(
+                    CGRect(x: 100.4, y: 60.4, width: 100.2, height: 100.2), within: snapBounds)
+                == CGRect(x: 100, y: 60, width: 101, height: 101),
+               "a crop edge past the halfway mark rounds to the next boundary")
+        let movedDraft = ScreenshotSupport.pixelSnappedCropRect(
+            ScreenshotSupport.movedRect(snappedDraft,
+                                        by: CGPoint(x: 12.6, y: -4.3),
+                                        within: snapBounds),
+            within: snapBounds)
+        expect(movedDraft.size == snappedDraft.size,
+               "moving a crop draft never changes its size")
+        expect(ScreenshotSupport.pixelSnappedCropRect(
+                    CGRect(x: -40, y: -30, width: 100, height: 100), within: snapBounds)
+                == CGRect(x: 0, y: 0, width: 60, height: 70),
+               "a snapped crop draft stays inside the image")
+
+        // An even sample side centres the edge only once the edge is whole,
+        // which is what the snapping above guarantees.
+        let snapImageSize = CGSize(width: 800, height: 600)
+        let snappedEdge = ScreenshotSupport.Handle.left.position(in: snappedDraft)
+        let snappedSample = ScreenshotSupport.cropLoupeSampleRect(around: snappedEdge,
+                                                                  imageSize: snapImageSize,
+                                                                  sideLength: 14,
+                                                                  centredOnPixel: false)
+        expect(snappedSample.midX == snappedEdge.x && snappedSample.midY == snappedEdge.y,
+               "the crop loupe centres on the edge it marks once the draft sits on pixels")
+        let looseEdge = ScreenshotSupport.Handle.left.position(in: looseDraft)
+        let looseSample = ScreenshotSupport.cropLoupeSampleRect(around: looseEdge,
+                                                                imageSize: snapImageSize,
+                                                                sideLength: 14,
+                                                                centredOnPixel: false)
+        expect(looseSample.midX != looseEdge.x,
+               "an even sample side alone does not centre a fractional crop edge")
+
         var patternParts = DateComponents()
         patternParts.year = 2026
         patternParts.month = 7
@@ -12510,25 +12634,121 @@ struct MetricsTests {
         expect(ScreenshotSupport.cropLoupeSampleRect(
             around: CGPoint(x: 50, y: 40),
             imageSize: CGSize(width: 100, height: 80))
-            == CGRect(x: 43, y: 33, width: 14, height: 14),
+            == CGRect(x: 44, y: 34, width: 13, height: 13),
                "the crop loupe centers its source pixels around an inner grip")
         expect(ScreenshotSupport.cropLoupeSampleRect(
             around: CGPoint(x: 100, y: 80),
             imageSize: CGSize(width: 100, height: 80))
-            == CGRect(x: 86, y: 66, width: 14, height: 14),
+            == CGRect(x: 87, y: 67, width: 13, height: 13),
                "the crop loupe keeps a full sample at the bottom right edge")
+        // An even sample side has no middle cell. The sampled pixel then sat
+        // half a cell right of and below the frame's centre, and the ring drawn
+        // around it followed, which is what read as an off-centre reticle.
+        for loupeZoom in [ScreenshotSupport.captureLoupeMinZoom, 1, 2,
+                          ScreenshotSupport.captureLoupeMaxZoom] {
+            let side = ScreenshotSupport.captureLoupeSampleSide(zoom: loupeZoom)
+            let pointer = CGPoint(x: 80.4, y: 50.7)
+            let image = CGSize(width: 160, height: 100)
+            let sample = ScreenshotSupport.cropLoupeSampleRect(around: pointer,
+                                                               imageSize: image,
+                                                               sideLength: side)
+            let loupeFrame = CGRect(x: 0, y: 0, width: 70, height: 70)
+            let marked = ScreenshotSupport.captureLoupeTargetPixelRect(around: pointer,
+                                                                       source: sample,
+                                                                       frame: loupeFrame)
+            expectClose(Double(marked.midX), Double(loupeFrame.midX),
+                        "the loupe marks the pixel in the middle of its frame across the zoom range")
+            expectClose(Double(marked.midY), Double(loupeFrame.midY),
+                        "the marked pixel is as centred vertically as it is horizontally")
+        }
+        // The editor's crop loupe marks an edge between pixels, so it needs the
+        // opposite parity: an even side puts that edge in the middle of the
+        // frame, where an odd one leaves it half a cell short of centre.
+        let cropEdgeSample = ScreenshotSupport.cropLoupeSampleRect(
+            around: CGPoint(x: 100, y: 60),
+            imageSize: CGSize(width: 400, height: 300),
+            sideLength: 14,
+            centredOnPixel: false)
+        expect(cropEdgeSample == CGRect(x: 93, y: 53, width: 14, height: 14)
+                && cropEdgeSample.midX == 100 && cropEdgeSample.midY == 60,
+               "the crop loupe centres its sample on the handle's edge, not on a pixel cell")
+        expect(ScreenshotSupport.cropLoupeSampleRect(
+            around: CGPoint(x: 100, y: 60),
+            imageSize: CGSize(width: 400, height: 300),
+            sideLength: 13,
+            centredOnPixel: false).width == 14,
+               "an odd side grows to the next even one when the loupe centres on an edge")
+
         expect(ScreenshotSupport.cropLoupeSampleRect(
             around: .zero,
             imageSize: CGSize(width: 8, height: 5))
             == CGRect(x: 0, y: 0, width: 8, height: 5),
                "the crop loupe safely shrinks only for images smaller than its sample")
+        expect(ScreenshotSupport.captureLoupeTargetPixelRect(
+            around: CGPoint(x: 50.5, y: 40.2),
+            source: CGRect(x: 43, y: 33, width: 14, height: 14),
+            frame: CGRect(x: 0, y: 0, width: 70, height: 70))
+            == CGRect(x: 35, y: 35, width: 5, height: 5),
+               "the loupe highlights one whole source pixel, not the pointer's sub-pixel position")
+        expect(ScreenshotSupport.captureLoupeTargetPixelRect(
+            around: CGPoint(x: 100, y: 80),
+            source: CGRect(x: 86, y: 66, width: 14, height: 14),
+            frame: CGRect(x: 0, y: 0, width: 70, height: 70))
+            == CGRect(x: 65, y: 65, width: 5, height: 5),
+               "a pointer on the far display edge highlights the last pixel the picker can read")
+        // The pixel the loupe marks and the pixel `confirmColor` copies come
+        // from two independent expressions. Sweeping the whole overlay at
+        // every zoom is what keeps them from drifting apart by one pixel.
+        let sampledImageSize = CGSize(width: 160, height: 100)
+        let sampledViewSize = CGSize(width: 320, height: 200)
+        let sampledFrame = CGRect(x: 20, y: 30, width: 70, height: 70)
+        var loupeAimFailure: String?
+        for zoom in [ScreenshotSupport.captureLoupeMinZoom, 1, ScreenshotSupport.captureLoupeMaxZoom] {
+            for stepX in 0...128 {
+                for stepY in 0...80 {
+                    let pixelPoint = ScreenshotSupport.imagePixelPoint(
+                        fromView: CGPoint(x: CGFloat(stepX) * 2.5, y: CGFloat(stepY) * 2.5),
+                        viewSize: sampledViewSize,
+                        imageSize: sampledImageSize)
+                    let source = ScreenshotSupport.cropLoupeSampleRect(
+                        around: pixelPoint,
+                        imageSize: sampledImageSize,
+                        sideLength: ScreenshotSupport.captureLoupeSampleSide(zoom: zoom))
+                    let highlight = ScreenshotSupport.captureLoupeTargetPixelRect(
+                        around: pixelPoint, source: source, frame: sampledFrame)
+                    let cellWidth = sampledFrame.width / source.width
+                    let cellHeight = sampledFrame.height / source.height
+                    let markedX = source.minX + ((highlight.minX - sampledFrame.minX) / cellWidth).rounded()
+                    let markedY = source.minY + ((highlight.minY - sampledFrame.minY) / cellHeight).rounded()
+                    // Copied verbatim from `confirmColor`.
+                    let copiedX = CGFloat(min(max(Int(pixelPoint.x.rounded(.down)), 0),
+                                              Int(sampledImageSize.width) - 1))
+                    let copiedY = CGFloat(min(max(Int(pixelPoint.y.rounded(.down)), 0),
+                                              Int(sampledImageSize.height) - 1))
+                    if markedX != copiedX || markedY != copiedY {
+                        loupeAimFailure = "at \(pixelPoint) zoom \(zoom) the loupe marks "
+                            + "(\(markedX), \(markedY)) but the picker copies (\(copiedX), \(copiedY))"
+                    }
+                    if !sampledFrame.insetBy(dx: -0.001, dy: -0.001).contains(highlight) {
+                        loupeAimFailure = "at \(pixelPoint) zoom \(zoom) the highlight leaves the loupe"
+                    }
+                }
+            }
+        }
+        expect(loupeAimFailure == nil,
+               loupeAimFailure ?? "the loupe highlight marks the pixel the color picker copies")
+        expect(ScreenshotSupport.captureLoupeTargetPixelRect(
+            around: .zero, source: .zero, frame: CGRect(x: 0, y: 0, width: 70, height: 70))
+            == CGRect(x: 0, y: 0, width: 70, height: 70),
+               "an empty sample leaves the loupe highlight harmless instead of dividing by zero")
         expectClose(ScreenshotSupport.captureLoupeZoom(1, adjustedBy: 1), 1.15,
                     "scrolling up zooms the capture loupe in")
         expectClose(ScreenshotSupport.captureLoupeZoom(0.5, adjustedBy: -1), 0.5,
                     "capture loupe zoom stays above its minimum")
         expectClose(ScreenshotSupport.captureLoupeZoom(4, adjustedBy: 1), 4,
                     "capture loupe zoom stays below its maximum")
-        expectClose(ScreenshotSupport.captureLoupeSampleSide(zoom: 2), 6,
+        expectClose(ScreenshotSupport.captureLoupeSampleSide(zoom: 2),
+                    Double(ScreenshotSupport.captureLoupeBaseSampleSide) / 2,
                     "higher capture loupe zoom samples fewer source pixels")
 
         expect(Defaults.registeredDefaults[DefaultsKey.screenshotFreeze] as? Bool == true,
@@ -12782,10 +13002,13 @@ struct MetricsTests {
                "the legacy scratchpad becomes the first selected tab without losing text")
         let twoPads = migratedScratchpad.addingPad(defaultName: "Scratchpad", id: secondPadID)
         let threePads = twoPads?.addingPad(defaultName: "Scratchpad", id: thirdPadID)
-        expect(threePads?.pads.map(\.name) == ["Scratchpad", "Scratchpad 2", "Scratchpad 3"]
+        expect(threePads?.pads.map(\.name) == ["Scratchpad 1", "Scratchpad 2", "Scratchpad 3"]
                 && threePads?.pads.map(\.id) == [firstPadID, secondPadID, thirdPadID]
                 && threePads?.selectedID == thirdPadID,
                "new scratchpads append in order, receive clear names and become selected")
+        expect(ScratchpadSupport.nextPadName(defaultName: "Scratchpad",
+                                             existingNames: ["Scratchpad"]) == "Scratchpad 2",
+               "an existing unnumbered scratchpad still occupies the first numbered slot")
         let renamedPad = threePads?.renaming(secondPadID, to: "  Work\nideas  ")
         expect(renamedPad?.pads[1].name == "Work ideas"
                 && ScratchpadSupport.sanitizedPadName(String(repeating: "x", count: 50)).count
@@ -13726,6 +13949,9 @@ struct MetricsTests {
         expect(Defaults.registeredDefaults[DefaultsKey.finderPasteImageAsFile] as? Bool == false
                 && backupKeys.contains(DefaultsKey.finderPasteImageAsFile),
                "pasting copied images as files is opt-in and travels with settings backup")
+        expect(Defaults.registeredDefaults[DefaultsKey.finderCutPasteShowHUD] as? Bool == true
+                && backupKeys.contains(DefaultsKey.finderCutPasteShowHUD),
+               "the Finder cut and paste floating panel default is on and travels with settings backup")
         expect(backupKeys.contains(DefaultsKey.windowPreviewExcludedApps)
                 && (Defaults.registeredDefaults[DefaultsKey.windowPreviewExcludedApps] as? [String]) == [],
                "the window preview exclusion list starts empty and travels with the settings backup")
@@ -15758,7 +15984,7 @@ struct MetricsTests {
         for language in AppLanguage.allCases {
             let commandBarValues = Mirror(reflecting: FeatureStrings.commandBar(language)).children
                 .compactMap { $0.value as? String }
-            expect(commandBarValues.count == 146 && commandBarValues.allSatisfy { !$0.isEmpty },
+            expect(commandBarValues.count == 151 && commandBarValues.allSatisfy { !$0.isEmpty },
                    "every command bar string is set for \(language.rawValue)")
             expect(commandBarValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible command bar strings (\(language.rawValue))")
@@ -16140,6 +16366,34 @@ struct MetricsTests {
                "a script link matches once something follows its name")
         expect(CommandBarLinks.matchingScriptLink(in: scriptLinks, query: "cur") == nil,
                "the bare name alone has nothing to run yet")
+        let bareRunnable = [
+            CommandBarLink(name: "clean", kind: .script, destination: "/tmp/clean",
+                           runsWithoutArgument: true),
+        ]
+        expect(CommandBarLinks.matchingScriptLink(in: bareRunnable, query: "clean")?.argument == "",
+               "a script marked as needing nothing runs on its bare name")
+        expect(CommandBarLinks.matchingScriptLink(in: bareRunnable, query: "  Clean  ")?.argument
+                == "",
+               "the bare name is matched the same way every other name is")
+        expect(CommandBarLinks.matchingScriptLink(in: bareRunnable, query: "clean code")?.argument
+                == "code",
+               "that same script still receives an argument when one is typed")
+        expect(CommandBarLinks.matchingScriptLink(in: bareRunnable, query: "cle") == nil
+                && CommandBarLinks.matchingScriptLink(in: bareRunnable, query: "cleaner") == nil,
+               "a script never runs off a prefix of its name, or a longer word starting with it")
+        // The list drops a script's own row once the answer row stands in for
+        // it. That has to use the same rule that decided the script would run,
+        // or a bare name shows the script twice: once as an answer and once as
+        // the plain row nothing removed.
+        expect(CommandBarLinks.matchingScriptLinks(in: bareRunnable, query: "clean")
+                .map(\.name) == ["clean"],
+               "a bare-name match is dropped from the list, like any other script match")
+        expect(CommandBarLinks.matchingScriptLinks(in: scriptLinks, query: "cur 100 usd eur")
+                .map(\.name) == ["cur"],
+               "a script named with an argument is dropped from the list")
+        expect(CommandBarLinks.matchingScriptLinks(in: scriptLinks, query: "cur").isEmpty
+                && CommandBarLinks.matchingScriptLinks(in: scriptLinks, query: "a 1").isEmpty,
+               "nothing is dropped for a script that did not match, or for a non-script link")
         expect(CommandBarLinks.matchingScriptLink(in: scriptLinks, query: "a 100 usd eur") == nil,
                "a non-script link never matches, even with an argument")
         let overlappingScripts = [
@@ -16150,10 +16404,26 @@ struct MetricsTests {
                                                    query: "run report today")?.link.name
                 == "run report",
                "the most specific script name wins over a shorter prefix")
+        expect(CommandBarLinks.matchingScriptLinks(in: overlappingScripts, query: "run report x")
+                .map(\.name).sorted() == ["run", "run report"],
+               "both overlapping names are dropped, so only the answer row is left")
         expect(CommandBarLinks.resultText("  100 USD = 86.70 EUR\n") == "100 USD = 86.70 EUR",
                "a script's output loses its wrapping whitespace")
         expect(CommandBarLinks.resultText("   \n") == nil,
                "empty output means nothing is ready yet")
+
+        let savedBeforeTheField = #"[{"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","name":"gh","#
+            + #""kind":"link","destination":"https://x"}]"#
+        let loadedOldShortcuts = CommandBarLinks.decode(Data(savedBeforeTheField.utf8))
+        expect(loadedOldShortcuts.count == 1 && loadedOldShortcuts.first?.name == "gh"
+                && loadedOldShortcuts.first?.runsWithoutArgument == false,
+               "a shortcut saved before runsWithoutArgument existed still loads, defaulting to off")
+        let roundTripped = CommandBarLinks.decode(
+            CommandBarLinks.encode([CommandBarLink(name: "clean", kind: .script,
+                                                   destination: "/tmp/clean",
+                                                   runsWithoutArgument: true)]))
+        expect(roundTripped.first?.runsWithoutArgument == true,
+               "the flag survives being saved and loaded again")
 
         // MARK: Open what was typed as a URL
         for address in ["example.com", "example.com/x", "https://example.com",

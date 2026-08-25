@@ -5,13 +5,19 @@ name: Sync fork
 # and merges upstream/main into this fork's main. Only the branch ref moves —
 # tags are never fetched, so upstream releases can never trigger this repo's
 # Release workflow (which needs signing secrets the fork does not have). Each
-# successful push kicks off the regular CI workflow to validate the merge. If a
-# merge hits conflicts, the run fails with instructions; resolve locally, push,
-# done.
+# successful push kicks off the regular CI workflow to validate the merge.
+# Runs are serialized through a concurrency group, so an overlapping scheduled
+# or manual run queues behind whatever is already running instead of racing it.
+# If a merge hits conflicts, the run fails with instructions; resolve locally,
+# push, done.
 on:
   schedule:
     - cron: "23 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: sync-fork
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -30,22 +36,28 @@ jobs:
       - name: Merge upstream main
         id: merge
         run: |
-          git remote add upstream https://github.com/vorssaint/vorssaint-utils.git
-          git fetch --no-tags upstream main
-          if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "main already contains upstream/main"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git merge --no-edit upstream/main; then
-            git merge --abort || true
-            echo "::error::Merging upstream/main hit conflicts. Resolve manually: git remote add upstream https://github.com/vorssaint/vorssaint-utils.git && git fetch upstream && git merge upstream/main, fix conflicts, commit, push."
-            exit 1
-          fi
+          git remote add upstream https://github.com/vorssaint/vorssaint-utils.git
 
-      - name: Push
-        if: steps.merge.outputs.changed == 'true'
-        run: git push origin main
+          changed=false
+          for attempt in 1 2 3; do
+            git fetch --no-tags origin main
+            git fetch --no-tags upstream main
+            git reset --hard origin/main
+            if git merge-base --is-ancestor upstream/main origin/main; then
+              echo "main already contains upstream/main"
+              break
+            fi
+            if ! git merge --no-edit upstream/main; then
+              git merge --abort || true
+              echo "::error::Merging upstream/main hit conflicts. Resolve manually: git remote add upstream https://github.com/vorssaint/vorssaint-utils.git && git fetch upstream && git merge upstream/main, fix conflicts, commit, push."
+              exit 1
+            fi
+            if git push origin main; then
+              changed=true
+              break
+            fi
+            echo "::warning::Push rejected because another run moved main meanwhile; retrying on a fresh state (attempt $attempt/3)"
+          done
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"

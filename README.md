@@ -26,6 +26,8 @@
 <p align="center">
   <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-black" alt="macOS 14 and newer, Apple Silicon"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License GPL 3.0 or later"></a>
+  <a href="https://github.com/chuahchengxi/croissant/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/chuahchengxi/croissant/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://github.com/chuahchengxi/croissant/releases/latest"><img src="https://img.shields.io/github/v/release/chuahchengxi/croissant?label=release" alt="Latest release"></a>
 </p>
 
 <p align="center">
@@ -75,7 +77,7 @@ First setup offers three one click bundles, Essentials, Windows, and Battery and
   <img src="docs/assets/readme/features-hub.png" width="720" alt="The Features hub in Settings, installing and uninstalling whole features">
 </p>
 
-The rest bends the same way: panel sections reorder and hide, the compact layout trades sections for tabs, settings export to a file and import on a new Mac, the app can stay light or dark apart from the Mac, and the whole app speaks thirteen languages.
+The rest bends the same way: panel sections reorder and hide, the compact layout trades sections for tabs, settings export to a file and import on a new Mac, the app can stay light or dark apart from the Mac, and the whole app speaks more than a dozen languages.
 
 ## Everything it does
 
@@ -92,7 +94,7 @@ The rest bends the same way: panel sections reorder and hide, the compact layout
 - **System monitor.** CPU, GPU, memory, swap use and temperatures with history graphs, including a choice between total memory in use and memory held by apps, plus battery health, time remaining, cycle count, power draw, an optional Fan Control beta with continuous manual speeds, custom temperature curves and live RPM, the apps burning energy right now and a shortcut to the Mac's full process inspector.
 - **Menu bar readouts.** Keep the readings you care about in the bar itself, with values or compact usage bars, including optional battery time remaining and fan speed, combined or as separate items.
 - **Network.** Live rates, session totals and a built in speed test.
-- **Alerts.** Optional notifications for sustained CPU load, high temperature, memory pressure, low disk space and low battery.
+- **Alerts.** Optional notifications for sustained CPU load, high CPU or battery temperature, memory pressure, low disk space and low battery.
 
 ### Windows and the Dock
 
