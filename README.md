@@ -26,6 +26,8 @@
 <p align="center">
   <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-black" alt="macOS 14 and newer, Apple Silicon"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License GPL 3.0 or later"></a>
+  <a href="https://github.com/chuahchengxi/croissant/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/chuahchengxi/croissant/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://github.com/chuahchengxi/croissant/releases/latest"><img src="https://img.shields.io/github/v/release/chuahchengxi/croissant?label=release" alt="Latest release"></a>
 </p>
 
 <p align="center">
@@ -50,7 +52,7 @@ Per app volume, a real system monitor, a better app switcher, window snapping, D
 
 ## What this build changes
 
-Croissaint is a personal fork of [the original Vorssaint](https://github.com/vorssaint/vorssaint-utils), rebaked under its own name and its own croissant mark, exactly as upstream's [trademark policy](TRADEMARKS.md) asks a fork to do. Same GPL source underneath, same features, plus:
+Croissaint began as a personal fork of an earlier open source menu bar app, rebaked under its own name and its own croissant mark, exactly as good fork etiquette asks. Same GPL source underneath, same features, plus:
 
 - **Croissant identity.** New name, new bundle id, new mark. The app icon, the menu bar glyph and the in-app watermark all come out of `Resources/Brand/logo.png` through `Tools/MakeIcon.swift`, so one file drives the whole set and `./build.sh` regenerates it.
 - **AirDrop straight from the shelf.** Park a few files on the shelf, hit the send chip, and they go out over AirDrop without a detour through Finder. It follows the shelf selection when there is one and takes everything on the shelf when there is not, so a scratch pile becomes a handoff in two clicks.
@@ -75,7 +77,7 @@ First setup offers three one click bundles, Essentials, Windows, and Battery and
   <img src="docs/assets/readme/features-hub.png" width="720" alt="The Features hub in Settings, installing and uninstalling whole features">
 </p>
 
-The rest bends the same way: panel sections reorder and hide, the compact layout trades sections for tabs, settings export to a file and import on a new Mac, the app can stay light or dark apart from the Mac, and the whole app speaks thirteen languages.
+The rest bends the same way: panel sections reorder and hide, the compact layout trades sections for tabs, settings export to a file and import on a new Mac, the app can stay light or dark apart from the Mac, and the whole app speaks more than a dozen languages.
 
 ## Everything it does
 
@@ -92,7 +94,7 @@ The rest bends the same way: panel sections reorder and hide, the compact layout
 - **System monitor.** CPU, GPU, memory, swap use and temperatures with history graphs, including a choice between total memory in use and memory held by apps, plus battery health, time remaining, cycle count, power draw, an optional Fan Control beta with continuous manual speeds, custom temperature curves and live RPM, the apps burning energy right now and a shortcut to the Mac's full process inspector.
 - **Menu bar readouts.** Keep the readings you care about in the bar itself, with values or compact usage bars, including optional battery time remaining and fan speed, combined or as separate items.
 - **Network.** Live rates, session totals and a built in speed test.
-- **Alerts.** Optional notifications for sustained CPU load, high temperature, memory pressure, low disk space and low battery.
+- **Alerts.** Optional notifications for sustained CPU load, high CPU or battery temperature, memory pressure, low disk space and low battery.
 
 ### Windows and the Dock
 
@@ -221,7 +223,7 @@ cd croissant
 ./build.sh --install  # the same, then install into Applications and launch
 ```
 
-Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the original Vorssaint name and look stay with upstream under [TRADEMARKS.md](TRADEMARKS.md), which is why this fork carries a croissant instead.
+Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the name and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md).
 
 ## When something misbehaves
 
@@ -238,13 +240,13 @@ The [troubleshooting guide](docs/TROUBLESHOOTING.md) walks through the common ca
 
 ## Community
 
-Croissaint started as a fork of [Vorssaint](https://github.com/vorssaint/vorssaint-utils) — credit to the original author for the foundation; everything croissant-specific happens here.
+Croissaint started as a fork of an earlier open source project — credit to the original author for the foundation; everything croissant-specific happens here.
 
 Croissaint is free and will stay that way. If it earned its place in your menu bar, a [coffee](https://github.com/chuahchengxi/croissant) keeps the upstream maintainer awake, with or without the Keep awake feature.
 
 ## License
 
-[GPL 3.0 or later](LICENSE), copyright the original author, plus the changes in this fork. The license covers the source code; the Vorssaint name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md), and are not used here.
+[GPL 3.0 or later](LICENSE), copyright the original author, plus the changes in this fork. The license covers the source code; the name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md).
 
 <p align="center">
   <sub>Croissaint — maintained by <a href="https://github.com/chuahchengxi">chuahchengxi</a></sub>
