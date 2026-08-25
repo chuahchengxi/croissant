@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.3] - 2026-08-25
+
+### Added
+- Synced all upstream Vorssaint work through August 25: media can now compress video and GIFs to a target file size, the Command Bar gains a compact mode, Dock Preview cards were reworked with a cleaner drag and hover controls, and a batch of fixes lands for display brightness, display names, Scratchpad tabs, the Shelf tooltip, App Switcher sizing, Launch at Login approval reporting and the Uninstaller.
+
+### Fixed
+- The in-app installer now verifies the offered release version before swapping bundles.
+
 ## [0.0.2] - 2026-08-24
 
 ### Fixed
