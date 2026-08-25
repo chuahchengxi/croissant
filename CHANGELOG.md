@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.4] - 2026-08-25
+
+### Added
+- Synced all upstream Vorssaint work through August 25: media can now compress video and GIFs to a target file size, the Command Bar gains a compact mode, Dock Preview cards were reworked with a cleaner drag and hover controls, the Shelf shows real video-frame thumbnails, script links can run without an argument, and the first Scratchpad tab is named Scratchpad 1.
+
+### Fixed
+- Screenshot crop drafts snap to pixel boundaries.
+- Display brightness is no longer replayed as a gamma dim, and display names resolve on the main thread.
+- The App Switcher sizes its grid cards and rows from shared content width, the Shelf hides tile tooltips when the context menu opens, the Scratchpad tab strip gets the width its row has free, Launch at Login reports items waiting for approval, the Uninstaller names what a removal left behind, and the Command Bar drops the key glyph from settings actions.
+
 ## [0.0.3] - 2026-08-25
 
 ### Added
