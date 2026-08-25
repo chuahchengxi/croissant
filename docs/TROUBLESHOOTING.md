@@ -6,9 +6,7 @@ The permission and uninstall commands below all point at Croissaint's bundle ide
 
 ## The app will not open
 
-Official Croissaint builds are signed with an Apple Developer ID and notarized, so they open with no security warning.
-
-If you built the app yourself or grabbed an unofficial copy, macOS Gatekeeper may stop it on the first launch. To open it anyway, do one of these.
+macOS Gatekeeper may stop Croissaint on the first launch. To open it anyway, do one of these.
 
 1. Right click, or Control click, Croissaint in Applications, choose Open, and confirm.
 2. Or open System Settings, Privacy and Security, find the note about Croissaint being blocked, and click Open Anyway.
