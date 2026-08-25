@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.7] - 2026-08-25
+
+### Added
+- Desktop pets now sleep lying down: the sprite freezes and tips onto the floor (upright species rotate and settle, round ones curl in place), so the eyelids ride one transform chain and cannot drift off the face.
+
+### Fixed
+- Every lidded species' eyelids are measured off its own sprite instead of a shared guess: 585 species measured, 255 pinned eyeless, and 13 hand-corrected where the pass landed on mouths, horns, crests, wings or frills.
+- The troubleshooting guide no longer claims releases are notarized.
+
 ## [0.0.6] - 2026-08-25
 
 ### Added
