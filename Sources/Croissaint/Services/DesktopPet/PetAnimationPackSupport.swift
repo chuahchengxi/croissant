@@ -108,6 +108,28 @@ enum PetAnimationPackSupport {
     /// Seconds the lids stay shut during one blink.
     static let blinkClosedDuration: TimeInterval = 0.13
 
+    /// Sleeping pose for a species, as transforms to apply to the whole
+    /// sprite-and-eyelids stack: upright buddies tip over onto their side —
+    /// a lossless 90° pixel rotation — and `liftY` raises the swung body back
+    /// so its side rests exactly on the floor line; wider-than-tall designs
+    /// curl up in place instead. The sprite's GIF frames freeze while asleep
+    /// (see `AnimatedSpriteView.paused`), so between the frozen frame and one
+    /// shared transform chain the eyelids cannot drift off the face, whatever
+    /// the species' own idle animation does when awake.
+    /// Pure so tests can pin the geometry the lids ride inside.
+    static func sleepPose(
+        canvasWidthOverHeight: Double, spriteHeight: Double
+    ) -> (rotationDegrees: Double, liftY: Double, liesOnSide: Bool) {
+        let width = spriteHeight * canvasWidthOverHeight
+        // Wide designs would stand on their head if tipped over; they just
+        // settle where they sit. 1.15 is where a body stops reading as
+        // upright and starts reading as round.
+        guard canvasWidthOverHeight < 1.15 else { return (0, 0, false) }
+        // Rotating ±90° about the bottom-center anchor swings the body half
+        // a width below the floor line; lift exactly that so it lies ON it.
+        return (-90, -width / 2, true)
+    }
+
     /// Parses pack bytes. Strict on structure: wrong magic, unknown version,
     /// truncated tail or count mismatch all yield nil so a corrupt download
     /// is never half-trusted.

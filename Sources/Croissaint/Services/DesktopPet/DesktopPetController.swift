@@ -539,7 +539,10 @@ struct DesktopPetView: View {
                     legMotion: motion,
                     walking: vm.walking,
                     flying: flying,
-                    paused: !vm.buddyVisible
+                    // Frozen while asleep: the GIF's own idle frames would
+                    // bob the face under the fixed eyelid rects. Frame 0 is
+                    // the neutral pose the eye rects were measured on.
+                    paused: !vm.buddyVisible || pet.snapshot.sleeping
                 )
                 // Eyelids sit inside the same flipped, offset, scaled
                 // hierarchy as the sprite, so they track every body motion.
@@ -552,6 +555,10 @@ struct DesktopPetView: View {
                     )
                 }
             }
+            .modifier(PetSleepPose(
+                sleeping: pet.snapshot.sleeping,
+                widthOverHeight: motion?.widthOverHeight ?? 1
+            ))
             .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
             .task(id: id) { await runBlinks(for: id) }
         }
@@ -710,6 +717,34 @@ struct DesktopPetView: View {
         let dt = now.timeIntervalSince(joyStart)
         guard dt < 1.5 else { return 1 }
         return 1 - 0.35 * max(0, sin(dt * .pi * 4)) * exp(-dt * 1.8)
+    }
+}
+
+// MARK: - Sleep pose (lying down)
+
+/// The nap pose, applied to the whole sprite-and-eyelids stack so the lids
+/// ride every degree of it: upright buddies tip over onto their side and
+/// settle onto the floor, round ones curl up where they sit. The GIF frames
+/// freeze while asleep (`AnimatedSpriteView.paused`), so the pose is
+/// genuinely still — only the outer breathing scale moves, and it moves
+/// sprite and lids together.
+struct PetSleepPose: ViewModifier {
+    let sleeping: Bool
+    let widthOverHeight: Double
+    static let spriteHeight: CGFloat = 96
+
+    func body(content: Content) -> some View {
+        let pose = PetAnimationPackSupport.sleepPose(
+            canvasWidthOverHeight: widthOverHeight,
+            spriteHeight: Double(Self.spriteHeight)
+        )
+        content
+            .rotationEffect(
+                .degrees(sleeping ? pose.rotationDegrees : 0),
+                anchor: .bottom
+            )
+            .offset(y: sleeping ? pose.liftY : 0)
+            .animation(.easeInOut(duration: 0.45), value: sleeping)
     }
 }
 

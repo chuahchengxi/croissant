@@ -16539,6 +16539,144 @@ struct MetricsTests {
                 expect(table.values.filter(\.hasLegs).allSatisfy {
                     $0.legLX < $0.canvasWidth && $0.legRX < $0.canvasWidth && $0.legTopY < $0.canvasHeight
                 }, "leg anchors stay inside the canvas")
+
+                // MARK: Sleeping eyelids, measured per species
+                //
+                // Every lidded species' lids are measured off its own sprite
+                // (hand-authored entries win, then the generated per-species
+                // table, never the old shared grow-blob). A nap holds the lid
+                // on screen for minutes, so each rect must sit exactly on the
+                // eye it closes — these pins guard that, pack rebuild after
+                // pack rebuild.
+
+                // 1. Individual lids are geometrically sane: on the canvas,
+                //    eye-sized, level as a pair, and never sharing a column
+                //    (two lids that touch read as one unibrow). The one
+                //    exception is the deliberate ¾-pose encoding: the same
+                //    rect twice draws as the single visible eye.
+                // 1. Individual lids are geometrically sane: on the canvas,
+                //    eye-sized, level as a pair, and never sharing a column
+                //    (two lids that touch read as one unibrow). The one
+                //    exception is the deliberate ¾-pose encoding: the same
+                //    rect twice draws as the single visible eye. Doduo's
+                //    pair is exempt from the level rule because its two lids
+                //    close one eye on each of its two heads.
+                let twoHeaded: Set<Int> = [84]
+                let lidded = table.values.filter(\.hasEyes)
+                let badRects = lidded.filter { motion in
+                    guard let l = motion.leftEye, let r = motion.rightEye else { return true }
+                    let lw = l.width * motion.canvasWidth
+                    let rw = r.width * motion.canvasWidth
+                    let lh = l.height * motion.canvasHeight
+                    let rh = r.height * motion.canvasHeight
+                    let plausible = { (e: PetEyeRect, w: Double, h: Double) in
+                        w >= 1 && h >= 1 && w <= motion.canvasWidth * 0.45
+                            && h <= motion.canvasHeight * 0.5
+                            && w / h <= 8 && h / w <= 8
+                    }
+                    guard plausible(l, lw, lh), plausible(r, rw, rh) else { return true }
+                    if !twoHeaded.contains(motion.dexID),
+                       abs((l.y + l.height / 2) - (r.y + r.height / 2)) > 0.18 { return true }
+                    if l != r, l.x + l.width > r.x { return true }   // unibrow
+                    return false
+                }
+                expect(badRects.isEmpty,
+                       "every measured lid pair is eye-sized, level and split (bad: \(badRects.map(\.dexID).prefix(8)))")
+
+                // 2. Lid colour is the species' own skin — never the
+                //    near-black of an outline or the blown white of a shine,
+                //    which is what turned naps into glowing goggles.
+                let goggleLids = lidded.filter { motion in
+                    let c = motion.lidColor
+                    let mx = max(c.red, c.green, c.blue)
+                    let mn = min(c.red, c.green, c.blue)
+                    return mx < 60.0 / 255 || (mn > 210.0 / 255 && mx > 235.0 / 255)
+                }
+                expect(goggleLids.isEmpty,
+                       "no lid is painted outline-black or shine-white (bad: \(goggleLids.map(\.dexID).prefix(8)))")
+
+                // 3. The hand-measured opening pass is pinned: dex 1-100 all
+                //    carry lids except the three genuinely eyeless designs,
+                //    and the classic ¾-pose starters keep their one-eye
+                //    encoding through any regeneration.
+                let handAuthored: Set<Int> = Set(1...100).subtracting([41, 51, 63])
+                let missingHand = handAuthored.filter { table[$0]?.hasEyes != true }
+                expect(missingHand.isEmpty,
+                       "every hand-measured dex 1-100 species keeps its lids (missing: \(missingHand.sorted()))")
+                let eyelessHand = [41, 51, 63].filter { table[$0]?.hasEyes == true }
+                expect(eyelessHand.isEmpty,
+                       "the eyeless designs (Zubat, Dugtrio, Psyduck) stay lid-free")
+                for id in [9, 6, 5, 10] where table[id]?.hasEyes == true {
+                    expect(table[id]?.leftEye == table[id]?.rightEye,
+                           "dex \(id) keeps its ¾-pose single-eye encoding")
+                }
+                expect(table[25]?.leftEye != table[25]?.rightEye,
+                       "a front-facing species like Pikachu keeps two distinct lids")
+
+                // 4. The hand-corrected species keep their grid-measured
+                //    rects: each was read off a pixel-grid render after the
+                //    measurement pass landed on a mouth, crest, tail fin or
+                //    wing. If one of these drifts, the lid drifts with it.
+                let handFixes: [Int: (
+                    (Double, Double, Double, Double), (Double, Double, Double, Double)
+                )] = [
+                    223: ((17, 9, 8, 7), (17, 9, 8, 7)),    // Remoraid
+                    227: ((7, 21, 6, 6), (7, 21, 6, 6)),    // Skarmory
+                    228: ((7, 7, 3, 3), (12, 6, 3, 3)),     // Houndoom (right lid was on the skull horn)
+                    264: ((9, 18, 6, 6), (9, 18, 6, 6)),    // Linoone
+                    291: ((8, 23, 6, 6), (20, 23, 6, 6)),   // Ninjask
+                    357: ((18, 7, 6, 6), (18, 7, 6, 6)),    // Tropius
+                    372: ((3, 19, 5, 5), (11, 20, 5, 5)),   // Shelgon (was a slab on the shell)
+                    487: ((35, 17, 8, 7), (47, 16, 8, 7)),  // Giratina
+                    624: ((22, 14, 5, 5), (22, 14, 5, 5)),  // Pawniard
+                    661: ((36, 37, 7, 7), (36, 37, 7, 7)),  // Fletchling
+                    695: ((50, 19, 8, 7), (50, 19, 8, 7)),  // Heliolisk
+                ]
+                for (id, rects) in handFixes {
+                    guard let motion = table[id], motion.hasEyes,
+                          let l = motion.leftEye, let r = motion.rightEye else {
+                        expect(false, "dex \(id) keeps its hand-corrected lids")
+                        continue
+                    }
+                    let cw = motion.canvasWidth, chh = motion.canvasHeight
+                    let matches = { (e: PetEyeRect, rect: (Double, Double, Double, Double)) in
+                        abs(e.x * cw - rect.0) < 0.01
+                            && abs(e.y * chh - rect.1) < 0.01
+                            && abs(e.width * cw - rect.2) < 0.01
+                            && abs(e.height * chh - rect.3) < 0.01
+                    }
+                    expect(matches(l, rects.0) && matches(r, rects.1),
+                           "dex \(id)'s lid stays on the hand-measured eye")
+                }
+                expect(table[854]?.hasEyes == false,
+                       "Sinistea's cup swirl never gets painted as an eye")
+
+                // 5. The individual measurement pass covers the whole dex:
+                //    every species either carries measured lids or is pinned
+                //    eyeless, so a pack rebuild never silently re-rolls the
+                //    fuzzy detector over a species someone already vetted.
+                expect(lidded.count == 683,
+                       "the measured lid roster stays exactly as vetted (\(lidded.count))")
+                expect(table.values.count - lidded.count == 342,
+                       "the eyeless roster stays exactly as vetted")
+
+                // 6. The sleep pose lays the buddy onto the floor without
+                //    detaching the lids: upright species tip -90° and lift
+                //    exactly half their width (the amount the swing buries
+                //    below the floor line); wide species curl in place.
+                let tip = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 0.5, spriteHeight: 96)
+                expect(tip.liesOnSide && tip.rotationDegrees == -90 && tip.liftY == -24,
+                       "an upright species lies on its side, lifted onto the floor")
+                let square = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 1.0, spriteHeight: 96)
+                expect(square.liesOnSide && square.liftY == -48,
+                       "a square species still tips, lifting half its width")
+                let round = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 1.2, spriteHeight: 96)
+                expect(!round.liesOnSide && round.rotationDegrees == 0 && round.liftY == 0,
+                       "a wide species curls up in place instead of standing on its head")
+                let boundary = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 1.15, spriteHeight: 96)
+                expect(!boundary.liesOnSide,
+                       "the 1.15 aspect boundary counts as round")
+
             } else {
                 expect(false, "the committed animation pack parses")
             }
