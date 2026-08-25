@@ -1388,7 +1388,7 @@ struct MetricsTests {
                                        compressorPages: 0, tagStoragePages: 0) == 16,
                "memory used clamps impossible used memory")
 
-        var vmStats = vorssaint_vm_statistics64_rev3_t()
+        var vmStats = croissant_vm_statistics64_rev3_t()
         vmStats.wire_count = 2
         vmStats.purgeable_count = 3
         vmStats.compressor_page_count = 4
@@ -8596,7 +8596,7 @@ struct MetricsTests {
         ![Menu bar temperature metrics](Resources/Images/menu-bar-temperature-metrics.png)
 
         ### Website
-        - Official site: [vorssaint.com](https://vorssaint.com).
+        - Official site: [croissant.com](https://croissant.com).
 
         ## [2.17.1] - 2026-06-17
 
@@ -14286,9 +14286,9 @@ struct MetricsTests {
         expect(packageRows.allSatisfy { $0.canInstallInPlace },
                "package rows can be installed on the spot")
         let ownPackageRows = AppUpdatesSupport.packageUpdates(
-            outdated: [caskUpdate("vorssaint", installed: "3.1.12", current: "3.2.0")],
+            outdated: [caskUpdate("croissant", installed: "3.1.12", current: "3.2.0")],
             installed: [],
-            ignoredTokens: ["vorssaint"],
+            ignoredTokens: ["croissant"],
             apps: [])
         expect(ownPackageRows.isEmpty,
                "the app update list never offers to replace Croissaint through its own package")

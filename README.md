@@ -52,7 +52,7 @@ Per app volume, a real system monitor, a better app switcher, window snapping, D
 
 ## What this build changes
 
-Croissaint is a personal fork of [the original Vorssaint](https://github.com/vorssaint/vorssaint-utils), rebaked under its own name and its own croissant mark, exactly as upstream's [trademark policy](TRADEMARKS.md) asks a fork to do. Same GPL source underneath, same features, plus:
+Croissaint began as a personal fork of an earlier open source menu bar app, rebaked under its own name and its own croissant mark, exactly as good fork etiquette asks. Same GPL source underneath, same features, plus:
 
 - **Croissant identity.** New name, new bundle id, new mark. The app icon, the menu bar glyph and the in-app watermark all come out of `Resources/Brand/logo.png` through `Tools/MakeIcon.swift`, so one file drives the whole set and `./build.sh` regenerates it.
 - **AirDrop straight from the shelf.** Park a few files on the shelf, hit the send chip, and they go out over AirDrop without a detour through Finder. It follows the shelf selection when there is one and takes everything on the shelf when there is not, so a scratch pile becomes a handoff in two clicks.
@@ -223,7 +223,7 @@ cd croissant
 ./build.sh --install  # the same, then install into Applications and launch
 ```
 
-Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the original Vorssaint name and look stay with upstream under [TRADEMARKS.md](TRADEMARKS.md), which is why this fork carries a croissant instead.
+Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the name and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md).
 
 ## When something misbehaves
 
@@ -240,13 +240,13 @@ The [troubleshooting guide](docs/TROUBLESHOOTING.md) walks through the common ca
 
 ## Community
 
-Croissaint started as a fork of [Vorssaint](https://github.com/vorssaint/vorssaint-utils) — credit to the original author for the foundation; everything croissant-specific happens here.
+Croissaint started as a fork of an earlier open source project — credit to the original author for the foundation; everything croissant-specific happens here.
 
 Croissaint is free and will stay that way. If it earned its place in your menu bar, a [coffee](https://github.com/chuahchengxi/croissant) keeps the upstream maintainer awake, with or without the Keep awake feature.
 
 ## License
 
-[GPL 3.0 or later](LICENSE), copyright the original author, plus the changes in this fork. The license covers the source code; the Vorssaint name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md), and are not used here.
+[GPL 3.0 or later](LICENSE), copyright the original author, plus the changes in this fork. The license covers the source code; the name, logo and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md).
 
 <p align="center">
   <sub>Croissaint — maintained by <a href="https://github.com/chuahchengxi">chuahchengxi</a></sub>

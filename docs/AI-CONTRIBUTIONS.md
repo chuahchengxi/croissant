@@ -39,8 +39,8 @@ direction rather than code.
 
 **Settle the direction, then write.** An agent builds whatever it is asked
 for; it has no way to know whether a thing belongs in this app. Open an issue,
-or find the one that exists — the [enhancement
-summary](https://github.com/vorssaintapp/vorssaint-utils/issues/838) sorts
+or find the one that exists — the [issue
+tracker](https://github.com/chuahchengxi/croissant/issues) sorts
 every open request into what shipped, what is worth doing, and what has been
 ruled out. Killing a direction before there is a branch costs an order of
 magnitude less than killing it after.
@@ -61,7 +61,7 @@ confident wrong answer.
 
 ## Whether it belongs here
 
-Vorssaint is one menu bar icon doing the job of a dozen paid Mac apps. Doing
+Croissaint is one menu bar icon doing the job of a dozen paid Mac apps. Doing
 their job is not the same as becoming them. The app reaches for what macOS
 almost does, or for what one small paid app does, and it does not grow a
 subsystem of its own — a network stack, an audio graph with drift
@@ -100,7 +100,7 @@ not in the description afterwards.
 external dependencies, and a runtime dependency counts the same way. A tool
 the user has to install through Homebrew is one. A tool that ships fixes on a
 near daily cadence is a maintenance contract. The cost is not the install: it
-is that every upstream breakage arrives here as a Vorssaint bug, reported by
+is that every upstream breakage arrives here as a Croissaint bug, reported by
 somebody with no way to tell whose fault it is, against a release cadence that
 cannot track it. A privileged helper, a new signing target, an extension the
 user has to switch on by hand in System Settings — those are release process
@@ -226,14 +226,14 @@ permissions and hardware, that is a small part of the claim.
 
 ```sh
 ./build.sh                     # full build, must finish without warnings
-./build/Vorssaint --selftest
+./build/Croissaint --selftest
 ./build.sh --test
 ```
 
 CI runs exactly those three. Four things are worth knowing beyond them:
 
 - **`./build.sh --test` is not proof that it compiles.** It builds a
-  hand-written list of source files, and `Sources/Vorssaint/UI/` is largely
+  hand-written list of source files, and `Sources/Croissaint/UI/` is largely
   not on it. **When the change touches the UI layer, run plain `./build.sh`
   as well** — otherwise a compile error rides all the way to CI unnoticed.
 - **`swift build` is the seconds-long edit loop**, and worth keeping in it:

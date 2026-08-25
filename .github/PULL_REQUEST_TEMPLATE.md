@@ -12,7 +12,7 @@ worth more than describing it well.
 
 What changes, and for a fix, what was wrong.
 
-If this adds or changes a feature, say why it belongs in Vorssaint. Direction
+If this adds or changes a feature, say why it belongs in Croissaint. Direction
 is the most common reason a pull request is turned down here, and it is far
 cheaper to settle in an issue before the code exists. Say what the feature is
 built on and whether that will still be here, what it drags in at runtime and
@@ -34,7 +34,7 @@ different Mac.
 
 ```sh
 ./build.sh                     # must finish without warnings
-./build/Vorssaint --selftest
+./build/Croissaint --selftest
 ./build.sh --test
 ```
 
