@@ -16972,6 +16972,33 @@ struct MetricsTests {
                 expect(!boundary.liesOnSide,
                        "the 1.15 aspect boundary counts as round")
 
+                // 7. A pressed sleep is a timed nap, not a permanent state:
+                //    the schedule wakes the buddy on its own after a random
+                //    stretch, and catching a wild pokemon never disturbs it.
+                for _ in 0..<50 {
+                    let delay = PetNapSchedule.wakeDelay()
+                    expect(delay >= 5 * 60 && delay <= 15 * 60,
+                           "nap lengths stay in the 5-15 minute band")
+                }
+                let napStart = Date(timeIntervalSince1970: 1_000_000)
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(599.9)
+                ) == false, "a nap a second from its deadline keeps sleeping")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(600)
+                ), "the nap wakes exactly at its deadline")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true, wakeAt: nil, now: napStart.addingTimeInterval(999_999)
+                ) == false,
+                   "a nap with no scheduled wake (older save) runs until rested or tapped")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: false, wakeAt: napStart, now: napStart
+                ) == false, "an awake buddy has nothing to wake from")
+
             } else {
                 expect(false, "the committed animation pack parses")
             }
