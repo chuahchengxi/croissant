@@ -119,10 +119,11 @@ enum UpdateInstallerSupport {
                     VERIFY_REQ='identifier "com.croissaint.utils"'
                     note fail-verify
                     # A Developer ID build passes Gatekeeper assessment directly.
-                    # The fork's ad-hoc build carries TeamIdentifier=adhoc and can
-                    # never satisfy spctl, so it is accepted on the strength of the
-                    # full strict signature validation instead.
-                    SIGNED_ADHOC="$(/usr/bin/codesign -dv "$STAGE" 2>&1 | /usr/bin/grep -c 'TeamIdentifier=adhoc')"
+                    # The fork's ad-hoc build can never satisfy spctl, so it is
+                    # accepted on the strength of the full strict signature
+                    # validation instead. codesign spells an ad-hoc signature
+                    # "Signature=adhoc" (and "TeamIdentifier=not set").
+                    SIGNED_ADHOC="$(/usr/bin/codesign -dv "$STAGE" 2>&1 | /usr/bin/grep -c 'Signature=adhoc')"
                     if /usr/bin/codesign -v --deep --strict -R="$VERIFY_REQ" "$STAGE" 2>/dev/null \
                         && { [ "$GATEKEEPER_OK" = 1 ] || [ "$SIGNED_ADHOC" -ge 1 ]; }; then
                         note fail-swap

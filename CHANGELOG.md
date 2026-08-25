@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.5] - 2026-08-25
+
+### Fixed
+- In-app updates install again. The installer recognized ad-hoc signed builds by a signature string that codesign never prints ("TeamIdentifier=adhoc" instead of "Signature=adhoc"), so with Gatekeeper enabled every update passed the download, mount and copy steps and then silently aborted at verification, relaunching the old version. Verified end to end against the real release DMG.
+
 ## [0.0.4] - 2026-08-25
 
 ### Added
