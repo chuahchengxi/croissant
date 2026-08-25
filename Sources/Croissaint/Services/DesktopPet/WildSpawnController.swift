@@ -69,13 +69,16 @@ final class WildSpawnController {
         pet?.consume(kind) ?? false
     }
 
-    func catchOdds(for kind: PetItemKind) -> Double {
-        switch kind {
-        case .pokeBall: return 0.55
-        case .greatBall: return 0.78
-        case .ultraBall: return 0.92
-        default: return 0
-        }
+    /// Species-weighted odds: a Poké Ball catches bugs, not Mewtwo.
+    func catchOdds(for kind: PetItemKind, dexID: Int?) -> Double {
+        guard let dexID else { return 0 }
+        return PetCatchTier.tier(for: dexID).odds(for: kind)
+    }
+
+    /// Pity threshold for the current wild pokemon.
+    func pityMisses(dexID: Int?) -> Int {
+        guard let dexID else { return 2 }
+        return PetCatchTier.tier(for: dexID).pityMisses
     }
 
     func noteMiss() {
@@ -561,8 +564,9 @@ struct WildPokemonView: View {
     }
 
     private func resolveThrow(with kind: PetItemKind) {
-        let guaranteed = controller.missCount >= 2
-        if Double.random(in: 0..<1) < controller.catchOdds(for: kind) || guaranteed {
+        let guaranteed = controller.missCount >= controller.pityMisses(dexID: vm.dexID)
+        if Double.random(in: 0..<1) < controller.catchOdds(for: kind, dexID: vm.dexID)
+            || guaranteed {
             succeed(with: kind)
         } else {
             controller.noteMiss()

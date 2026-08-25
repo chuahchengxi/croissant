@@ -302,6 +302,10 @@ if (( TEST )); then
         Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift \
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift \
+        Sources/Croissaint/Services/DesktopPet/PetAnimationPackSupport.swift \
+        Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
+        Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
+        Sources/Croissaint/Services/DesktopPet/PetCatchDifficulty.swift \
         Tests/MetricsTests.swift \
         -o build/metrics-tests
     ./build/metrics-tests
@@ -417,6 +421,10 @@ FAN_HELPER_VERSION="$(
     "$STAGE/Contents/Info.plist"
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
+# The desktop pet's animation table. 21 KB, read once at first buddy frame —
+# bundled rather than downloaded so it can never disagree with the parser
+# that reads it (PetAnimationPack.swift).
+cp Resources/pet-animation-pack.bin "$STAGE/Contents/Resources/pet-animation-pack.bin"
 cp build/MenuBarIcon.png build/MenuBarIcon@2x.png build/BrandMark.png "$STAGE/Contents/Resources/"
 if [[ -f build/Assets.car ]]; then
     cp build/Assets.car "$STAGE/Contents/Resources/Assets.car"

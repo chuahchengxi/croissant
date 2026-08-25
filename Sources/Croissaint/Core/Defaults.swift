@@ -903,6 +903,8 @@ enum Defaults {
         // Once the pet feature is installed the buddy shows up right away;
         // uninstalling in the hub is the way to send it home.
         DefaultsKey.desktopPetEnabled: true,
+        // The animation pack is a deliberate download: with it absent the pet
+        // runs the exact pack-free motion, so it starts off.
         DefaultsKey.panelUtilityCleaner: true,
         DefaultsKey.panelUtilityHomebrew: true,
         DefaultsKey.panelUtilityAppUpdates: true,

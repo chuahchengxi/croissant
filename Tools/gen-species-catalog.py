@@ -2,7 +2,7 @@
 """Regenerates Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift
 from the PokeAPI CSV dumps. Run from the repo root; needs network.
 
-One line per species, #1-#1025: `id|Name|Types|nextID`. The pet model only
+One line per species, #1-#1025: `id|Name|Types|nextID|captureRate`. The pet model only
 understands one evolution path, so a branching line (Eevee, Slowpoke, Wurmple)
 follows its lowest-dex branch; the branches it skips are still reachable,
 because every species is its own entry.
@@ -32,11 +32,12 @@ lines = []
 for r in sorted(species, key=lambda r: int(r["id"])):
     i = r["id"]
     nxt = evolves_to.get(i, [])
-    lines.append("%s|%s|%s|%s" % (
+    lines.append("%s|%s|%s|%s|%s" % (
         i,
         names[i],
         " · ".join(types.get(i, ["Unknown"])),
         min(nxt, key=int) if nxt else "",
+        r["capture_rate"],
     ))
 
 out = pathlib.Path("Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift")
