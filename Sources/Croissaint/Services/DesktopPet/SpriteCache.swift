@@ -19,41 +19,75 @@ enum SpriteCache {
         dir.appendingPathComponent("\(id).gif")
     }
 
-    private static var frameCache: [Int: [CGImage]] = [:]
+    /// Bounded: a dex-worth of decoded GIF frames would otherwise grow
+    /// without limit as the buddy evolves and the chooser is browsed.
+    private static let frameCache: NSCache<NSNumber, NSArray> = {
+        let cache = NSCache<NSNumber, NSArray>()
+        cache.countLimit = 48
+        cache.totalCostLimit = 128 * 1024 * 1024
+        return cache
+    }()
+
+    /// Serial queue owning `decoding`; ImageIO decode happens here so a
+    /// dozen-frame GIF never blocks the main thread mid-scroll or on launch.
+    private static let decodeQueue = DispatchQueue(label: "com.croissaint.sprite-decode")
+    private static var decoding = Set<Int>()
+
+    private static func cacheCost(_ frames: [CGImage]) -> Int {
+        frames.reduce(0) { $0 + $1.width * $1.height * 4 }
+    }
 
     /// All frames of the cached sprite (animated GIFs yield many; PNG fallback yields one).
-    /// Returns nil while the sprite is still downloading (fetch kicked off automatically).
+    /// Returns nil while the sprite is still downloading or decoding (both kick off
+    /// automatically; `.spriteCacheDidUpdate` fires when frames become available).
     ///
     /// Frames come from ImageIO rather than NSImage.representations: current
     /// AppKit collapses an animated GIF into a single representation, which
     /// silently turned every pet into a still image.
     static func frames(for id: Int) -> [CGImage]? {
-        if let cached = frameCache[id] { return cached }
-        let url = localURL(id)
-        var cgs: [CGImage] = []
-        if let src = CGImageSourceCreateWithURL(url as CFURL, nil) {
-            for index in 0..<CGImageSourceGetCount(src) {
-                if let frame = CGImageSourceCreateImageAtIndex(src, index, nil) {
-                    cgs.append(frame)
+        if let cached = frameCache.object(forKey: NSNumber(value: id)) as? [CGImage] {
+            return cached
+        }
+        scheduleDecode(id)
+        return nil
+    }
+
+    private static func scheduleDecode(_ id: Int) {
+        decodeQueue.async {
+            guard !decoding.contains(id) else { return }
+            decoding.insert(id)
+            let url = localURL(id)
+            var cgs: [CGImage] = []
+            if let src = CGImageSourceCreateWithURL(url as CFURL, nil) {
+                for index in 0..<CGImageSourceGetCount(src) {
+                    if let frame = CGImageSourceCreateImageAtIndex(src, index, nil) {
+                        cgs.append(frame)
+                    }
                 }
             }
+            decoding.remove(id)
+            DispatchQueue.main.async {
+                if !cgs.isEmpty {
+                    frameCache.setObject(
+                        cgs as NSArray, forKey: NSNumber(value: id), cost: cacheCost(cgs)
+                    )
+                    notifyUpdated()
+                    return
+                }
+                // A file that exists but cannot be parsed is worse than no file:
+                // it would block every future fetch. Drop it so the refetch
+                // starts clean.
+                if FileManager.default.fileExists(atPath: url.path) {
+                    try? FileManager.default.removeItem(at: url)
+                }
+                prefetch(ids: [id], done: nil)
+            }
         }
-        if !cgs.isEmpty {
-            frameCache[id] = cgs
-            return cgs
-        }
-        // A file that exists but cannot be parsed is worse than no file: it
-        // would block every future fetch. Drop it so the refetch starts clean.
-        if FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.removeItem(at: url)
-        }
-        prefetch(ids: [id], done: nil)
-        return nil
     }
 
     /// Drops cached frames so a re-downloaded sprite gets picked up.
     static func invalidate(_ id: Int) {
-        frameCache.removeValue(forKey: id)
+        frameCache.removeObject(forKey: NSNumber(value: id))
     }
 
     /// Returns cached sprite, kicking off a background fetch if missing.

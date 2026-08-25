@@ -4,36 +4,83 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Sleep tint
+
+/// The dozing look: desaturated and a touch dim.
+///
+/// The sprite and its eyelids MUST wear this together. When only the sprite
+/// carried it, the lids kept full saturation and brightness while the face
+/// behind them dimmed, so every sleeping buddy looked like it had a pair of
+/// glowing goggles stuck to its head. One modifier, both call sites, no way
+/// for them to drift apart again.
+struct PetSleepTint: ViewModifier {
+    let sleeping: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .saturation(sleeping ? 0.45 : 1)
+            .brightness(sleeping ? -0.15 : 0)
+            .opacity(sleeping ? 0.92 : 1)
+            .animation(.easeInOut(duration: 0.3), value: sleeping)
+    }
+}
+
+extension View {
+    func petSleepTint(_ sleeping: Bool) -> some View {
+        modifier(PetSleepTint(sleeping: sleeping))
+    }
+}
+
 // MARK: - Animated sprite (plays the GIF's own frames)
 
 struct AnimatedSpriteView: View {
     let id: Int
     let height: CGFloat
     var sleeping = false
+    /// When set (desktop buddy only) and the species has detected legs, the
+    /// walking cycle slices each leg out and swings it around the hip.
+    var legMotion: PetFaceMotion?
+    var walking = false
+    /// Flyers never step: the whole body glides, banks and flutters instead
+    /// (see `DesktopPetController`), so nothing about the sprite is sliced.
+    var flying = false
+    /// Freezes playback entirely (hidden buddy windows): no timeline ticks,
+    /// no body re-evaluations, zero cost while off screen.
+    var paused = false
 
-    @State private var frameIdx = 0
     @State private var refresh = false
 
-    private static let clock = Timer.publish(every: 0.09, on: .main, in: .common).autoconnect()
+    /// GIF cadence; naps run at half rate since nothing moves anyway.
+    private static let frameInterval: Double = 0.09
+    private static let sleepInterval: Double = 0.18
+
+    private var playInterval: Double {
+        sleeping ? Self.sleepInterval : Self.frameInterval
+    }
+
+    /// Phase source for the leg swing; wall clock so the Canvas redraws from
+    /// the parent TimelineView stay smooth without extra state. Cadence
+    /// follows the species' gait class so squat species scurry and tall
+    /// ones stride.
+    private var legPhase: Double {
+        let rate = legMotion.map {
+            PetAnimationPackSupport.gait(forClass: $0.gaitClass).stepRate
+        } ?? 1
+        return Date.timeIntervalSinceReferenceDate * 9 * rate
+    }
 
     var body: some View {
         Group {
             if let frames = SpriteCache.frames(for: id), !frames.isEmpty {
-                if frames.count > 1 {
-                    Image(decorative: frames[min(frameIdx, frames.count - 1)], scale: 2)
-                        .resizable()
-                        .interpolation(.none)
-                        .scaledToFit()
-                        .frame(height: height)
-                        .onReceive(Self.clock) { _ in
-                            frameIdx = (frameIdx + 1) % frames.count
-                        }
-                } else {
-                    Image(decorative: frames[0], scale: 2)
-                        .resizable()
-                        .interpolation(.none)
-                        .scaledToFit()
-                        .frame(height: height)
+                // Frame index derives from the timeline date instead of @State,
+                // so each tick is a plain re-render — and the whole timeline
+                // parks itself when the view leaves the hierarchy or pauses.
+                TimelineView(.animation(minimumInterval: playInterval, paused: paused)) { timeline in
+                    let idx = paused
+                        ? 0
+                        : Int(timeline.date.timeIntervalSinceReferenceDate / playInterval)
+                            % frames.count
+                    spriteBody(frames: frames, frameIndex: max(0, idx))
                 }
             } else {
                 VStack(spacing: 4) {
@@ -45,14 +92,84 @@ struct AnimatedSpriteView: View {
                 .frame(height: height)
             }
         }
-        .saturation(sleeping ? 0.45 : 1)
-        .brightness(sleeping ? -0.15 : 0)
-        .opacity(sleeping ? 0.92 : 1)
-        .animation(.easeInOut(duration: 0.3), value: sleeping)
+        .petSleepTint(sleeping)
         .id(refresh)
         .onReceive(NotificationCenter.default.publisher(for: .spriteCacheDidUpdate)) { _ in
             refresh.toggle()
         }
+    }
+
+    @ViewBuilder
+    private func spriteBody(frames: [CGImage], frameIndex: Int) -> some View {
+        if let motion = legMotion, walking, !sleeping, !flying,
+           let slices = PetSpriteSlicer.slices(
+                id: id, frameIndex: min(frameIndex, frames.count - 1),
+                motion: motion, height: height
+           ) {
+            slicedBody(slices: slices, motion: motion)
+        } else if frames.count > 1 {
+            plain(frames[min(frameIndex, frames.count - 1)], idleBreathing: false)
+        } else {
+            // Static sprite (gen 6+ ships as PNG): a gentle breathing
+            // wobble keeps it alive — the dex's later halves have no
+            // animated source to play.
+            plain(frames[0], idleBreathing: true)
+        }
+    }
+
+    /// Static single-image path. With `idleBreathing`, a subtle bottom
+    /// anchored scale wobble stands in for the missing GIF frames.
+    private func plain(_ frame: CGImage, idleBreathing: Bool) -> some View {
+        let base = Image(decorative: frame, scale: 2)
+            .resizable()
+            .interpolation(.none)
+            .scaledToFit()
+            .frame(height: height)
+        if idleBreathing {
+            let t = Date.timeIntervalSinceReferenceDate
+            return AnyView(base.scaleEffect(
+                1 + 0.013 * sin(t * 2 * .pi / 1.7),
+                anchor: .bottom
+            ))
+        }
+        return AnyView(base)
+    }
+
+    /// Body with leg crops redrawn on top, each swung around its hip in
+    /// opposite phase — real stepping legs rather than a whole-sprite waddle.
+    private func slicedBody(slices: PetSpriteSlicer.Slices, motion: PetFaceMotion) -> some View {
+        let phase = legPhase
+        let gait = PetAnimationPackSupport.gait(forClass: motion.gaitClass)
+        let swing: Double = 0.16 * gait.waddle
+        let canvasWidth = height * CGFloat(motion.widthOverHeight)
+        return Canvas { context, _ in
+            context.draw(
+                Image(decorative: slices.body, scale: 1).interpolation(.none),
+                in: CGRect(x: 0, y: 0, width: canvasWidth, height: height)
+            )
+            for (crop, rect, legPhase) in [
+                (slices.legL, slices.legLRect, phase),
+                (slices.legR, slices.legRRect, phase + .pi),
+            ] {
+                var cx = context
+                let hipX = rect.minX + rect.width / 2
+                let hipY = rect.minY
+                cx.translateBy(x: hipX, y: hipY)
+                cx.rotate(by: .radians(sin(legPhase) * swing))
+                // A tiny lift on the forward stroke sells the step.
+                cx.translateBy(x: 0, y: -max(0, sin(legPhase)) * height * 0.018)
+                cx.draw(
+                    Image(decorative: crop, scale: 1).interpolation(.none),
+                    in: CGRect(
+                        x: rect.minX - hipX,
+                        y: rect.minY - hipY,
+                        width: rect.width,
+                        height: rect.height
+                    )
+                )
+            }
+        }
+        .frame(width: canvasWidth, height: height)
     }
 }
 

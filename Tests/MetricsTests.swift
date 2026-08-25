@@ -16601,6 +16601,9 @@ struct MetricsTests {
                "every species has one name per evolution stage")
         expect(speciesCatalog.allSatisfy { $0.evoIDs.count <= 3 },
                "no chain runs past the three stages the level thresholds cover")
+        expect(speciesCatalog.allSatisfy { (3...255).contains($0.captureRate) },
+               "every species carries a plausible capture rate")
+        expect(speciesCaptureRate(for: 25) == 190, "Pikachu's capture rate survives the round trip")
 
         // The bug this catalog replaced: an evolved buddy kept its base name.
         let rowlet = SpeciesDef.lookup("rowlet")
@@ -16618,6 +16621,264 @@ struct MetricsTests {
         expectEqual(SpeciesDef.normalizedKey("Mr. Mime"), "mrmime", "punctuation is stripped from keys")
         expect(SpeciesDef.lookup("nidoran")?.baseID == 29, "the first Nidoran keeps the plain key")
         expect(SpeciesDef.lookup("nidoran32")?.baseID == 32, "the clashing Nidoran is suffixed with its ID")
+
+        // MARK: Pet animation pack
+
+        // Record builder mirroring Tools/gen-animation-pack.py's 21-byte row:
+        // u16 id, flags, canvas w/h, body flags, left rect, right rect, lid
+        // RGB, leg left-x/right-x/top-y/width.
+        func packRecord(
+            _ id: Int, flags: UInt8, canvasW: UInt8, canvasH: UInt8,
+            body: UInt8 = 0,
+            left: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0),
+            right: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0),
+            lid: (UInt8, UInt8, UInt8) = (0, 0, 0),
+            legs: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
+        ) -> Data {
+            var data = Data()
+            data.append(contentsOf: [UInt8(id & 0xFF), UInt8((id >> 8) & 0xFF), flags, canvasW, canvasH, body])
+            data.append(contentsOf: [left.0, left.1, left.2, left.3])
+            data.append(contentsOf: [right.0, right.1, right.2, right.3])
+            data.append(contentsOf: [lid.0, lid.1, lid.2])
+            data.append(contentsOf: [legs.0, legs.1, legs.2, legs.3])
+            return data
+        }
+        func packHeader(count: Int) -> Data {
+            var data = Data("CPAP".utf8)
+            data.append(contentsOf: [0x03, 0x00, UInt8(count & 0xFF), UInt8((count >> 8) & 0xFF)])
+            return data
+        }
+        func packBytes(_ records: [Data], count: Int? = nil) -> Data {
+            packHeader(count: count ?? records.count) + records.reduce(Data(), +)
+        }
+
+        let goodPack = packBytes([
+            packRecord(25, flags: 0b0001, canvasW: 40, canvasH: 50, body: 0b11,
+                       left: (10, 12, 6, 6), right: (24, 12, 6, 6), lid: (248, 208, 40),
+                       legs: (8, 30, 38, 9)),
+            packRecord(26, flags: 0b1000, canvasW: 30, canvasH: 60),
+            packRecord(27, flags: 0b0101, canvasW: 20, canvasH: 20,
+                       left: (2, 2, 0, 4), right: (10, 2, 4, 4), lid: (10, 10, 10)),
+        ])
+        let parsedPack = PetAnimationPackSupport.parse(goodPack)
+        expect(parsedPack != nil && parsedPack?.count == 3, "a well-formed pack parses")
+        let pikachu = parsedPack?[25]
+        expect(pikachu?.hasEyes == true, "a hasEyes record carries both eyes")
+        expect(pikachu?.leftEye == PetEyeRect(x: 0.25, y: 0.24, width: 0.15, height: 0.12),
+               "eye rects normalize to the sprite canvas")
+        expect(pikachu?.lidColor == PetLidColor(red: 248.0 / 255, green: 208.0 / 255, blue: 40.0 / 255),
+               "the lid color survives decoding")
+        expect(pikachu?.widthOverHeight == 0.8, "canvas aspect drives overlay layout")
+        expect(pikachu?.hasLegs == true && pikachu?.legLX == 8 && pikachu?.legRX == 30
+                && pikachu?.legTopY == 38 && pikachu?.legWidth == 9,
+               "leg anchors decode in canvas space")
+        expect(pikachu?.hasWings == true, "the wing flag routes the buddy into the glide")
+        expect(parsedPack?[26]?.hasEyes == false && parsedPack?[26]?.gaitClass == 2,
+               "an eyes-free record still carries its gait class")
+        expect(parsedPack?[26]?.hasLegs == false && parsedPack?[26]?.hasWings == false,
+               "records without body flags keep the pack-free walk")
+        expect(parsedPack?[27]?.hasEyes == false,
+               "a degenerate rect falls back to body-only motion instead of garbage lids")
+
+        expect(PetAnimationPackSupport.parse(Data("CPAS".utf8) + goodPack.dropFirst(4)) == nil,
+               "a wrong magic is rejected")
+        expect(PetAnimationPackSupport.parse(packBytes([packRecord(1, flags: 0, canvasW: 10, canvasH: 10)],
+                                                       count: 5)) == nil,
+               "a count mismatch is rejected")
+        expect(PetAnimationPackSupport.parse(goodPack.dropLast(3)) == nil,
+               "a truncated record is rejected")
+        let shortHeader = Data("CPAP".utf8) + [0x02, 0x00]
+        expect(PetAnimationPackSupport.parse(shortHeader) == nil, "a short header is rejected")
+        var wrongVersion = packHeader(count: 0)
+        wrongVersion[4] = 0x09
+        expect(PetAnimationPackSupport.parse(wrongVersion) == nil, "an unknown pack version is rejected")
+        expect(PetAnimationPackSupport.parse(Data()) == nil, "empty bytes are rejected")
+        expect(PetAnimationPackSupport.parse(packHeader(count: 0))?.isEmpty == true,
+               "a valid empty pack parses to an empty table")
+        let unsorted = packBytes([
+            packRecord(9, flags: 0, canvasW: 10, canvasH: 10),
+            packRecord(4, flags: 0, canvasW: 10, canvasH: 10),
+        ])
+        expect(PetAnimationPackSupport.parse(unsorted) == nil,
+               "records must stay sorted by dex id")
+
+        // Blink rhythm: stable per species, inside a sane band, with a pinned
+        // closed window.
+        for id in [1, 25, 133, 702, 1025] {
+            let period = PetAnimationPackSupport.blinkPeriod(for: id)
+            expect(period >= 2.9 && period <= 6.2,
+                   "blink periods stay in the 2.9-6.2 s band")
+            expect(period == PetAnimationPackSupport.blinkPeriod(for: id),
+                   "a species blinks on a stable rhythm")
+        }
+        let blinkPeriod = PetAnimationPackSupport.blinkPeriod(for: 25)
+        expect(PetAnimationPackSupport.blinkIsClosed(phaseStart: 100, time: 100, period: blinkPeriod),
+               "the lids shut at the blink's start")
+        expect(!PetAnimationPackSupport.blinkIsClosed(
+                phaseStart: 100, time: 100 + PetAnimationPackSupport.blinkClosedDuration + 0.05,
+                period: blinkPeriod),
+               "the lids reopen once the blink window passes")
+        expect(PetAnimationPackSupport.blinkIsClosed(
+                phaseStart: 100,
+                time: 100 + blinkPeriod + PetAnimationPackSupport.blinkClosedDuration / 2,
+                period: blinkPeriod),
+               "the blink rhythm wraps into the next period")
+
+        // Gait: squat species waddle quicker, tall ones stride slower, and
+        // the neutral class is an exact identity so pack-free motion is
+        // untouched.
+        // Leg slice geometry: the crop rect the slicer takes out of the
+        // sprite, and the flip into the bottom-left-origin space a bitmap
+        // context erases in. Getting that flip wrong punched the leg-shaped
+        // holes into the buddy's head while its real legs stayed put.
+        var strider = PetFaceMotion(
+            dexID: 25, leftEye: nil, rightEye: nil,
+            lidColor: PetLidColor(red: 0, green: 0, blue: 0),
+            widthOverHeight: 1, gaitClass: 1, canvasWidth: 40, canvasHeight: 50,
+            hasLegs: true, legLX: 12, legRX: 28, legTopY: 40, legWidth: 8
+        )
+        let slices = PetAnimationPackSupport.legSlices(
+            for: strider, frameWidth: 40, frameHeight: 50
+        )
+        expect(slices?.left == PetLegSlice(x: 8, y: 40, width: 8, height: 10),
+               "the left leg crop spans the foot from the leg top to the canvas floor")
+        expect(slices?.right == PetLegSlice(x: 24, y: 40, width: 8, height: 10),
+               "the right leg crop mirrors it around the other foot")
+        if let left = slices?.left, let right = slices?.right {
+            expect(left.x + left.width <= right.x,
+                   "the two crops never share a column, so no pixel is cleared once and drawn twice")
+            // A crop sitting on the image's bottom edge must clear the
+            // context's bottom edge, not its top.
+            let flipped = left.flippedForContext(imageHeight: 50)
+            expect(flipped.y == 0 && flipped.height == left.height && flipped.x == left.x,
+                   "a crop on the sprite's bottom edge flips to the context's bottom edge")
+            expect(flipped.flippedForContext(imageHeight: 50) == left,
+                   "flipping twice returns the original rect")
+        }
+        strider.hasLegs = false
+        expect(PetAnimationPackSupport.legSlices(for: strider, frameWidth: 40, frameHeight: 50) == nil,
+               "a species without legs is never sliced")
+        strider.hasLegs = true
+        strider.legRX = 15   // feet too close: the crops would overlap
+        expect(PetAnimationPackSupport.legSlices(for: strider, frameWidth: 40, frameHeight: 50) == nil,
+               "overlapping crops are refused rather than tearing a seam between the legs")
+
+        let squat = PetAnimationPackSupport.gait(forClass: 0)
+        let tall = PetAnimationPackSupport.gait(forClass: 2)
+        expect(squat.stepRate > PetGait.neutral.stepRate && squat.bobAmplitude < PetGait.neutral.bobAmplitude
+                && squat.waddle > PetGait.neutral.waddle,
+               "squat species take quick, shallow, wobbly steps")
+        expect(tall.stepRate < PetGait.neutral.stepRate && tall.bobAmplitude > PetGait.neutral.bobAmplitude
+                && tall.waddle < PetGait.neutral.waddle,
+               "tall species take slow, deep, steady strides")
+        expect(PetAnimationPackSupport.gait(forClass: 1) == .neutral
+                && PetAnimationPackSupport.gait(forClass: 7) == .neutral,
+               "unknown gait classes fall back to the neutral walk")
+
+        // The committed pack itself: parses, covers the dex, and stays small.
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Tests/
+            .deletingLastPathComponent() // repo root
+        let committedPack = try? Data(contentsOf: repoRoot.appendingPathComponent("Resources/pet-animation-pack.bin"))
+        expect(committedPack != nil, "the animation pack ships in the repo")
+        if let committedPack {
+            expect(committedPack.count < 64 * 1024,
+                   "the animation pack stays under 64 KB")
+            if let table = PetAnimationPackSupport.parse(committedPack) {
+                expect(table.count == 1025, "the pack carries every National Dex species")
+                expect(table.keys.allSatisfy { (1...1025).contains($0) },
+                       "pack records stay inside the National Dex range")
+                let withEyes = table.values.filter(\.hasEyes).count
+                expect(withEyes > 300,
+                       "a healthy share of species got detected eyes (\(withEyes))")
+                let legged = table.values.filter(\.hasLegs)
+                expect((200...900).contains(legged.count),
+                       "sliced legs go to the species that actually have two of them (\(legged.count))")
+                expect(legged.allSatisfy {
+                    $0.legWidth > 0 && $0.legRX > $0.legLX
+                        && $0.legTopY < $0.canvasHeight
+                }, "every legged record carries a usable leg band")
+                expect(legged.allSatisfy {
+                    ($0.legRX - $0.legLX) > $0.legWidth
+                }, "the two leg crops never overlap, so no pixel is cleared once and drawn twice")
+                let withWings = table.values.filter(\.hasWings).count
+                expect((60...200).contains(withWings),
+                       "the winged set is the flying roster, not every sprite (\(withWings))")
+                expect(table.values.allSatisfy { $0.widthOverHeight > 0 && $0.widthOverHeight < 8 },
+                       "every canvas aspect is plausible")
+                expect(table.values.filter(\.hasLegs).allSatisfy {
+                    $0.legLX < $0.canvasWidth && $0.legRX < $0.canvasWidth && $0.legTopY < $0.canvasHeight
+                }, "leg anchors stay inside the canvas")
+            } else {
+                expect(false, "the committed animation pack parses")
+            }
+        }
+
+        // MARK: Catch difficulty
+
+        // Tiers come straight from the PokeAPI capture rates.
+        expect(PetCatchTier.tier(for: 10) == .common, "Caterpie is easy")
+        expect(PetCatchTier.tier(for: 25) == .common, "Pikachu is easy")
+        expect(PetCatchTier.tier(for: 6) == .tough, "Charizard is tough")
+        expect(PetCatchTier.tier(for: 143) == .legendary, "Snorlax is legendary-tier rare")
+        expect(PetCatchTier.tier(for: 150) == .legendary, "Mewtwo is legendary")
+        expect(PetCatchTier.tier(for: 723) == .tough,
+               "Dartrix keeps its own capture rate (45 = tough)")
+        expect(PetCatchTier.tier(for: 26) == .tough,
+               "Raichu is harder to catch than Pikachu, like the games")
+        expect(speciesCaptureRate(for: 150) == 3, "Mewtwo's raw rate is 3")
+        expect(speciesCaptureRate(for: 999_999) == 45, "unknown ids fall back to the average")
+
+        // A Poké Ball no longer catches everything: mythicals shrug it off.
+        expect(PetCatchTier.legendary.odds(for: .pokeBall) == 0.10,
+               "legendaries resist Poké Balls")
+        expect(PetCatchTier.tough.odds(for: .pokeBall) == 0.30,
+               "tough species sit at 30% with a Poké Ball")
+        expect(PetCatchTier.common.odds(for: .pokeBall) == 0.75,
+               "common species stay generous")
+        // Better balls multiply, capped so nothing becomes a formality.
+        expect(PetCatchTier.legendary.odds(for: .ultraBall) == 0.20,
+               "an Ultra Ball doubles the legendary odds")
+        expect(PetCatchTier.common.odds(for: .ultraBall) == 0.95,
+               "odds cap at 95%")
+        // Pity scales with difficulty.
+        expect(PetCatchTier.common.pityMisses == 2 && PetCatchTier.legendary.pityMisses == 5,
+               "harder species demand longer streaks before the pity catch")
+        expect(PetCatchTier.tier(for: 999_999) == .tough,
+               "unknown ids default to the average tier (45)")
+
+        // MARK: Pet moves
+
+        // Signature moves win over types; Greninja flings shurikens.
+        expect(PetMoveCatalog.move(for: 658, types: "Water · Dark")
+                == PetMove(name: "Water Shuriken", style: .waterShuriken),
+               "Greninja's signature is Water Shuriken")
+        expect(PetMoveCatalog.move(for: 25, types: "Electric").style == .bolt,
+               "Pikachu bolts")
+        expect(PetMoveCatalog.move(for: 7, types: "Water").style == .waterJet,
+               "Squirtle squirts water")
+        // Type fallback colours every other species' move in character.
+        expect(PetMoveCatalog.move(for: 129, types: "Water").style == .waterJet,
+               "a water species squirts water")
+        expect(PetMoveCatalog.move(for: 66, types: "Fighting").style == .impactBurst,
+               "a fighting species bursts")
+        expect(PetMoveCatalog.move(for: 132, types: "Normal").style == .starBurst,
+               "a normal species throws stars")
+        expect(PetMoveCatalog.move(for: 999_999, types: "Unknown · Weird").style == .starBurst,
+               "unknown types fall back to stars")
+        expect(PetMoveCatalog.move(for: 999_999, types: nil).style == .starBurst,
+               "typeless species still get a move")
+        // Every signature style maps to drawable pixel art.
+        let allStyles: [PetMoveStyle] = [
+            .bolt, .waterJet, .waterShuriken, .flameJet, .ember, .leafStorm, .psychicOrb,
+            .shadowBall, .darkBurst, .starBurst, .coinToss, .singNotes, .boneToss,
+            .rockThrow, .steelGlint, .fairySparkle, .iceShard, .poisonBubbles,
+            .gustStreaks, .dragonPulse, .auraSphere, .bugSwarm, .sandPuff, .impactBurst,
+            .dragonDart, .slashArc, .mudPuff, .heartBurst,
+        ]
+        expect(allStyles.count == PetMoveStyle.allCases.count,
+               "every declared move style stays covered by pixel art")
+
 
         // MARK: Result
 

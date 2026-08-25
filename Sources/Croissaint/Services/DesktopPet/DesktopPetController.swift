@@ -2,6 +2,7 @@
 // Copyright (C) 2026 chuahchengxi
 
 import AppKit
+import Combine
 import SwiftUI
 
 // MARK: - Reusable floating panel factory
@@ -37,12 +38,39 @@ final class TapOnlyContainerView: NSView {
 final class DesktopViewModel: ObservableObject {
     @Published var facingLeft = false
     @Published var walking = false
+    /// Mirrors whether the desktop panel is on screen; views freeze every
+    /// timeline while it is hidden so an invisible buddy costs no redraws.
+    @Published var buddyVisible = false
     @Published var hearts: [FloatingHeart] = []
     @Published var zzzs: [FloatingZzz] = []
+    @Published var moves: [PetMoveInstance] = []
+    @Published var notice: PetNotice?
 
     func spawnHearts(_ count: Int) {
         for _ in 0..<count {
             hearts.append(FloatingHeart(x: .random(in: -40...40), size: .random(in: 10...18)))
+        }
+    }
+
+    /// The buddy plays its signature (or type-flavoured) move: a short pixel
+    /// particle burst fired in the direction it is facing.
+    func spawnMove(pet: PetState) {
+        guard let dexID = pet.dexID else { return }
+        let move = PetMoveCatalog.move(for: dexID, types: pet.species?.tagline)
+        moves.append(PetMoveInstance(style: move.style, facingLeft: facingLeft))
+        if moves.count > 2 { moves.removeFirst(moves.count - 2) }
+    }
+
+    /// Replaces any visible banner; auto-dismisses unless a newer one lands.
+    func showNotice(text: String, icon: NSImage?) {
+        let notice = PetNotice(text: PetPixelArt.text(text), icon: icon.flatMap(PetPixelArt.icon))
+        withAnimation(.easeOut(duration: 0.25)) {
+            self.notice = notice
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
+            withAnimation(.easeIn(duration: 0.3)) {
+                if self?.notice?.id == notice.id { self?.notice = nil }
+            }
         }
     }
 
@@ -100,6 +128,8 @@ final class DesktopPetController {
 
     private var timer: Timer?
     private var celebrateToken: NSObjectProtocol?
+    private var noticePanel: PetNoticePanel?
+    private var noticeCancellable: AnyCancellable?
     private var walking = false
     private var dir = 1
     private var remaining: TimeInterval = 1.5
@@ -109,6 +139,9 @@ final class DesktopPetController {
     private var isShown = false
     private var lastSleeping = false
     private var nextZzzAt = Date.distantPast
+    private var lastTickAt = Date()
+    /// Origin last pushed to the window server; skips redundant frame moves.
+    private var appliedOrigin: NSPoint?
     private static let speed: CGFloat = 60 // px/s
 
     func start(pet: PetState) {
@@ -116,6 +149,16 @@ final class DesktopPetController {
         self.pet = pet
         computeBounds()
         setupWindow()
+        PetNotificationBridge.shared.start(vm: vm)
+        noticePanel = PetNoticePanel(petWindow: window)
+        noticeCancellable = vm.$notice.sink { [weak self] notice in
+            guard let self else { return }
+            if let notice {
+                self.noticePanel?.show(notice: notice)
+            } else {
+                self.noticePanel?.hide()
+            }
+        }
 
         if let saved = pet.desktopPos() {
             pos = CGPoint(x: CGFloat(saved.x), y: CGFloat(saved.y))
@@ -123,11 +166,20 @@ final class DesktopPetController {
             pos = CGPoint(x: screen.midX - 85, y: screen.minY + 12)
         }
         clampPos()
+        appliedOrigin = nil
         applyFrame()
 
+        lastTickAt = Date()
         let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
-            self?.tick(0.05)
+            guard let self else { return }
+            let now = Date()
+            // Measure real elapsed time so motion speed stays true when a
+            // tick lands late under load.
+            let dt = min(0.25, now.timeIntervalSince(self.lastTickAt))
+            self.lastTickAt = now
+            self.tick(dt)
         }
+        t.tolerance = 0.02
         RunLoop.main.add(t, forMode: .common)
         timer = t
 
@@ -135,6 +187,9 @@ final class DesktopPetController {
             forName: .pokePalCelebrate, object: nil, queue: .main
         ) { [weak self] _ in
             self?.vm.spawnHearts(4)
+            if let pet = self?.pet {
+                self?.vm.spawnMove(pet: pet)
+            }
         }
     }
 
@@ -143,12 +198,18 @@ final class DesktopPetController {
     func stop() {
         timer?.invalidate()
         timer = nil
+        PetNotificationBridge.shared.stop()
+        noticeCancellable?.cancel()
+        noticeCancellable = nil
+        noticePanel?.stop()
+        noticePanel = nil
         if let celebrateToken {
             NotificationCenter.default.removeObserver(celebrateToken)
             self.celebrateToken = nil
         }
         window?.orderOut(nil)
         isShown = false
+        vm.buddyVisible = false
     }
 
     /// Only visible when enabled AND a buddy actually exists.
@@ -164,12 +225,16 @@ final class DesktopPetController {
             window?.orderOut(nil)
             isShown = false
         }
+        if vm.buddyVisible != (want && pet.snapshot.species != nil) {
+            vm.buddyVisible = want && pet.snapshot.species != nil
+        }
     }
 
     func setVisible(_ visible: Bool) {
         if visible { window?.makeKeyAndOrderFront(nil) }
         else { window?.orderOut(nil) }
         isShown = window?.isVisible ?? false
+        vm.buddyVisible = isShown
     }
 
     private func setupWindow() {
@@ -290,7 +355,16 @@ final class DesktopPetController {
 
     private func applyFrame() {
         guard let w = window else { return }
+        // Skip when the origin already matches: repositioning two clear
+        // floating panels 20×/s forces WindowServer recomposites even when
+        // the buddy is standing still (e.g. napping in a corner).
+        if let appliedOrigin,
+           abs(appliedOrigin.x - pos.x) < 0.5, abs(appliedOrigin.y - pos.y) < 0.5 {
+            return
+        }
         w.setFrameOrigin(pos)
+        noticePanel?.reposition()
+        appliedOrigin = pos
     }
 
     // Called by the container view during interaction.
@@ -302,6 +376,7 @@ final class DesktopPetController {
         } else {
             _ = pet.pet()
             vm.spawnHearts(3)
+            vm.spawnMove(pet: pet)
         }
     }
 
@@ -372,17 +447,23 @@ struct DesktopPetView: View {
     /// When the current joy dance started; nil while the buddy is calm.
     @State private var joyStart: Date?
 
+    /// True while a blink has the lids shut; driven by a scheduled task, so
+    /// between blinks nothing renders at all.
+    @State private var eyesClosed = false
+    @State private var blinkCount = 0
+
     /// Motion only matters while walking, napping or celebrating — outside of
-    /// that the timeline is paused so a calm buddy costs no redraws.
+    /// that the timeline is paused so a calm buddy costs no redraws. A hidden
+    /// buddy pauses everything.
     private var timelinePaused: Bool {
-        !(vm.walking || pet.snapshot.sleeping || joyStart != nil)
+        !vm.buddyVisible || !(vm.walking || pet.snapshot.sleeping || joyStart != nil)
     }
 
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 Spacer()
-                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: joyStart == nil)) { timeline in
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: joyStart == nil || !vm.buddyVisible)) { timeline in
                     Capsule()
                         .fill(Color.black.opacity(0.14))
                         .frame(width: 52, height: 7)
@@ -392,7 +473,15 @@ struct DesktopPetView: View {
                 }
             }
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: timelinePaused)) { timeline in
+            // Sleep breathing is a slow sine: 10 fps is indistinguishable
+            // from 30 here and costs a third of the redraws during naps
+            // that can last hours.
+            TimelineView(
+                .animation(
+                    minimumInterval: pet.snapshot.sleeping ? 1.0 / 10 : 1.0 / 30,
+                    paused: timelinePaused
+                )
+            ) { timeline in
                 let now = timeline.date
                 sprite
                     .offset(y: bodyOffset(at: now))
@@ -410,6 +499,16 @@ struct DesktopPetView: View {
                 FloatingHeartView(heart: heart) {
                     vm.hearts.removeAll { $0.id == heart.id }
                 }
+            }
+
+            ForEach(vm.moves) { move in
+                PetMoveEffectView(move: move) {
+                    vm.moves.removeAll { $0.id == move.id }
+                }
+                .offset(
+                    x: vm.facingLeft ? -58 : 28,
+                    y: pet.snapshot.sleeping ? 0 : -22
+                )
             }
 
             ForEach(vm.zzzs) { zzz in
@@ -431,27 +530,119 @@ struct DesktopPetView: View {
     @ViewBuilder
     private var sprite: some View {
         if let id = pet.dexID {
-            AnimatedSpriteView(id: id, height: 96, sleeping: pet.snapshot.sleeping)
-                .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
+            let motion = PetAnimationEngine.motion(for: id)
+            ZStack {
+                AnimatedSpriteView(
+                    id: id,
+                    height: 96,
+                    sleeping: pet.snapshot.sleeping,
+                    legMotion: motion,
+                    walking: vm.walking,
+                    flying: flying,
+                    paused: !vm.buddyVisible
+                )
+                // Eyelids sit inside the same flipped, offset, scaled
+                // hierarchy as the sprite, so they track every body motion.
+                if let motion {
+                    PetEyelidsView(
+                        motion: motion,
+                        height: 96,
+                        closed: eyesClosed || pet.snapshot.sleeping,
+                        sleeping: pet.snapshot.sleeping
+                    )
+                }
+            }
+            .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
+            .task(id: id) { await runBlinks(for: id) }
         }
+    }
+
+    /// Winged species travel by air: a smooth hover with a gentle pitch into
+    /// the direction of travel instead of ground steps.
+    private var flying: Bool {
+        guard vm.walking, !pet.snapshot.sleeping, let id = pet.dexID else { return false }
+        return PetAnimationEngine.motion(for: id)?.hasWings == true
+    }
+
+    /// Schedules blinks a few seconds apart. One sleeping task, no timers:
+    /// each flip is a two-frame Core Animation transition, and while the
+    /// buddy sleeps the loop just idles with the lids held shut.
+    private func runBlinks(for id: Int) async {
+        let period = PetAnimationPackSupport.blinkPeriod(for: id)
+        while !Task.isCancelled {
+            if PetAnimationEngine.motion(for: id) == nil {
+                if eyesClosed { eyesClosed = false }
+                try? await Task.sleep(for: .seconds(2))
+                continue
+            }
+            if pet.snapshot.sleeping {
+                try? await Task.sleep(for: .seconds(1))
+                continue
+            }
+            let openFor = period * Double.random(in: 0.75...1.3)
+            try? await Task.sleep(for: .seconds(openFor))
+            guard !Task.isCancelled, !pet.snapshot.sleeping else { continue }
+            blinkCount += 1
+            withAnimation(.easeInOut(duration: 0.06)) { eyesClosed = true }
+            try? await Task.sleep(for: .seconds(PetAnimationPackSupport.blinkClosedDuration))
+            withAnimation(.easeInOut(duration: 0.08)) { eyesClosed = false }
+            // Every so often a quick second blink — the way eyes really do.
+            let doubleBlink = (blinkCount + id) % 4 == 0
+            if doubleBlink, !Task.isCancelled, !pet.snapshot.sleeping {
+                try? await Task.sleep(for: .seconds(0.18))
+                withAnimation(.easeInOut(duration: 0.05)) { eyesClosed = true }
+                try? await Task.sleep(for: .seconds(0.1))
+                withAnimation(.easeInOut(duration: 0.07)) { eyesClosed = false }
+            }
+        }
+    }
+
+    /// Walk-cycle flavor for the current species; `.neutral` (pack absent)
+    /// keeps the original motion byte-for-byte.
+    private var gait: PetGait {
+        guard let id = pet.dexID, let motion = PetAnimationEngine.motion(for: id) else { return .neutral }
+        return PetAnimationPackSupport.gait(forClass: motion.gaitClass)
     }
 
     // MARK: Body motion
 
+    /// True while the buddy is striding on its sliced legs — the body stays
+    /// level and lets the legs do the talking instead of waddling.
+    private var stepping: Bool {
+        vm.walking && !pet.snapshot.sleeping && !flying && steppingOnLegs
+    }
+
+    private var steppingOnLegs: Bool {
+        guard let id = pet.dexID else { return false }
+        return PetAnimationEngine.motion(for: id)?.hasLegs == true
+    }
+
     private func bodyOffset(at now: Date) -> CGFloat {
         var y = 0.0
         let t = now.timeIntervalSinceReferenceDate
+        let gait = gait
 
-        // Walking: a bouncy step hop.
         if vm.walking, !pet.snapshot.sleeping {
-            y -= abs(sin(t * 9)) * 5
+            if flying {
+                // Flyers glide.
+                y -= 7 + sin(t * 2.8) * 3.5
+            } else if stepping {
+                // Legs swing; the body just breathes with the stride.
+                let phase = t * 9 * gait.stepRate
+                y -= abs(sin(phase)) * 1.1
+            } else {
+                // Pack-free fallback keeps the classic hop.
+                y -= abs(sin(t * 9 * gait.stepRate)) * 5 * gait.bobAmplitude
+            }
         }
 
-        // Joyful: three quick decaying hops.
+        // Joyful: three quick decaying hops. Squat buddies shake where they
+        // stand; tall ones really get air.
         if let joyStart {
             let dt = now.timeIntervalSince(joyStart)
             if dt < 1.5 {
-                y -= max(0, sin(dt * .pi * 4)) * 16 * exp(-dt * 1.8)
+                let flavour: Double = gait.gaitClass == 0 ? 0.45 : (gait.gaitClass == 2 ? 1.25 : 1.0)
+                y -= max(0, sin(dt * .pi * 4)) * 16 * flavour * exp(-dt * 1.8)
             }
         }
         return CGFloat(y)
@@ -460,26 +651,45 @@ struct DesktopPetView: View {
     private func bodyRotation(at now: Date) -> Double {
         var angle = 0.0
         let t = now.timeIntervalSinceReferenceDate
+        let gait = gait
 
-        // Waddle: tilt side to side with each step.
-        if vm.walking, !pet.snapshot.sleeping {
-            angle += sin(t * 9) * 2.5
+        // Sleepy heads nod: tall species droop forward as they doze.
+        if pet.snapshot.sleeping, gait.gaitClass == 2 {
+            angle += vm.facingLeft ? 1.8 : -1.8
         }
 
-        // Joy wiggle on top of the hops.
+        // Flyers bank into travel; striders stay near-level with a faint
+        // counter-sway; the pack-free fallback keeps the classic waddle.
+        if vm.walking, !pet.snapshot.sleeping {
+            if flying {
+                angle += (vm.facingLeft ? 5 : -5) + sin(t * 2.8 + 0.9) * 2
+            } else if stepping {
+                angle += sin(t * 9 * gait.stepRate) * 0.7
+            } else {
+                angle += sin(t * 9 * gait.stepRate) * 2.5 * gait.waddle
+            }
+        }
+
+        // Joy wiggle on top of the hops — squigglier for squat species.
         if let joyStart {
             let dt = now.timeIntervalSince(joyStart)
             if dt < 1.5 {
-                angle += sin(dt * .pi * 6) * 7 * exp(-dt * 2.2)
+                let wiggle: Double = gait.gaitClass == 0 ? 10 : 7
+                angle += sin(dt * .pi * 6) * wiggle * exp(-dt * 2.2)
             }
         }
         return angle
     }
 
     /// Asleep: slow breathing. Celebrating: a landing squash between hops.
+    /// Flying: a fast wing-beat flutter.
     private func bodyScale(at now: Date) -> Double {
         if pet.snapshot.sleeping {
-            return 1 + 0.03 * sin(now.timeIntervalSinceReferenceDate * 2.2)
+            let base = gait.gaitClass == 0 ? 0.965 : 1.0
+            return base + 0.03 * sin(now.timeIntervalSinceReferenceDate * 2.2)
+        }
+        if flying {
+            return 1 + 0.022 * sin(now.timeIntervalSinceReferenceDate * 8.5)
         }
         if let joyStart {
             let dt = now.timeIntervalSince(joyStart)
@@ -490,11 +700,65 @@ struct DesktopPetView: View {
         return 1
     }
 
-    /// The floor shadow shrinks while airborne so hops read as real lifts.
+    /// The floor shadow shrinks while airborne so hops read as real lifts —
+    /// and stays small while a flyer is aloft.
     private func shadowScale(at now: Date) -> Double {
+        if flying {
+            return 0.45
+        }
         guard let joyStart else { return 1 }
         let dt = now.timeIntervalSince(joyStart)
         guard dt < 1.5 else { return 1 }
         return 1 - 0.35 * max(0, sin(dt * .pi * 4)) * exp(-dt * 1.8)
+    }
+}
+
+// MARK: - Eyelid overlay (animation pack)
+
+/// Draws the buddy's eyelids over its sprite: brief closures while awake
+/// (blinking) and a steady gentle shut while asleep. The lid is painted in
+/// the species' own sampled fur colour, so slight over-coverage melts into
+/// the body; only the darker lash line carries the shape. Fades in and out
+/// with plain Core Animation transitions — no render loop of its own.
+struct PetEyelidsView: View {
+    let motion: PetFaceMotion
+    let height: CGFloat
+    let closed: Bool
+    /// Lids share the sprite's sleep tint; see `PetSleepTint`.
+    var sleeping = false
+
+    var body: some View {
+        let canvasWidth = height * CGFloat(motion.widthOverHeight)
+        ZStack {
+            if let left = motion.leftEye, let right = motion.rightEye {
+                lid(left)
+                lid(right)
+            }
+        }
+        .frame(width: canvasWidth, height: height)
+        .opacity(closed ? 1 : 0)
+        .petSleepTint(sleeping)
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func lid(_ eye: PetEyeRect) -> some View {
+        let width = CGFloat(eye.width) * height * CGFloat(motion.widthOverHeight)
+        let lidHeight = CGFloat(eye.height) * height
+        let x = (CGFloat(eye.x) + CGFloat(eye.width) / 2) * height * CGFloat(motion.widthOverHeight)
+        let y = (CGFloat(eye.y) + CGFloat(eye.height) / 2) * height
+        let color = motion.lidColor
+        ZStack {
+            RoundedRectangle(cornerRadius: lidHeight * 0.3)
+                .fill(Color(red: color.red, green: color.green, blue: color.blue))
+            // Lash line along the lower lid: the part that actually reads.
+            Capsule()
+                .fill(Color(red: color.red * 0.42, green: color.green * 0.42, blue: color.blue * 0.42))
+                .frame(height: max(1.1, lidHeight * 0.24))
+                .offset(y: lidHeight * 0.34)
+                .padding(.horizontal, width * 0.08)
+        }
+        .frame(width: width, height: lidHeight)
+        .position(x: x, y: y)
     }
 }

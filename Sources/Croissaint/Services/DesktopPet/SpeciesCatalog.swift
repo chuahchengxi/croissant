@@ -9,6 +9,10 @@ struct SpeciesDef: Identifiable {
     let names: [String]
     let evoIDs: [Int]
     let tagline: String
+    /// PokeAPI capture rate (255 = trivial, 3 = mythical). Drives how hard
+    /// the species is to catch. Data lines that predate the column default
+    /// to the historical average.
+    let captureRate: Int
 
     var id: String { key }
     var name: String { names[0] }
@@ -38,14 +42,24 @@ struct SpeciesDef: Identifiable {
 /// The whole National Dex. Every species is pickable as a buddy and carries the
 /// remainder of its evolution line, so choosing Dartrix still ends at Decidueye.
 let speciesCatalog: [SpeciesDef] = {
-    struct Row { let name: String; let tagline: String; let next: Int? }
+    struct Row {
+        let name: String
+        let tagline: String
+        let next: Int?
+        var captureRate = 45
+    }
     var rows: [Int: Row] = [:]
     var order: [Int] = []
 
     for line in speciesCatalogData.split(separator: "\n") {
         let cols = line.split(separator: "|", omittingEmptySubsequences: false)
-        guard cols.count == 4, let id = Int(cols[0]) else { continue }
-        rows[id] = Row(name: String(cols[1]), tagline: String(cols[2]), next: Int(cols[3]))
+        guard cols.count >= 4, let id = Int(cols[0]) else { continue }
+        rows[id] = Row(
+            name: String(cols[1]),
+            tagline: String(cols[2]),
+            next: Int(cols[3]),
+            captureRate: cols.count > 4 ? Int(cols[4]) ?? 45 : 45
+        )
         order.append(id)
     }
 
@@ -64,10 +78,30 @@ let speciesCatalog: [SpeciesDef] = {
             key: key,
             names: ids.map { rows[$0]!.name },
             evoIDs: ids,
-            tagline: row.tagline
+            tagline: row.tagline,
+            captureRate: row.captureRate
         )
     }
 }()
 
 private let speciesIndex: [String: SpeciesDef] =
     Dictionary(speciesCatalog.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+
+/// Capture rate for any dex id, mid-evolution stages included. Unknown ids
+/// fall back to the historical series average (45).
+func speciesCaptureRate(for dexID: Int) -> Int {
+    speciesCaptureRateIndex[dexID] ?? 45
+}
+
+private let speciesCaptureRateIndex: [Int: Int] = {
+    // Each stage keeps its own rate (Raichu is genuinely harder to catch
+    // than Pikachu), so this reads the raw rows rather than the merged
+    // evolution lines.
+    var index: [Int: Int] = [:]
+    for line in speciesCatalogData.split(separator: "\n") {
+        let cols = line.split(separator: "|", omittingEmptySubsequences: false)
+        guard cols.count > 4, let id = Int(cols[0]) else { continue }
+        index[id] = Int(cols[4]) ?? 45
+    }
+    return index
+}()

@@ -23,11 +23,35 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     env:
-      # Mirrored so steps can branch on whether real notarization will happen;
-      # notarize.sh itself already skips quietly when these are unset.
+      # Mirrored at job scope so any step can branch on whether real signing
+      # and notarization will happen.
+      SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
       NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # An un-notarized DMG gets flagged as possible malware by Gatekeeper on
+      # every user's Mac ("Apple could not verify…"), which is how v3.4.1
+      # shipped. Refuse to publish rather than ship that quietly.
+      - name: Require signing & notarization credentials
+        run: |
+          missing=0
+          for secret in SIGNING_CERT_P12 NOTARY_API_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+            if [[ -z "${!secret}" ]]; then
+              echo "✗ Missing repo secret: ${secret}" >&2
+              missing=1
+            fi
+          done
+          if [[ "$missing" != 0 ]]; then
+            echo "" >&2
+            echo "Release credentials are not configured on this repository, so" >&2
+            echo "the DMG would open with a macOS malware warning. Add the secrets" >&2
+            echo "(SIGNING_CERT_P12, SIGNING_CERT_PASSWORD, NOTARY_API_KEY_P8," >&2
+            echo "NOTARY_KEY_ID, NOTARY_ISSUER_ID) and re-run this workflow." >&2
+            exit 1
+          fi
 
       # Unit tests already gate this exact commit in CI on main; the release
       # run goes straight to building so the tag reaches users faster.
