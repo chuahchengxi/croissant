@@ -81,6 +81,19 @@ final class WildSpawnController {
         return PetCatchTier.tier(for: dexID).pityMisses
     }
 
+    /// Whether a ball is strong enough for the current wild pokemon at all —
+    /// a Poké Ball cannot hold a legendary no matter how many are thrown.
+    func ballAllowed(_ kind: PetItemKind, dexID: Int?) -> Bool {
+        guard let dexID else { return false }
+        return PetCatchTier.tier(for: dexID).canCatch(with: kind)
+    }
+
+    /// The weakest ball the current wild pokemon accepts, for UI copy.
+    func requiredBall(dexID: Int?) -> PetItemKind {
+        guard let dexID else { return .pokeBall }
+        return PetCatchTier.tier(for: dexID).requiredBall
+    }
+
     func noteMiss() {
         misses += 1
         vm.missPulse.toggle()
@@ -278,20 +291,12 @@ struct WildPokemonView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // One top slot: WILD! until the catch lands, Gotcha! after —
-            // they share the space instead of stacking over the sprite.
-            // Pet-world copy is all one pixel font at one size, the same
-            // renderer as the notification banner.
-            ZStack {
-                PixelTextView(text: "WILD!")
-                    .opacity(gotcha ? 0 : 1)
-                if gotcha {
-                    PixelTextView(text: "Gotcha!")
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
-            }
-            .frame(height: 38)
-            .animation(.easeInOut(duration: 0.18), value: gotcha)
+            // WILD! is the encounter's own label and keeps the top slot for
+            // the whole visit; Gotcha! pops over the caught ball instead
+            // (see the overlay below). Pet-world copy is all one pixel font
+            // at one size, the same renderer as the notification banner.
+            PixelTextView(text: "WILD!")
+                .frame(height: 38)
 
             encounterArea
                 .frame(height: 210)
@@ -318,6 +323,14 @@ struct WildPokemonView: View {
                 FloatingHeartView(heart: heart) {
                     vm.hearts.removeAll { $0.id == heart.id }
                 }
+            }
+            // Gotcha! rides right on top of the caught ball, which rests at
+            // the pokemon's spot after the wobble. Drawn in the overlay so it
+            // beats the ball in z-order.
+            if gotcha {
+                PixelTextView(text: "Gotcha!")
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    .position(x: targetRect.midX, y: targetRect.midY - 52)
             }
         }
         .onDisappear { stopFlight() }
@@ -382,7 +395,10 @@ struct WildPokemonView: View {
                             lineWidth: 1.2
                         )
                     )
-                    .opacity(controller.ballCount(for: kind) == 0 ? 0.35 : 1)
+                    .opacity(
+                        controller.ballCount(for: kind) == 0
+                            || !controller.ballAllowed(kind, dexID: vm.dexID) ? 0.35 : 1
+                    )
                 }
                 .buttonStyle(PressableStyle())
             }
@@ -460,6 +476,13 @@ struct WildPokemonView: View {
         }
 
         let kind = pet.activeBall
+        // Too weak a ball never leaves your hand — no ball wasted on a
+        // pokemon it cannot hold.
+        guard controller.ballAllowed(kind, dexID: vm.dexID) else {
+            flash("Needs a \(controller.requiredBall(dexID: vm.dexID).displayName)!")
+            springBack()
+            return
+        }
         guard controller.takeBall(kind) else {
             flash("No \(kind.displayName)s left!")
             springBack()
@@ -557,9 +580,11 @@ struct WildPokemonView: View {
     }
 
     private func resolveThrow(with kind: PetItemKind) {
-        let guaranteed = controller.missCount >= controller.pityMisses(dexID: vm.dexID)
-        if Double.random(in: 0..<1) < controller.catchOdds(for: kind, dexID: vm.dexID)
-            || guaranteed {
+        let odds = controller.catchOdds(for: kind, dexID: vm.dexID)
+        // Pity never overrides the ball gate: zero odds means zero, always.
+        let guaranteed = odds > 0
+            && controller.missCount >= controller.pityMisses(dexID: vm.dexID)
+        if Double.random(in: 0..<1) < odds || guaranteed {
             succeed(with: kind)
         } else {
             controller.noteMiss()

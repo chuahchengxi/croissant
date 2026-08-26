@@ -43,6 +43,8 @@ final class DesktopViewModel: ObservableObject {
     @Published var buddyVisible = false
     @Published var hearts: [FloatingHeart] = []
     @Published var zzzs: [FloatingZzz] = []
+    /// Puff counter for the sleep loop — decides which z's become dreams.
+    var zzzCount = 0
     @Published var moves: [PetMoveInstance] = []
     @Published var fetched: [FloatingFetch] = []
     @Published var dizzyStars: [FloatingDizzy] = []
@@ -97,8 +99,18 @@ final class DesktopViewModel: ObservableObject {
 
     /// A sleepy "z" drifting off the buddy. Old ones are trimmed so a long
     /// nap never accumulates views.
-    func spawnZzz() {
-        zzzs.append(FloatingZzz(x: .random(in: 24...46), size: .random(in: 9...14)))
+    /// A sleepy "z" drifting off the buddy; every few puffs is a dream
+    /// bubble instead, so long naps don't repeat one flat animation. Old
+    /// ones are trimmed so a nap never accumulates views.
+    func spawnZzz(seed: Int) {
+        zzzCount += 1
+        let dreaming = zzzCount % max(2, PetSleepChoreography.dreamEvery(seed: seed)) == 0
+        zzzs.append(FloatingZzz(
+            x: .random(in: 24...46),
+            size: .random(in: 9...14),
+            dream: dreaming,
+            symbol: PetSleepChoreography.dreamSymbol(seed: seed, cycle: zzzCount)
+        ))
         if zzzs.count > 5 { zzzs.removeFirst(zzzs.count - 5) }
     }
 
@@ -118,10 +130,14 @@ final class DesktopViewModel: ObservableObject {
 }
 
 /// One drifting "z" puff while the buddy naps.
+/// One drifting "z" puff while the buddy naps — or, every few puffs, a
+/// dream bubble showing what the buddy is dreaming about.
 struct FloatingZzz: Identifiable {
     let id = UUID()
     let x: CGFloat
     let size: CGFloat
+    var dream = false
+    var symbol = "z"
 }
 
 /// The pixelated app icon the buddy "retrieved" — floats up and fades.
@@ -199,18 +215,29 @@ struct FloatingZzzView: View {
     @State private var risen = false
 
     var body: some View {
-        Text("z")
-            .font(.system(size: zzz.size, weight: .black, design: .rounded))
-            .foregroundStyle(.indigo.opacity(0.85))
-            .padding(.horizontal, 3)
-            .background(Capsule().fill(Color.white.opacity(0.75)))
-            .offset(x: zzz.x + (risen ? 8 : 0), y: risen ? -52 : 6)
-            .opacity(risen ? 0 : 0.95)
-            .scaleEffect(risen ? 1.15 : 0.7)
-            .onAppear {
-                withAnimation(.easeOut(duration: 1.6)) { risen = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.65) { onDone() }
+        Group {
+            if zzz.dream {
+                Text(zzz.symbol)
+                    .font(.system(size: zzz.size + 3, weight: .black))
+                    .foregroundStyle(.pink.opacity(0.85))
+                    .shadow(color: .purple.opacity(0.35), radius: 2)
+            } else {
+                Text("z")
+                    .font(.system(size: zzz.size, weight: .black, design: .rounded))
+                    .foregroundStyle(.indigo.opacity(0.85))
+                    .padding(.horizontal, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.75)))
             }
+        }
+        .offset(x: zzz.x + (risen ? (zzz.dream ? 12 : 8) : 0), y: risen ? (zzz.dream ? -66 : -52) : 6)
+        .opacity(risen ? 0 : 0.95)
+        .scaleEffect(risen ? 1.15 : 0.7)
+        .onAppear {
+            withAnimation(.easeOut(duration: zzz.dream ? 2.1 : 1.6)) { risen = true }
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + (zzz.dream ? 2.15 : 1.65)
+            ) { onDone() }
+        }
     }
 }
 
@@ -407,9 +434,12 @@ final class DesktopPetController {
         // While sleeping, drift to the nearest screen corner and nap there.
         if sleeping {
             glideToNearestCorner(dt)
-            // Snore on a beat: a "z" puff every couple of seconds.
+            // Snore on a beat: a drifting z every couple of seconds, with
+            // dream bubbles surfacing every few puffs.
+            // Custom sprites have no dex id; they snore on seed 0 like the
+            // pose choreography does.
             if Date() >= nextZzzAt {
-                vm.spawnZzz()
+                vm.spawnZzz(seed: pet.dexID ?? 0)
                 nextZzzAt = Date().addingTimeInterval(Double.random(in: 1.7...2.5))
             }
             return
@@ -742,7 +772,10 @@ struct DesktopPetView: View {
             // that can last hours.
             TimelineView(
                 .animation(
-                    minimumInterval: pet.snapshot.sleeping ? 1.0 / 10 : 1.0 / 30,
+                    // The nap choreography (breath waves + dream kicks)
+                    // needs smoother sampling than the old flat sine:
+                    // 15 fps is a third of the awake cost, still fluid.
+                    minimumInterval: pet.snapshot.sleeping ? 1.0 / 15 : 1.0 / 30,
                     paused: timelinePaused
                 )
             ) { timeline in
@@ -758,6 +791,7 @@ struct DesktopPetView: View {
                         anchor: .bottom
                     )
                     .offset(y: bodyOffset(at: now))
+                    .offset(x: bodyXShift(at: now))
                     .scaleEffect(bodyScale(at: now), anchor: .bottom)
                     .rotationEffect(.degrees(bodyRotation(at: now)), anchor: .bottom)
             }
@@ -953,6 +987,13 @@ struct DesktopPetView: View {
         let t = now.timeIntervalSinceReferenceDate
         let gait = gait
 
+        // The sleep routine owns the body while asleep: breathing waves and
+        // dream twitches ride the same transform chain as the lids.
+        if pet.snapshot.sleeping {
+            let nap = PetSleepChoreography.pose(at: t, seed: pet.dexID ?? 0, gaitClass: gait.gaitClass)
+            return CGFloat(-nap.yOffset)
+        }
+
         if vm.walking, !pet.snapshot.sleeping {
             if flying {
                 // Flyers glide.
@@ -987,14 +1028,26 @@ struct DesktopPetView: View {
         return CGFloat(y)
     }
 
+    /// Sideways drift from dream twitches — zero while awake.
+    private func bodyXShift(at now: Date) -> CGFloat {
+        guard pet.snapshot.sleeping else { return 0 }
+        return CGFloat(PetSleepChoreography.pose(
+            at: now.timeIntervalSinceReferenceDate,
+            seed: pet.dexID ?? 0,
+            gaitClass: gait.gaitClass
+        ).xOffset)
+    }
+
     private func bodyRotation(at now: Date) -> Double {
         var angle = 0.0
         let t = now.timeIntervalSinceReferenceDate
         let gait = gait
 
-        // Sleepy heads nod: tall species droop forward as they doze.
-        if pet.snapshot.sleeping, gait.gaitClass == 2 {
-            angle += vm.facingLeft ? 1.8 : -1.8
+        // Sleepy heads nod: tall species droop forward as they doze — and
+        // the choreography layers settling shifts + dream twitches on top.
+        if pet.snapshot.sleeping {
+            let nap = PetSleepChoreography.pose(at: t, seed: pet.dexID ?? 0, gaitClass: gait.gaitClass)
+            return (gait.gaitClass == 2 ? (vm.facingLeft ? 1.8 : -1.8) : 0) + nap.angle
         }
 
         // Flyers bank into travel; striders stay near-level with a faint
@@ -1020,12 +1073,16 @@ struct DesktopPetView: View {
         return angle
     }
 
-    /// Asleep: slow breathing. Celebrating: a landing squash between hops.
-    /// Flying: a fast wing-beat flutter.
+    /// Asleep: the choreographed breath — waves of deeper and lighter
+    /// breathing, not one flat sine. Celebrating: a landing squash between
+    /// hops. Flying: a fast wing-beat flutter.
     private func bodyScale(at now: Date) -> Double {
         if pet.snapshot.sleeping {
-            let base = gait.gaitClass == 0 ? 0.965 : 1.0
-            return base + 0.03 * sin(now.timeIntervalSinceReferenceDate * 2.2)
+            return PetSleepChoreography.pose(
+                at: now.timeIntervalSinceReferenceDate,
+                seed: pet.dexID ?? 0,
+                gaitClass: gait.gaitClass
+            ).breathScale
         }
         if flying {
             return 1 + 0.022 * sin(now.timeIntervalSinceReferenceDate * 8.5)

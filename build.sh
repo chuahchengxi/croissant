@@ -44,8 +44,15 @@ ENTITLEMENTS="Resources/Croissaint.entitlements"
 LEGACY_IDENTITY="Croissaint Utils Signing"
 
 developer_id_identity() {
-    security find-identity -v -p codesigning 2>/dev/null \
-        | grep 'Developer ID Application' \
+    # Any Apple-issued identity gives a stable, team-based designated
+    # requirement, which is what keeps TCC grants (Accessibility, Screen
+    # Recording) alive across rebuilds. Prefer Developer ID (notarizable),
+    # else fall back to an Apple Development certificate — without this,
+    # local builds went ad-hoc and every rebuild orphaned the grants.
+    local ids
+    ids="$(security find-identity -v -p codesigning 2>/dev/null)"
+    { grep 'Developer ID Application' <<< "$ids" \
+        || grep '"Apple Development' <<< "$ids"; } \
         | head -1 \
         | sed -E 's/.*"(.*)".*/\1/' || true
 }
@@ -330,6 +337,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetSpriteMetrics.swift \
         Sources/Croissaint/Services/DesktopPet/DesktopThrowSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetNoticeParsing.swift \
+        Sources/Croissaint/Services/DesktopPet/PetSleepChoreography.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveArt.swift \
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
@@ -514,7 +522,7 @@ sign_bundle() {
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
 
     if [[ -n "$DEVID" ]]; then
-        echo "  signing with Developer ID (hardened runtime): $DEVID"
+        echo "  signing with Apple-issued identity (hardened runtime): $DEVID"
     elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
         echo "  signing with legacy self-signed identity: $LEGACY_IDENTITY"
     else

@@ -48,6 +48,26 @@ enum PetCatchTier {
         }
     }
 
+    /// Payout for transferring a spare copy of this tier — every rank pays
+    /// differently, and higher ranks pay in better gear.
+    var transferRewards: [(kind: PetItemKind, count: Int)] {
+        switch self {
+        case .common: return [(.pokeBall, 2), (.berry, 2)]
+        case .wary: return [(.pokeBall, 3), (.berry, 3)]
+        case .tough: return [(.greatBall, 2), (.berry, 4)]
+        case .legendary: return [(.ultraBall, 2), (.everStone, 1), (.berry, 5)]
+        }
+    }
+
+    var transferCoins: Int {
+        switch self {
+        case .common: return 10
+        case .wary: return 25
+        case .tough: return 50
+        case .legendary: return 150
+        }
+    }
+
     var label: String {
         switch self {
         case .common: return "Easy"
@@ -57,10 +77,37 @@ enum PetCatchTier {
         }
     }
 
+    /// The weakest ball that can hold this tier at all: everyday species
+    /// take any ball, tough ones need at least a Great Ball, and legendaries
+    /// only stay in an Ultra Ball.
+    var requiredBall: PetItemKind {
+        switch self {
+        case .common, .wary: return .pokeBall
+        case .tough: return .greatBall
+        case .legendary: return .ultraBall
+        }
+    }
+
+    private static func rank(of kind: PetItemKind) -> Int {
+        switch kind {
+        case .pokeBall: return 0
+        case .greatBall: return 1
+        case .ultraBall: return 2
+        default: return -1
+        }
+    }
+
+    func canCatch(with kind: PetItemKind) -> Bool {
+        Self.rank(of: kind) >= Self.rank(of: requiredBall)
+    }
+
     /// Final odds for a ball against this tier. Great Balls ×1.5, Ultra
     /// Balls ×2, capped at 95% — even a mythic never becomes a formality,
-    /// and nothing is unwinnable.
+    /// and nothing is unwinnable. A ball below the tier's required ball
+    /// cannot catch at all: zero odds, and the pity counter routes through
+    /// this too, so no guarantee ever overrides the gate.
     func odds(for kind: PetItemKind) -> Double {
+        guard canCatch(with: kind) else { return 0 }
         let multiplier: Double
         switch kind {
         case .pokeBall: multiplier = 1.0
