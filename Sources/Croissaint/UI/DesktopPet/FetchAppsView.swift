@@ -105,6 +105,11 @@ struct FetchAppsView: View {
         if NSWorkspace.shared.open(app.url) {
             pet.rewardFetch()
             onFetched?(app.name)
+            // The desktop buddy presents its catch: pixelated icon pops out
+            // beside it (see FloatingFetchView).
+            NotificationCenter.default.post(
+                name: .pokePalFetch, object: nil, userInfo: ["icon": app.icon]
+            )
             NotificationCenter.default.post(name: .pokePalCelebrate, object: nil)
             query = ""
         }

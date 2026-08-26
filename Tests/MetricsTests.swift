@@ -2481,18 +2481,8 @@ struct MetricsTests {
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.1.0", lastSeenVersion: nil)
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.9", lastSeenVersion: nil),
                "support prompt never leaks into another release")
-        expect(SupportUpdateIntroStep.social.next == .support
-               && SupportUpdateIntroStep.support.next == nil,
-               "update intro moves from social updates to support")
-        expect(SupportUpdateIntroStep.social.previous == nil
-               && SupportUpdateIntroStep.support.previous == .social,
-               "update intro navigates back without closing")
-        expect(SupportUpdateIntroStep.allCases == [.social, .support],
-               "update intro page indicators follow the navigation order")
         expect(AppInfo.coffeeURL.absoluteString == "https://github.com/chuahchengxi/croissant",
                "financial support points at the GitHub project page")
-        expect(AppInfo.socialURL.absoluteString == "https://github.com/chuahchengxi/croissant",
-               "social previews keep the official repository")
         // AppInfo.version falls back to "dev" in this bare harness, so read
         // the plist the shipped app will actually carry. The pin is a
         // per-release decision: this check fails on every version bump so the
@@ -9520,9 +9510,6 @@ struct MetricsTests {
                 strings.supportIntroStarButton,
                 strings.supportIntroStarMessage,
                 strings.supportIntroCoffeeButton,
-                strings.communityIntroTitle,
-                strings.communityIntroMessage,
-                strings.communityIntroFollowButton,
             ]
             expect(supportCommunityStrings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
                    "\(prefix) support and community strings are complete without em dash")
@@ -9532,20 +9519,6 @@ struct MetricsTests {
             expect(strings.supportIntroStarMessage.localizedCaseInsensitiveContains("GitHub")
                    && strings.supportIntroStarButton.localizedCaseInsensitiveContains("GitHub"),
                    "\(prefix) non-financial support and community actions name their destinations")
-            expect(!strings.communityIntroMessage.isEmpty
-                   && strings.communityIntroMessage.contains("X"),
-                   "\(prefix) community intro invites users to follow previews on X")
-            let retiredWeeklyPhrases = [
-                "uma vez por semana", "once a week", "haftada bir", "раз в неделю",
-                "una vez por semana", "einmal pro Woche", "une fois par semaine",
-                "una volta a settimana", "週1回", "매주 한 번", "每周更新一次", "每週更新一次",
-            ]
-            expect(retiredWeeklyPhrases.allSatisfy {
-                !strings.communityIntroMessage.localizedCaseInsensitiveContains($0)
-            }, "\(prefix) community intro no longer promises weekly updates")
-            expect(!strings.communityIntroMessage.contains("—")
-                   && strings.communityIntroMessage.count <= 320,
-                   "\(prefix) community intro stays concise and has no em dash")
             expect(!strings.updateShowcaseTitle.isEmpty, "\(prefix) update showcase title is present")
             expect(!strings.updateShowcaseMessage.isEmpty, "\(prefix) update showcase message is present")
             expect(!strings.updateShowcaseUnavailable.isEmpty, "\(prefix) update showcase fallback is present")
@@ -17386,6 +17359,64 @@ struct MetricsTests {
         strider.hasLegs = false
         expect(PetAnimationPackSupport.legSlices(for: strider, frameWidth: 40, frameHeight: 50) == nil,
                "a species without legs is never sliced")
+
+        // Lid geometry, on synthetic faces where every case is reachable.
+        let canvas = 100.0
+        func face(_ left: (Double, Double, Double, Double),
+                  _ right: (Double, Double, Double, Double)) -> PetFaceMotion {
+            let rect = { (r: (Double, Double, Double, Double)) in
+                PetEyeRect(x: r.0 / canvas, y: r.1 / canvas,
+                           width: r.2 / canvas, height: r.3 / canvas)
+            }
+            return PetFaceMotion(
+                dexID: 1, leftEye: rect(left), rightEye: rect(right),
+                lidColor: PetLidColor(red: 0.5, green: 0.5, blue: 0.5),
+                widthOverHeight: 1, gaitClass: 1,
+                canvasWidth: canvas, canvasHeight: canvas
+            )
+        }
+        // Every eye grows by exactly one canvas pixel on each side — the
+        // rounding the pack paid on the way in, paid back on the way out.
+        if let grown = PetAnimationPackSupport.lidRects(for: face((30, 30, 10, 10), (60, 30, 10, 10))) {
+            expect(abs(grown.left.x * canvas - 29) < 0.001
+                    && abs(grown.left.width * canvas - 12) < 0.001,
+                   "a lid grows one pixel on every side")
+        } else {
+            expect(false, "a two-eyed face has lid rects")
+        }
+        // Growth is flat, not proportional: a big eye grows by the same
+        // pixel a small one does, or every roomy-canvas design wears a slab.
+        if let big = PetAnimationPackSupport.lidRects(for: face((10, 10, 30, 30), (60, 10, 30, 30))) {
+            expect(abs(big.left.width * canvas - 32) < 0.001,
+                   "a large eye grows by the same single pixel")
+        }
+        // An eye against the canvas edge cannot grow off it.
+        if let edge = PetAnimationPackSupport.lidRects(for: face((0, 0, 6, 6), (60, 0, 6, 6))) {
+            expect(edge.left.x == 0 && edge.left.y == 0,
+                   "a lid on the canvas edge clamps instead of growing off it")
+            expect(edge.right.x + edge.right.width <= 1,
+                   "no lid runs past the far edge either")
+        }
+        // Close-set eyes: growth stops at the seam between them rather than
+        // welding the pair into one unibrow.
+        if let tight = PetAnimationPackSupport.lidRects(for: face((40, 30, 8, 8), (49, 30, 8, 8))) {
+            expect(tight.left.x + tight.left.width <= tight.right.x,
+                   "grown lids never overlap")
+            expect(tight.left.x + tight.left.width >= 48 / canvas
+                    && tight.right.x <= 49 / canvas,
+                   "the trim pulls back to the measured eye and no further")
+        }
+        // The ¾-pose encoding stores one eye twice; trimming it against
+        // itself would halve the only lid there is.
+        let oneEyed = face((30, 30, 8, 8), (30, 30, 8, 8))
+        if let single = PetAnimationPackSupport.lidRects(for: oneEyed) {
+            expect(single.left == single.right && single.left.width > 8 / canvas,
+                   "a one-eyed species keeps a single full-size lid")
+        }
+        var eyeless = strider
+        eyeless.leftEye = nil
+        expect(PetAnimationPackSupport.lidRects(for: eyeless) == nil,
+               "a species with no measured eyes has no lids to paint")
         strider.hasLegs = true
         strider.legRX = 15   // feet too close: the crops would overlap
         expect(PetAnimationPackSupport.legSlices(for: strider, frameWidth: 40, frameHeight: 50) == nil,
@@ -17627,6 +17658,51 @@ struct MetricsTests {
                     sleeping: false, wakeAt: napStart, now: napStart
                 ) == false, "an awake buddy has nothing to wake from")
 
+                // 8. The painted lid covers the whole measured eye. The pack
+                //    measures each eye tight and rounds it to whole canvas
+                //    pixels, so lids drawn at exactly that size left the
+                //    sclera and outline ring showing — a nap holds that pose
+                //    for minutes, and a buddy napping with its eyes half open
+                //    is what this grows out of. Growing is only ever safe if
+                //    it stays on the canvas and the pair never merges.
+                let uncovered = lidded.filter { motion in
+                    guard let rects = PetAnimationPackSupport.lidRects(for: motion),
+                          let l = motion.leftEye, let r = motion.rightEye
+                    else { return true }
+                    let covers = { (lid: PetEyeRect, eye: PetEyeRect) in
+                        lid.x <= eye.x + 1e-9 && lid.y <= eye.y + 1e-9
+                            && lid.x + lid.width >= eye.x + eye.width - 1e-9
+                            && lid.y + lid.height >= eye.y + eye.height - 1e-9
+                    }
+                    let onCanvas = { (lid: PetEyeRect) in
+                        lid.x >= 0 && lid.y >= 0 && lid.width > 0 && lid.height > 0
+                            && lid.x + lid.width <= 1 + 1e-9
+                            && lid.y + lid.height <= 1 + 1e-9
+                    }
+                    guard covers(rects.left, l), covers(rects.right, r),
+                          onCanvas(rects.left), onCanvas(rects.right)
+                    else { return true }
+                    // Grown lids that meet would read as one unibrow.
+                    if l != r {
+                        let (near, far) = rects.left.x <= rects.right.x
+                            ? (rects.left, rects.right) : (rects.right, rects.left)
+                        if near.x + near.width > far.x + 1e-9 { return true }
+                    }
+                    return false
+                }
+                expect(uncovered.isEmpty,
+                       "every species' lids cover their measured eyes, on canvas and apart "
+                       + "(bad: \(uncovered.map(\.dexID).sorted().prefix(8)))")
+
+                // A lid that grows must actually grow: pinned on Pikachu,
+                // whose 2x4 px eye box was small enough to leave a black
+                // crumb showing at every corner.
+                if let pika = table[25], let rects = PetAnimationPackSupport.lidRects(for: pika),
+                   let eye = pika.leftEye {
+                    expect(rects.left.width > eye.width && rects.left.height > eye.height,
+                           "a small eye's lid grows past the measured box")
+                }
+
             } else {
                 expect(false, "the committed animation pack parses")
             }
@@ -17665,6 +17741,82 @@ struct MetricsTests {
         expect(PetCatchTier.tier(for: 999_999) == .tough,
                "unknown ids default to the average tier (45)")
 
+        // MARK: Pet sprite size normalization
+
+        // PokeAPI mixes tight animated canvases with heavily padded static
+        // ones, so every render path normalizes via PetSpriteMetrics. The
+        // measurement is pinned on synthetic sprites whose artwork occupies
+        // exactly known boxes.
+        func synthetic(_ w: Int, _ h: Int, art: CGRect?) -> CGImage? {
+            guard let ctx = CGContext(
+                data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return nil }
+            if let art {
+                ctx.setFillColor(CGColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 1))
+                ctx.fill(art)
+            } else {
+                ctx.setFillColor(CGColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 1))
+                ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            }
+            return ctx.makeImage()
+        }
+
+        if let full = synthetic(64, 64, art: nil) {
+            let fill = PetSpriteMetrics.fillRatio(of: full)
+            expect(fill != nil, "an opaque sprite measures")
+            expectClose(fill?.widthFraction ?? 0, 1.0, "a tight canvas fills its width")
+            expectClose(fill?.heightFraction ?? 0, 1.0, "a tight canvas fills its height")
+        } else {
+            expect(false, "synthetic tight sprite renders")
+        }
+
+        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
+            let fill = PetSpriteMetrics.fillRatio(of: quarter)
+            expectClose(fill?.widthFraction ?? 0, 0.5, "padded artwork reports half the width")
+            expectClose(fill?.heightFraction ?? 0, 0.5, "padded artwork reports half the height")
+        } else {
+            expect(false, "synthetic padded sprite renders")
+        }
+        if let blank = synthetic(64, 64, art: CGRect.null) {
+            expect(PetSpriteMetrics.fillRatio(of: blank) == nil,
+                   "a fully transparent sprite measures as nothing")
+        } else {
+            expect(false, "synthetic blank sprite renders")
+        }
+
+        // Scale selection: tight canvases land on the target fill, padded
+        // ones inflate only up to the cap, extra-wide species are breadth-
+        // clamped, and unknown sprites stay untouched until decoded.
+        PetSpriteMetrics.reset()
+        var tightFrames: [CGImage] = []
+        if let full = synthetic(64, 64, art: nil) { tightFrames = [full] }
+        expectClose(
+            PetSpriteMetrics.scale(for: 900_001, frames: tightFrames),
+            PetSpriteMetrics.targetFill, "a tight canvas keeps the target fill")
+
+        PetSpriteMetrics.reset()
+        var paddedFrames: [CGImage] = []
+        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
+            paddedFrames = [quarter]
+        }
+        expect(PetSpriteMetrics.scale(for: 900_002, frames: paddedFrames) == PetSpriteMetrics.maxScale,
+               "a padded sprite inflates only up to the cap")
+        // Memoized per species: an undecodeable frame list must not undo it.
+        expect(PetSpriteMetrics.scale(for: 900_002, frames: []) == PetSpriteMetrics.maxScale,
+               "the normalization memoizes once measured")
+
+        PetSpriteMetrics.reset()
+        var sprawlFrames: [CGImage] = []
+        if let wideArt = synthetic(256, 64, art: nil) { sprawlFrames = [wideArt] }
+        expect(PetSpriteMetrics.scale(for: 900_003, frames: sprawlFrames) == PetSpriteMetrics.minScale,
+               "extra-wide species are breadth-clamped instead of sprawling")
+
+        PetSpriteMetrics.reset()
+        expect(PetSpriteMetrics.scale(for: 900_004, frames: []) == 1.0,
+               "undecoded sprites render unscaled rather than guessing")
+
         // MARK: Pet moves
 
         // Signature moves win over types; Greninja flings shurikens.
@@ -17696,6 +17848,61 @@ struct MetricsTests {
         ]
         expect(allStyles.count == PetMoveStyle.allCases.count,
                "every declared move style stays covered by pixel art")
+
+        // Every move brings its own art. Styles used to share maps — one orb
+        // for psychic, aura, shadow and dark, one streak for gust and both
+        // dragon moves — so a third of the roster looked identical mid-air.
+        var seenMaps: [[String]: PetMoveStyle] = [:]
+        var seenPalettes: [String: PetMoveStyle] = [:]
+        var seenFlights: [String: PetMoveStyle] = [:]
+        for style in PetMoveStyle.allCases {
+            let sprite = PetMoveArt.sprite(for: style)
+            let name = style.rawValue
+
+            if let twin = seenMaps.updateValue(style, forKey: sprite.map) {
+                expect(false, "\(name) draws its own pixel map, not \(twin.rawValue)'s")
+            }
+            let paletteKey = sprite.palette.sorted { $0.key < $1.key }
+                .map { "\($0.key):\($0.value)" }.joined(separator: ",")
+            if let twin = seenPalettes.updateValue(style, forKey: paletteKey) {
+                expect(false, "\(name) mixes its own palette, not \(twin.rawValue)'s")
+            }
+            let flight = PetMoveArt.flight(for: style)
+            let flightKey = "\(flight.speed)/\(flight.gravity)/\(flight.spread)/"
+                + "\(flight.spin)/\(flight.scale)/\(flight.count)"
+            if let twin = seenFlights.updateValue(style, forKey: flightKey) {
+                expect(false, "\(name) flies its own way, not \(twin.rawValue)'s")
+            }
+
+            // Three inks minimum: two flat colours read as a coloured blob at
+            // this size, not as pixel art.
+            expect(sprite.palette.count >= 3,
+                   "\(name) is drawn in at least three colours (\(sprite.palette.count))")
+            expect(Set(sprite.palette.values).count == sprite.palette.count,
+                   "\(name) never spends two palette keys on the same colour")
+            for hex in sprite.palette.values {
+                expect(hex >= 0 && hex <= 0xFFFFFF, "\(name)'s palette stays inside 24-bit RGB")
+            }
+
+            // Map and palette must agree: an unpainted character draws a hole,
+            // an unused colour is a palette entry nobody can see.
+            let used = Set(sprite.map.joined()).subtracting(["."])
+            expect(used == Set(sprite.palette.keys),
+                   "\(name)'s map and palette name the same inks "
+                   + "(map \(used.sorted()), palette \(sprite.palette.keys.sorted()))")
+            let widths = Set(sprite.map.map(\.count))
+            expect(widths.count == 1, "\(name)'s map is rectangular")
+            expect(sprite.map.count >= 3 && (widths.first ?? 0) >= 3,
+                   "\(name)'s map is big enough to hold a shape")
+
+            // Flight numbers stay in a band the burst can actually draw.
+            expect(flight.count >= 3 && flight.count <= 16,
+                   "\(name) throws between 3 and 16 particles (\(flight.count))")
+            expect(flight.speed > 0 && flight.spread > 0 && flight.scale > 0,
+                   "\(name) flies forwards, opens a fan and has a size")
+            expect(abs(flight.gravity) <= 2.5 && abs(flight.spin) <= 1000,
+                   "\(name)'s pull and spin stay inside the sane band")
+        }
 
 
         // MARK: Result

@@ -9,6 +9,8 @@ extension Notification.Name {
     static let spriteCacheDidUpdate = Notification.Name("PokePal.spriteCacheDidUpdate")
     static let pokePalCelebrate = Notification.Name("PokePal.celebrate")
     static let pokePalToast = Notification.Name("PokePal.toast")
+    /// `userInfo["icon"]` carries the fetched app's NSImage.
+    static let pokePalFetch = Notification.Name("PokePal.fetch")
 }
 
 enum PetMood {

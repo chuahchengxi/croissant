@@ -36,6 +36,8 @@ LAYOUTS = {
 }
 
 SWING = {0: 0.16 * 1.4, 1: 0.16, 2: 0.16 * 0.7}
+# Kept in sync with PetAnimationPackSupport.lidPadPixels.
+LID_PAD_PX = 1.0
 
 
 class Rec:
@@ -143,6 +145,26 @@ def compose_walk(rec, img, zoom, phase):
     return out
 
 
+def lid_rects(rec):
+    """The two lid boxes in canvas pixels — PetAnimationPackSupport.lidRects.
+
+    The measured eye grown by one pixel on every side (the tight box leaves
+    sclera and outline showing) and trimmed apart so a close-set pair never
+    merges into a unibrow.
+    """
+    out = []
+    for x, y, w, h in (rec.leye, rec.reye):
+        out.append([max(0, x - LID_PAD_PX), max(0, y - LID_PAD_PX),
+                    min(rec.cw, x + w + LID_PAD_PX), min(rec.ch, y + h + LID_PAD_PX)])
+    near, far = sorted(out, key=lambda r: r[0])
+    if rec.leye != rec.reye and near[2] > far[0]:
+        inner, outer = sorted((rec.leye, rec.reye), key=lambda r: r[0])
+        seam = (inner[0] + inner[2] + outer[0]) / 2
+        near[2] = max(inner[0] + inner[2], seam - 0.5)
+        far[0] = min(outer[0], seam + 0.5)
+    return [near, far]
+
+
 def compose_blink(rec, img, zoom):
     if zoom > 1:
         img = img.resize((img.width * zoom, img.height * zoom), Image.NEAREST)
@@ -152,11 +174,14 @@ def compose_blink(rec, img, zoom):
     zoom = out.width / rec.cw
     d = ImageDraw.Draw(out)
     lash = tuple(int(c * 0.42) for c in rec.lid)
-    for x, y, w, h in (rec.leye, rec.reye):
-        x, y, w, h = x * zoom, y * zoom, w * zoom, h * zoom
-        d.rounded_rectangle([x, y, x + w, y + h], radius=max(1, h * 0.3),
+    for (x0, y0, x1, y1), eye in zip(lid_rects(rec), sorted((rec.leye, rec.reye))):
+        d.rounded_rectangle([x0 * zoom, y0 * zoom, x1 * zoom, y1 * zoom],
+                            radius=max(1, (y1 - y0) * zoom * 0.16),
                             fill=rec.lid + (255,))
-        d.rectangle([x + w * 0.08, y + h * 0.72, x + w * 0.92, y + h * 0.96],
+        # Lash sized off the measured eye, not the grown lid: scaling it with
+        # the fur turns every wide lid into a black bar.
+        ex, ey, ew, eh = (v * zoom for v in eye)
+        d.rectangle([ex + ew * 0.08, ey + eh * 0.72, ex + ew * 0.92, ey + eh * 0.96],
                     fill=lash + (255,))
     return out
 

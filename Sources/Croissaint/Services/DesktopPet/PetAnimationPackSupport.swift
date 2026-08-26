@@ -108,6 +108,22 @@ enum PetAnimationPackSupport {
     /// Seconds the lids stay shut during one blink.
     static let blinkClosedDuration: TimeInterval = 0.13
 
+    /// How far a lid grows past the measured eye, in canvas pixels.
+    ///
+    /// The pack measures each eye tight against its ink and rounds it to
+    /// whole canvas pixels, so a lid drawn at exactly that size leaves the
+    /// sclera, the shine and the outline ring showing around it — the eye
+    /// still reads open, which a nap holding the pose for minutes makes
+    /// impossible to miss. Over-coverage melts into the lid, painted in the
+    /// species' own fur colour; under-coverage never does.
+    ///
+    /// One pixel, flat: it is a rounding loss being paid back, not a
+    /// proportion. Growing by a share of the eye instead made every
+    /// large-eyed design (most of gen 6 onward, drawn on roomy 96x96
+    /// canvases) wear a slab across its face. Calibration knob: raise it if
+    /// a species still peeks.
+    static let lidPadPixels = 1.0
+
     /// Sleeping pose for a species, as transforms to apply to the whole
     /// sprite-and-eyelids stack: upright buddies tip over onto their side —
     /// a lossless 90° pixel rotation — and `liftY` raises the swung body back
@@ -128,6 +144,56 @@ enum PetAnimationPackSupport {
         // Rotating ±90° about the bottom-center anchor swings the body half
         // a width below the floor line; lift exactly that so it lies ON it.
         return (-90, -width / 2, true)
+    }
+
+    /// The pair of lid rectangles to paint for a species, in the same
+    /// canvas-normalized space as `PetEyeRect`: each measured eye grown by
+    /// the pad above, clamped to the canvas, and kept from touching its
+    /// partner — two lids that meet read as one unibrow.
+    ///
+    /// A lid may only ever grow: the trim between a close-set pair pulls the
+    /// inner edges back to the measured eye and no further, so nothing that
+    /// was covered before ends up exposed. Species that have only one
+    /// visible eye are stored as the same rect twice; that pair is left
+    /// alone, since trimming a rect against itself would halve it.
+    static func lidRects(
+        for motion: PetFaceMotion
+    ) -> (left: PetEyeRect, right: PetEyeRect)? {
+        guard let left = motion.leftEye, let right = motion.rightEye,
+              motion.canvasWidth > 0, motion.canvasHeight > 0
+        else { return nil }
+        let pixelX = 1 / motion.canvasWidth
+        let pixelY = 1 / motion.canvasHeight
+
+        func grown(_ eye: PetEyeRect) -> PetEyeRect {
+            let padX = lidPadPixels * pixelX
+            let padY = lidPadPixels * pixelY
+            let x0 = max(0, eye.x - padX)
+            let y0 = max(0, eye.y - padY)
+            let x1 = min(1, eye.x + eye.width + padX)
+            let y1 = min(1, eye.y + eye.height + padY)
+            return PetEyeRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        }
+
+        var near = grown(left)
+        var far = grown(right)
+        let leftIsNearer = left.x <= right.x
+        let inner = leftIsNearer ? left : right
+        let outer = leftIsNearer ? right : left
+        if !leftIsNearer { swap(&near, &far) }
+        if left != right, near.x + near.width > far.x {
+            let seam = (inner.x + inner.width + outer.x) / 2
+            let nearEdge = max(inner.x + inner.width, seam - pixelX / 2)
+            let farEdge = min(outer.x, seam + pixelX / 2)
+            near = PetEyeRect(
+                x: near.x, y: near.y, width: nearEdge - near.x, height: near.height
+            )
+            far = PetEyeRect(
+                x: farEdge, y: far.y,
+                width: far.x + far.width - farEdge, height: far.height
+            )
+        }
+        return leftIsNearer ? (near, far) : (far, near)
     }
 
     /// Parses pack bytes. Strict on structure: wrong magic, unknown version,

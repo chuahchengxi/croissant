@@ -44,6 +44,7 @@ final class DesktopViewModel: ObservableObject {
     @Published var hearts: [FloatingHeart] = []
     @Published var zzzs: [FloatingZzz] = []
     @Published var moves: [PetMoveInstance] = []
+    @Published var fetched: [FloatingFetch] = []
     @Published var notice: PetNotice?
 
     func spawnHearts(_ count: Int) {
@@ -80,6 +81,13 @@ final class DesktopViewModel: ObservableObject {
         zzzs.append(FloatingZzz(x: .random(in: 24...46), size: .random(in: 9...14)))
         if zzzs.count > 5 { zzzs.removeFirst(zzzs.count - 5) }
     }
+
+    /// The buddy proudly presents the app it just fetched: the icon pops out
+    /// pixelated and drifts up beside it.
+    func spawnFetch(icon: NSImage?) {
+        fetched.append(FloatingFetch(icon: icon.flatMap(PetPixelArt.icon), x: .random(in: (-46)...(-24))))
+        if fetched.count > 3 { fetched.removeFirst(fetched.count - 3) }
+    }
 }
 
 /// One drifting "z" puff while the buddy naps.
@@ -87,6 +95,42 @@ struct FloatingZzz: Identifiable {
     let id = UUID()
     let x: CGFloat
     let size: CGFloat
+}
+
+/// The pixelated app icon the buddy "retrieved" — floats up and fades.
+struct FloatingFetch: Identifiable {
+    let id = UUID()
+    /// Already pixelated (tiny bitmap, nearest-neighbour upscale).
+    let icon: CGImage?
+    let x: CGFloat
+}
+
+struct FloatingFetchView: View {
+    let fetch: FloatingFetch
+    let onDone: () -> Void
+    @State private var risen = false
+
+    var body: some View {
+        Group {
+            if let icon = fetch.icon {
+                Image(decorative: icon, scale: 2)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: "app.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .offset(x: fetch.x + (risen ? 6 : 0), y: risen ? -58 : 8)
+        .opacity(risen ? 0 : 1)
+        .scaleEffect(risen ? 1.15 : 0.4)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.5)) { risen = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) { onDone() }
+        }
+    }
 }
 
 struct FloatingZzzView: View {
@@ -128,6 +172,7 @@ final class DesktopPetController {
 
     private var timer: Timer?
     private var celebrateToken: NSObjectProtocol?
+    private var fetchToken: NSObjectProtocol?
     private var noticePanel: PetNoticePanel?
     private var noticeCancellable: AnyCancellable?
     private var walking = false
@@ -191,6 +236,13 @@ final class DesktopPetController {
                 self?.vm.spawnMove(pet: pet)
             }
         }
+
+        fetchToken = NotificationCenter.default.addObserver(
+            forName: .pokePalFetch, object: nil, queue: .main
+        ) { [weak self] notification in
+            let icon = notification.userInfo?["icon"] as? NSImage
+            self?.vm.spawnFetch(icon: icon)
+        }
     }
 
     /// Tears the walker down: stops ticking and takes the window off screen,
@@ -206,6 +258,10 @@ final class DesktopPetController {
         if let celebrateToken {
             NotificationCenter.default.removeObserver(celebrateToken)
             self.celebrateToken = nil
+        }
+        if let fetchToken {
+            NotificationCenter.default.removeObserver(fetchToken)
+            self.fetchToken = nil
         }
         window?.orderOut(nil)
         isShown = false
@@ -444,8 +500,18 @@ struct DesktopPetView: View {
     @EnvironmentObject private var vm: DesktopViewModel
     @EnvironmentObject private var pet: PetState
 
+    /// Deliberately small — the buddy reads as a pocket creature, and pixel
+    /// art keeps its details at this size. Normalization (PetSpriteMetrics)
+    /// evens out species-to-species differences on top of this.
+    static let buddySpriteHeight: CGFloat = 76
+
     /// When the current joy dance started; nil while the buddy is calm.
     @State private var joyStart: Date?
+
+    /// Bumped whenever any sprite finishes decoding: the normalization scale
+    /// lives in this view (so it can wrap sprite + eyelids together) and must
+    /// recompute once real frames exist.
+    @State private var spriteEpoch = false
 
     /// True while a blink has the lids shut; driven by a scheduled task, so
     /// between blinks nothing renders at all.
@@ -517,6 +583,13 @@ struct DesktopPetView: View {
                 }
             }
 
+            ForEach(vm.fetched) { fetch in
+                FloatingFetchView(fetch: fetch) {
+                    vm.fetched.removeAll { $0.id == fetch.id }
+                }
+                .offset(y: pet.snapshot.sleeping ? 10 : -18)
+            }
+
             if pet.snapshot.sleeping {
                 SleepBubble()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -525,16 +598,28 @@ struct DesktopPetView: View {
                     .allowsHitTesting(false)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .spriteCacheDidUpdate)) { _ in
+            // Re-evaluates body so the normalization scale recomputes now
+            // that real frames exist.
+            spriteEpoch.toggle()
+        }
     }
 
     @ViewBuilder
     private var sprite: some View {
         if let id = pet.dexID {
             let motion = PetAnimationEngine.motion(for: id)
+            // One normalization for the whole stack: the sprite's visible
+            // artwork lands on a common fraction of the box no matter how
+            // much padding its source canvas carries, and the eyelids ride
+            // the same transform so they never drift off the face.
+            let fit = CGFloat(PetSpriteMetrics.scale(
+                for: id, frames: SpriteCache.frames(for: id) ?? []
+            ))
             ZStack {
                 AnimatedSpriteView(
                     id: id,
-                    height: 96,
+                    height: Self.buddySpriteHeight,
                     sleeping: pet.snapshot.sleeping,
                     legMotion: motion,
                     walking: vm.walking,
@@ -542,22 +627,25 @@ struct DesktopPetView: View {
                     // Frozen while asleep: the GIF's own idle frames would
                     // bob the face under the fixed eyelid rects. Frame 0 is
                     // the neutral pose the eye rects were measured on.
-                    paused: !vm.buddyVisible || pet.snapshot.sleeping
+                    paused: !vm.buddyVisible || pet.snapshot.sleeping,
+                    normalizeSize: false
                 )
                 // Eyelids sit inside the same flipped, offset, scaled
                 // hierarchy as the sprite, so they track every body motion.
                 if let motion {
                     PetEyelidsView(
                         motion: motion,
-                        height: 96,
+                        height: Self.buddySpriteHeight,
                         closed: eyesClosed || pet.snapshot.sleeping,
                         sleeping: pet.snapshot.sleeping
                     )
                 }
             }
+            .scaleEffect(fit, anchor: .bottom)
             .modifier(PetSleepPose(
                 sleeping: pet.snapshot.sleeping,
-                widthOverHeight: motion?.widthOverHeight ?? 1
+                widthOverHeight: motion?.widthOverHeight ?? 1,
+                spriteHeight: Self.buddySpriteHeight * fit
             ))
             // PokeAPI front sprites natively face LEFT, so the mirror is
             // what turns a buddy to the right: facing left draws the raw
@@ -734,12 +822,14 @@ struct DesktopPetView: View {
 struct PetSleepPose: ViewModifier {
     let sleeping: Bool
     let widthOverHeight: Double
-    static let spriteHeight: CGFloat = 96
+    /// Display height AFTER size normalization — the tip-over lift is half
+    /// the buddy's real width, so it needs the scaled number.
+    var spriteHeight: CGFloat = 96
 
     func body(content: Content) -> some View {
         let pose = PetAnimationPackSupport.sleepPose(
             canvasWidthOverHeight: widthOverHeight,
-            spriteHeight: Double(Self.spriteHeight)
+            spriteHeight: Double(spriteHeight)
         )
         content
             .rotationEffect(
@@ -758,6 +848,11 @@ struct PetSleepPose: ViewModifier {
 /// the species' own sampled fur colour, so slight over-coverage melts into
 /// the body; only the darker lash line carries the shape. Fades in and out
 /// with plain Core Animation transitions — no render loop of its own.
+///
+/// Geometry comes from `PetAnimationPackSupport.lidRects`, which grows the
+/// measured eye box a touch: drawn at exactly the measured size, the eye's
+/// sclera and outline ring stayed visible around the lid and the buddy
+/// napped with its eyes half open.
 struct PetEyelidsView: View {
     let motion: PetFaceMotion
     let height: CGFloat
@@ -768,9 +863,10 @@ struct PetEyelidsView: View {
     var body: some View {
         let canvasWidth = height * CGFloat(motion.widthOverHeight)
         ZStack {
-            if let left = motion.leftEye, let right = motion.rightEye {
-                lid(left)
-                lid(right)
+            if let rects = PetAnimationPackSupport.lidRects(for: motion),
+               let left = motion.leftEye, let right = motion.rightEye {
+                lid(rects.left, lash: left)
+                lid(rects.right, lash: right)
             }
         }
         .frame(width: canvasWidth, height: height)
@@ -779,22 +875,40 @@ struct PetEyelidsView: View {
         .allowsHitTesting(false)
     }
 
+    /// One shut eye: fur over the whole grown lid box, and the lash line
+    /// sized off the *measured* eye instead of the grown box. Scaling the
+    /// lash with the fur turned every wide lid into a black bar — sunglasses,
+    /// not sleep — while the fur itself, being the species' own colour, can
+    /// spread as far as it needs to without being seen.
     @ViewBuilder
-    private func lid(_ eye: PetEyeRect) -> some View {
-        let width = CGFloat(eye.width) * height * CGFloat(motion.widthOverHeight)
-        let lidHeight = CGFloat(eye.height) * height
-        let x = (CGFloat(eye.x) + CGFloat(eye.width) / 2) * height * CGFloat(motion.widthOverHeight)
-        let y = (CGFloat(eye.y) + CGFloat(eye.height) / 2) * height
+    private func lid(_ fill: PetEyeRect, lash eye: PetEyeRect) -> some View {
+        let canvasWidth = height * CGFloat(motion.widthOverHeight)
+        let width = CGFloat(fill.width) * canvasWidth
+        let lidHeight = CGFloat(fill.height) * height
+        let x = (CGFloat(fill.x) + CGFloat(fill.width) / 2) * canvasWidth
+        let y = (CGFloat(fill.y) + CGFloat(fill.height) / 2) * height
+        let lashWidth = CGFloat(eye.width) * canvasWidth
+        // Centred on the eye, not on the lid: the unibrow trim can pull one
+        // side of a close-set lid in, and the lash must stay on the eye.
+        let lashCentreX = (CGFloat(eye.x) + CGFloat(eye.width) / 2) * canvasWidth
+        let lashCentreY = (CGFloat(eye.y) + CGFloat(eye.height) / 2) * height
         let color = motion.lidColor
         ZStack {
-            RoundedRectangle(cornerRadius: lidHeight * 0.3)
+            // Barely rounded: at the old 0.3 the corners cut back inside the
+            // eye and left four crumbs of it showing.
+            RoundedRectangle(cornerRadius: lidHeight * 0.16)
                 .fill(Color(red: color.red, green: color.green, blue: color.blue))
             // Lash line along the lower lid: the part that actually reads.
             Capsule()
                 .fill(Color(red: color.red * 0.42, green: color.green * 0.42, blue: color.blue * 0.42))
-                .frame(height: max(1.1, lidHeight * 0.24))
-                .offset(y: lidHeight * 0.34)
-                .padding(.horizontal, width * 0.08)
+                .frame(
+                    width: lashWidth * 0.84,
+                    height: max(1.1, CGFloat(eye.height) * height * 0.24)
+                )
+                .offset(
+                    x: lashCentreX - x,
+                    y: lashCentreY - y + CGFloat(eye.height) * height * 0.34
+                )
         }
         .frame(width: width, height: lidHeight)
         .position(x: x, y: y)

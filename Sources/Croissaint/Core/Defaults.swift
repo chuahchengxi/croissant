@@ -620,25 +620,6 @@ enum SupportUpdateIntroInfo {
     }
 }
 
-enum SupportUpdateIntroStep: CaseIterable, Hashable {
-    case social
-    case support
-
-    var next: SupportUpdateIntroStep? {
-        switch self {
-        case .social: return .support
-        case .support: return nil
-        }
-    }
-
-    var previous: SupportUpdateIntroStep? {
-        switch self {
-        case .social: return nil
-        case .support: return .social
-        }
-    }
-}
-
 enum KeepAwakeIconTint: String, CaseIterable, Identifiable {
     case orange, green, blue, purple, pink, none
 

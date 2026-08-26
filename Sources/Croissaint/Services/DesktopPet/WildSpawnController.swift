@@ -329,7 +329,7 @@ struct WildPokemonView: View {
                 .fill(Color.primary.opacity(0.06))
 
             if let id = vm.dexID {
-                AnimatedSpriteView(id: id, height: 160)
+                AnimatedSpriteView(id: id, height: 128)
                     .scaleEffect(spriteGone ? 0.05 : 1)
                     .opacity(spriteGone ? 0 : 1)
                     .scaleEffect(vm.missPulse ? 0.86 : 1)

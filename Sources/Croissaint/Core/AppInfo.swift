@@ -11,7 +11,6 @@ enum AppInfo {
     static let repositoryURL = URL(string: "https://github.com/chuahchengxi/croissant")!
     /// Financial support points at the GitHub project page (star/sponsor).
     static let coffeeURL = URL(string: "https://github.com/chuahchengxi/croissant")!
-    static let socialURL = URL(string: "https://github.com/chuahchengxi/croissant")!
 
     /// The bundle version. The fallback only applies to the bare binary
     /// (e.g. `--selftest`), never the shipped app, which reads its Info.plist.

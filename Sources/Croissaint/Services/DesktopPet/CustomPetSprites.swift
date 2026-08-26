@@ -29,21 +29,30 @@ enum CustomPetSprites {
     /// rendered nearest-neighbour at 3px per cell onto the 128px canvas. The
     /// idle loop bounces with a squash on landing and sneaks a blink into
     /// every second cycle.
+    ///
+    /// No two frames of the loop are the same picture: the six beats each
+    /// carry their own rise and squash, and a sheen slides across the crown
+    /// over the whole twelve, so the second cycle never repeats the first.
+    /// A loop that draws the same frame four times is a shorter loop wearing
+    /// a longer one's delay.
     private static func nailongFrames() -> [CGImage] {
         // (rise, widthScale, heightScale) per beat; scales keep the feet planted.
         let bounce: [(rise: Int, sx: CGFloat, sy: CGFloat)] = [
             (0, 1.00, 1.00),   // rest
-            (2, 1.00, 1.00),   // lift
-            (3, 1.00, 1.00),   // apex
-            (2, 1.00, 1.00),   // fall
-            (0, 1.00, 1.00),   // land
-            (0, 1.05, 0.94),   // squash
+            (2, 0.99, 1.02),   // lift, stretching into it
+            (4, 0.98, 1.03),   // apex
+            (3, 0.99, 1.01),   // fall
+            (1, 1.02, 0.98),   // land
+            (0, 1.06, 0.93),   // squash
         ]
         var frames: [CGImage] = []
         for cycle in 0..<2 {
             for (index, beat) in bounce.enumerated() {
                 let blink = cycle == 1 && index >= 4
-                if let frame = renderPixelFrame(map: nailongMap, blink: blink, beat: beat) {
+                let sheenX = 8 + (cycle * bounce.count + index) * 2
+                if let frame = renderPixelFrame(
+                    map: nailongMap, blink: blink, sheenX: sheenX, beat: beat
+                ) {
                     frames.append(frame)
                 }
             }
@@ -106,14 +115,33 @@ enum CustomPetSprites {
         "K": CGColor(srgbRed: 0.125, green: 0.149, blue: 0.106, alpha: 1),
         "M": CGColor(srgbRed: 0.420, green: 0.227, blue: 0.122, alpha: 1),
         "P": CGColor(srgbRed: 0.941, green: 0.502, blue: 0.549, alpha: 1),
+        "B": CGColor(srgbRed: 0.980, green: 0.647, blue: 0.588, alpha: 1),
+        "S": CGColor(srgbRed: 1.000, green: 0.965, blue: 0.780, alpha: 1),
     ]
 
+    /// Paints `char` over the body cells inside a rectangle. Only plain body
+    /// cells take it, so a stamp can never land on an eye, the belly or an
+    /// outline.
+    private static func stamp(
+        _ cells: inout [String], rows: ClosedRange<Int>, columns: ClosedRange<Int>,
+        with char: Character
+    ) {
+        for y in rows where cells.indices.contains(y) {
+            var chars = Array(cells[y])
+            for x in columns where chars.indices.contains(x) && chars[x] == "Y" {
+                chars[x] = char
+            }
+            cells[y] = String(chars)
+        }
+    }
+
     /// Renders one animation frame: optionally swaps the eyes for closed
-    /// lids, then stamps the map bottom-centre with squash scaling and an
-    /// upward offset. Cells stay axis-aligned rectangles so the pixel grid
-    /// never blurs.
+    /// lids, lays on the blush and the travelling sheen, then stamps the map
+    /// bottom-centre with squash scaling and an upward offset. Cells stay
+    /// axis-aligned rectangles so the pixel grid never blurs.
     private static func renderPixelFrame(
-        map: [String], blink: Bool, beat: (rise: Int, sx: CGFloat, sy: CGFloat)
+        map: [String], blink: Bool, sheenX: Int,
+        beat: (rise: Int, sx: CGFloat, sy: CGFloat)
     ) -> CGImage? {
         var cells = map
         if blink {
@@ -128,6 +156,15 @@ enum CustomPetSprites {
                 for x in 21...27 where (11...12).contains(y) && chars[x] == "Y" { chars[x] = "O" }
                 cells[y] = String(chars)
             }
+        }
+        // Warm cheeks under the eyes, and a pale sheen sliding across the
+        // crown on a slant. The sheen is what makes every frame of the loop
+        // its own picture; the blush is just colour the flat gold was missing.
+        stamp(&cells, rows: 15...17, columns: 8...10, with: "B")
+        stamp(&cells, rows: 15...17, columns: 29...31, with: "B")
+        for (offset, y) in (2...5).enumerated() {
+            stamp(&cells, rows: y...y, columns: (sheenX + offset)...(sheenX + offset + 1),
+                  with: "S")
         }
         let cell: CGFloat = 3
         let side = CGFloat(cells.count) * cell

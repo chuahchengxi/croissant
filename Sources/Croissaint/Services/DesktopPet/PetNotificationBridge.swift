@@ -10,9 +10,9 @@ import SwiftUI
 enum PetPixelArt {
     /// Renders text as chunky pixel type: bold monospaced glyphs with a
     /// hard black outline and white fill, word-wrapped onto at most two
-    /// lines, then upscaled nearest-neighbour when there is room. Sizing is
-    /// dynamic — the caller reads the returned image's dimensions and gives
-    /// the banner exactly that much room.
+    /// lines. Every banner renders at the same fixed scale — a per-banner
+    /// "shrink long text" rule used to make consecutive notifications look
+    /// like two different fonts.
     static func text(_ raw: String) -> CGImage? {
         let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
@@ -42,10 +42,9 @@ enum PetPixelArt {
             )
         }
         image.unlockFocus()
-        // Chunky 2× for short text; 1× keeps long text inside the panel.
-        let factor = width * 2 <= 296 ? 2 : 1
+        // Fixed 2× for every banner: one size, one font, always.
         return upscaled(
-            image.cgImage(forProposedRect: nil, context: nil, hints: nil), factor: factor
+            image.cgImage(forProposedRect: nil, context: nil, hints: nil), factor: 2
         )
     }
 

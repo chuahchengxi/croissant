@@ -954,9 +954,6 @@ struct Strings {
     let supportIntroCoffeeButton: String
     let supportIntroLaterButton: String
     let supportIntroDoneButton: String
-    let communityIntroTitle: String
-    let communityIntroMessage: String
-    let communityIntroFollowButton: String
     let homebrewOfficialIntroTitle: String
     let homebrewOfficialIntroMessage: String
     let homebrewOfficialIntroInstallLabel: String
@@ -1921,9 +1918,6 @@ extension Strings {
         supportIntroCoffeeButton: "Apoiar no GitHub Stars",
         supportIntroLaterButton: "Agora não",
         supportIntroDoneButton: "Concluir",
-        communityIntroTitle: "Vem ver antes de todo mundo",
-        communityIntroMessage: "Quem já me seguia no X viu várias novidades desta atualização antes de todo mundo. Lá eu posto prévias do que vem depois e mostro como funciona, para você já saber o básico antes mesmo da atualização sair. Segue lá e veja o que vem depois!",
-        communityIntroFollowButton: "Seguir @chuahchengxi no X",
         homebrewOfficialIntroTitle: "Agora no catálogo oficial do Homebrew",
         homebrewOfficialIntroMessage: "O Croissaint agora pode ser instalado direto do catálogo oficial do Homebrew.",
         homebrewOfficialIntroInstallLabel: "Nova instalação",
@@ -2883,9 +2877,6 @@ extension Strings {
         supportIntroCoffeeButton: "Support on GitHub Stars",
         supportIntroLaterButton: "Not now",
         supportIntroDoneButton: "Done",
-        communityIntroTitle: "See it before everyone else",
-        communityIntroMessage: "People who already followed me on X saw several changes in this update before anyone else. I post previews of what is coming and show how it works, so you already know the basics before the update ships. Follow along and see what comes next!",
-        communityIntroFollowButton: "Follow @chuahchengxi on X",
         homebrewOfficialIntroTitle: "Now in the official Homebrew catalog",
         homebrewOfficialIntroMessage: "Croissaint can now be installed directly from the official Homebrew catalog.",
         homebrewOfficialIntroInstallLabel: "New installation",
