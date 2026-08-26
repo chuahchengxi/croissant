@@ -10858,7 +10858,7 @@ struct MetricsTests {
                    "no em-dash in visible camera preview strings (\(language.rawValue))")
             let radialMenuValues = Mirror(reflecting: FeatureStrings.radialMenu(language)).children
                 .compactMap { $0.value as? String }
-            expect(radialMenuValues.count == 58 && radialMenuValues.allSatisfy { !$0.isEmpty },
+            expect(radialMenuValues.count == 90 && radialMenuValues.allSatisfy { !$0.isEmpty },
                    "every radial menu string is set for \(language.rawValue)")
             expect(radialMenuValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible radial menu strings (\(language.rawValue))")
@@ -11860,6 +11860,158 @@ struct MetricsTests {
                 && RadialMenuTool.cleaningMode.isRunnable(isFeatureAvailable: { _ in true },
                                                           boolFor: { _ in false }),
                "Shelf wheel slices follow the Shelf master switch without affecting on-demand tools")
+
+        // MARK: Radial menu profiles
+
+        let allColors = RadialMenuColor.allCases
+        expect(allColors.count == 12
+                && Set(allColors.map(\.rawValue)).count == 12
+                && allColors.allSatisfy { $0.id == $0.rawValue },
+               "twelve distinct radial menu accent colors")
+        let enStrings = FeatureStrings.radialMenu(.enUS)
+        expect(RadialMenuColor.accent.title(enStrings) == "Accent"
+                && RadialMenuColor.blue.title(enStrings) == "Blue"
+                && RadialMenuColor.purple.title(enStrings) == "Purple"
+                && RadialMenuColor.pink.title(enStrings) == "Pink"
+                && RadialMenuColor.red.title(enStrings) == "Red"
+                && RadialMenuColor.orange.title(enStrings) == "Orange"
+                && RadialMenuColor.yellow.title(enStrings) == "Yellow"
+                && RadialMenuColor.green.title(enStrings) == "Green"
+                && RadialMenuColor.mint.title(enStrings) == "Mint"
+                && RadialMenuColor.cyan.title(enStrings) == "Cyan"
+                && RadialMenuColor.indigo.title(enStrings) == "Indigo"
+                && RadialMenuColor.graphite.title(enStrings) == "Graphite",
+               "radial menu color titles localize properly")
+
+        let allPresets = RadialMenuProfilePreset.allCases
+        expect(allPresets.count == 6
+                && Set(allPresets.map(\.rawValue)).count == 6
+                && allPresets.allSatisfy { $0.id == $0.rawValue },
+               "six distinct radial profile presets")
+        expect(RadialMenuProfilePreset.general.makeItems().count == 6
+                && RadialMenuProfilePreset.media.makeItems().count == 4
+                && RadialMenuProfilePreset.tools.makeItems().count == 6
+                && RadialMenuProfilePreset.windowLayout.makeItems().count == 5
+                && RadialMenuProfilePreset.quickToggles.makeItems().count == 5
+                && RadialMenuProfilePreset.blank.makeItems().isEmpty,
+               "presets generate expected initial item layouts")
+
+        let customProfile = RadialMenuProfile(
+            id: UUID(),
+            name: " Media Wheel ",
+            color: .purple,
+            shortcut: "control+command:49",
+            mouseButton: RadialMenuMouseTrigger.back.rawValue,
+            items: RadialMenuProfilePreset.media.makeItems()
+        )
+        expect(customProfile.displayName(enStrings) == " Media Wheel ",
+               "profile custom name is displayed")
+        let blankNamedProfile = RadialMenuProfile(name: "", color: .accent)
+        expect(blankNamedProfile.displayName(enStrings) == enStrings.presetGeneral,
+               "blank profile name falls back to General preset title")
+
+        let encodedProfilesData = RadialMenuSupport.encodeProfiles([customProfile])
+        let decodedProfiles = RadialMenuSupport.decodeProfiles(encodedProfilesData)
+        expect(decodedProfiles.count == 1
+                && decodedProfiles[0].id == customProfile.id
+                && decodedProfiles[0].name == "Media Wheel"
+                && decodedProfiles[0].color == .purple
+                && decodedProfiles[0].shortcut == "control+command:49"
+                && decodedProfiles[0].mouseButton == RadialMenuMouseTrigger.back.rawValue
+                && decodedProfiles[0].items.count == 4,
+               "profile encodes and decodes accurately with trimmed name")
+
+        let dupID = UUID()
+        let dups = [
+            RadialMenuProfile(id: dupID, name: "First"),
+            RadialMenuProfile(id: dupID, name: "Duplicate"),
+            RadialMenuProfile(id: UUID(), name: "  Trim Me  ", shortcut: "invalidShortcutFormat"),
+        ]
+        let sanitizedDups = RadialMenuSupport.sanitizedProfiles(dups)
+        expect(sanitizedDups.count == 2
+                && sanitizedDups[0].name == "First"
+                && sanitizedDups[1].name == "Trim Me"
+                && sanitizedDups[1].shortcut.isEmpty,
+               "sanitized profiles deduplicate IDs, trim names, and drop invalid shortcuts")
+
+        let emptySanitized = RadialMenuSupport.sanitizedProfiles([])
+        expect(emptySanitized.count == 1
+                && emptySanitized[0].color == .accent
+                && !emptySanitized[0].shortcut.isEmpty
+                && emptySanitized[0].items.count == 6,
+               "sanitizing empty profile list provides one default starter profile")
+
+        let appOnlyProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.off.rawValue,
+            items: [RadialMenuItem(kind: .app, payload: "/Applications/Safari.app")]
+        )
+        expect(!RadialMenuSupport.needsAccessibility([appOnlyProfile]),
+               "app-only profile without mouse button does not need Accessibility")
+        let mouseProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.forward.rawValue,
+            items: [RadialMenuItem(kind: .app, payload: "/Applications/Safari.app")]
+        )
+        expect(RadialMenuSupport.needsAccessibility([mouseProfile]),
+               "profile with mouse trigger needs Accessibility")
+        let shortcutProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.off.rawValue,
+            items: [RadialMenuItem(kind: .shortcut, payload: "command:8")]
+        )
+        expect(RadialMenuSupport.needsAccessibility([shortcutProfile]),
+               "profile with keyboard shortcut slice needs Accessibility")
+
+        let profileTestDefaults = UserDefaults(suiteName: "com.vorssaint.tests.radialProfiles")!
+        profileTestDefaults.removePersistentDomain(forName: "com.vorssaint.tests.radialProfiles")
+        profileTestDefaults.set(true, forKey: AppFeature.radialMenu.availabilityKey)
+        profileTestDefaults.set(true, forKey: DefaultsKey.radialMenuEnabled)
+
+        let profileA = RadialMenuProfile(
+            name: "Work",
+            mouseButton: RadialMenuMouseTrigger.back.rawValue
+        )
+        let profileB = RadialMenuProfile(
+            name: "Fun",
+            mouseButton: RadialMenuMouseTrigger.button(4).rawValue
+        )
+        profileTestDefaults.set(RadialMenuSupport.encodeProfiles([profileA, profileB]), forKey: DefaultsKey.radialMenuProfiles)
+
+        expect(RadialMenuSupport.claimsMouseButton(MouseButtonShortcutSupport.backButtonNumber, defaults: profileTestDefaults),
+               "claims button 3 from profile A")
+        expect(RadialMenuSupport.claimsMouseButton(4, defaults: profileTestDefaults),
+               "claims button 4 from profile B")
+        expect(!RadialMenuSupport.claimsMouseButton(5, defaults: profileTestDefaults),
+               "does not claim unclaimed button 5")
+
+        profileTestDefaults.set(false, forKey: DefaultsKey.radialMenuEnabled)
+        expect(!RadialMenuSupport.claimsMouseButton(MouseButtonShortcutSupport.backButtonNumber, defaults: profileTestDefaults),
+               "disabled radial menu never claims mouse buttons")
+        profileTestDefaults.removePersistentDomain(forName: "com.vorssaint.tests.radialProfiles")
+
+        let testImage = NSImage(size: NSSize(width: 16, height: 16))
+        testImage.lockFocus()
+        NSColor.red.set()
+        NSRect(x: 0, y: 0, width: 16, height: 16).fill()
+        testImage.unlockFocus()
+        let samplePNG = RadialMenuFaviconFetcher.scaledPNGData(from: testImage, targetSize: 32)
+        expect(samplePNG != nil && (samplePNG?.count ?? 0) > 0, "scaledPNGData produces valid PNG")
+
+        let itemWithFavicon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: samplePNG)
+        let encodedFaviconData = RadialMenuSupport.encode([itemWithFavicon])
+        let decodedFaviconItem = RadialMenuSupport.decode(encodedFaviconData).first
+        expect(decodedFaviconItem?.customIconData == samplePNG,
+               "customIconData survives encode and decode")
+
+        let oversizedData = Data(repeating: 0xFF, count: 70_000)
+        let itemWithOversizedIcon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: oversizedData)
+        let sanitizedOversized = RadialMenuSupport.sanitized([itemWithOversizedIcon]).first
+        expect(sanitizedOversized?.customIconData == nil,
+               "sanitized drops oversized customIconData")
+
+        let invalidImageData = Data([0x00, 0x01, 0x02, 0x03])
+        let itemWithInvalidIcon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: invalidImageData)
+        let sanitizedInvalid = RadialMenuSupport.sanitized([itemWithInvalidIcon]).first
+        expect(sanitizedInvalid?.customIconData == nil,
+               "sanitized drops corrupted customIconData that cannot form an NSImage")
 
         // MARK: Dock click with AX-blind apps (issue #200)
 
