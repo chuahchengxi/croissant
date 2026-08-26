@@ -6,12 +6,8 @@ import Foundation
 
 enum UpdateShowcaseInfo {
     static let releaseVersion = "3.1.4"
-    static let mediaAssetName = "vorssaint-3.1.4-showcase-1.mp4"
+    static let mediaAssetName = "showcase.mp4"
     static let mediaSHA256 = "88031b2b48708b8eb96248fef1143432a0600382b59ad5ea39e0746af27ab9e8"
-
-    static var remoteMediaURL: URL {
-        URL(string: "https://github.com/vorssaintapp/vorssaint-utils/releases/download/v\(releaseVersion)/\(mediaAssetName)")!
-    }
 
     static var localDeveloperMediaURL: URL? {
         guard AppInfo.isDeveloperBuild else { return nil }
@@ -87,34 +83,16 @@ final class UpdateShowcaseMediaLoader: ObservableObject {
         }
         try? FileManager.default.removeItem(at: cached)
 
-        state = .loading
-        let request = URLRequest(url: UpdateShowcaseInfo.remoteMediaURL,
-                                 cachePolicy: .reloadIgnoringLocalCacheData,
-                                 timeoutInterval: 12)
-        task = URLSession.shared.downloadTask(with: request) { [weak self] tempURL, response, error in
-            guard let self else { return }
-            let ok = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? true
-            guard let tempURL, error == nil, ok else {
-                DispatchQueue.main.async { self.state = .failed }
-                return
-            }
-            guard UpdateShowcaseInfo.mediaIsTrusted(at: tempURL) else {
-                DispatchQueue.main.async { self.state = .failed }
-                return
-            }
-
-            do {
-                try FileManager.default.createDirectory(at: UpdateShowcaseInfo.cacheDirectory,
-                                                        withIntermediateDirectories: true)
-                let target = UpdateShowcaseInfo.cachedMediaURL
-                try? FileManager.default.removeItem(at: target)
-                try FileManager.default.moveItem(at: tempURL, to: target)
-                DispatchQueue.main.async { self.state = .ready(target) }
-            } catch {
-                DispatchQueue.main.async { self.state = .failed }
-            }
-        }
-        task?.resume()
+        // The media used to be fetched from the upstream project's releases.
+        // This fork does not publish a showcase asset and does not reach into
+        // anyone else's repository for one, so there is nothing to download:
+        // a developer override or a warm cache plays, otherwise the step shows
+        // its own "unavailable" copy and the user continues past it.
+        // ponytail: the whole showcase is unreachable anyway — AppDelegate
+        // gates it on AppInfo.version == "3.1.4", which this fork's 0.0.x
+        // numbering can never match. Delete the feature outright (view,
+        // strings, defaults keys) if it is still dead next time it is touched.
+        state = .failed
     }
 
     func cancel() {

@@ -31,12 +31,6 @@
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/M6BwWH4BJp">
-    <img src="docs/assets/readme/discord-symbol.svg" width="72" alt="Discord">
-  </a>
-</p>
-
-<p align="center">
   For partnerships or anything private, email
   <a href="https://github.com/chuahchengxi/croissant/issues"><strong>GitHub Issues</strong></a>.
 </p>
@@ -189,7 +183,7 @@ To remove Croissaint completely, including its settings and permissions:
 
 ## Private by default
 
-Croissaint is local-first, with no account, analytics or tracking. The network is touched only by things you can see: update checks, the speed test, Homebrew actions, temporary screenshot or recording links and feedback you explicitly send. The full story is in the [privacy notes](docs/PRIVACY.md).
+Croissaint is local-first, with no account, analytics or tracking. The network is touched only by things you can see: update checks, the speed test and Homebrew actions. Nothing you capture, type or copy is ever uploaded. The full story is in the [privacy notes](docs/PRIVACY.md).
 
 Permissions get the same treatment. Every one is optional, the app explains each in plain words, shows which features actually use it, and even tells you when a permission you granted is no longer needed by anything, with a shortcut to revoke it.
 
