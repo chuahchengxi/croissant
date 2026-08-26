@@ -578,8 +578,15 @@ final class DesktopPetController {
 extension DesktopPetController {
     static let minThrowSpeed: Double = 380
 
+    /// Winged species don't fall: a toss glides to a hover and the buddy
+    /// keeps living at whatever altitude it stopped at.
+    private var petFloats: Bool {
+        guard let id = pet?.dexID else { return false }
+        return PetAnimationEngine.motion(for: id)?.hasWings == true
+    }
+
     /// Launches the buddy with the release flick; it then flies, bounces and
-    /// rolls under the same feel as the wild-encounter ball.
+    /// rolls with the Ball.app desk-toy feel (floaters glide instead).
     private func beginThrow(vx: Double, vy: Double) {
         cancelFlight()
         vm.thrown = true
@@ -610,10 +617,11 @@ extension DesktopPetController {
 
         let substep = 1.0 / 120.0
         let box = window?.frame.size ?? CGSize(width: 170, height: 170)
+        let floats = petFloats
         while flightAccumulator >= substep, flightState != nil {
             flightAccumulator -= substep
             let (next, events) = DesktopThrowSupport.step(
-                state, dt: substep, box: box, bounds: boundsRect
+                state, dt: substep, box: box, bounds: boundsRect, floats: floats
             )
             state = next
             if events.hitFloor || events.hitCeiling {
@@ -651,7 +659,8 @@ extension DesktopPetController {
         applyFrame()
         pet?.setDesktopPos(x: Double(pos.x), y: Double(pos.y))
         remaining = Double.random(in: 2...4)
-        vm.spawnDizzy()
+        // A floater eases to a hover; only a grounded crash-landing dazes.
+        if !petFloats { vm.spawnDizzy() }
         vm.thrown = false
     }
 

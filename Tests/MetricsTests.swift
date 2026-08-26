@@ -18092,8 +18092,9 @@ struct MetricsTests {
 
         // MARK: Desktop buddy throw physics
 
-        // The buddy flies under the same feel as the ball throw: fixed-step
-        // gravity, bouncy walls, a floor that turns the bounce into a skid.
+        // The buddy flies with the Ball.app desk-toy feel: fixed-step gravity,
+        // 0.6 restitution on every edge, a floor that turns the bounce into a
+        // skid, and no gravity at all for floaters.
         let box = CGSize(width: 170, height: 170)
         let bounds = CGRect(x: 0, y: 0, width: 1440, height: 900)
         let floorY = Double(bounds.minY)
@@ -18103,16 +18104,16 @@ struct MetricsTests {
         var st = DesktopThrowSupport.State(x: 700, y: 500, vx: 0, vy: 0)
         var bounced = false
         var landedCount = 0
-        let dropHeight = 500.0
-        let incoming = (2 * DesktopThrowSupport.Constants.gravity * dropHeight).squareRoot()
+        var preImpactVy = 0.0
         for _ in 0..<1800 {
+            if !bounced { preImpactVy = st.vy }
             let (next, events) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
             st = next
             if events.hitFloor {
                 if !bounced {
-                    // First touchdown reflects at floor restitution.
-                    expect(abs(st.vy - incoming * DesktopThrowSupport.Constants.floorRestitution) < 25,
-                           "the first bounce keeps \(DesktopThrowSupport.Constants.floorRestitution) of the impact")
+                    // First touchdown reflects the impact speed at restitution.
+                    expect(abs(st.vy + preImpactVy * DesktopThrowSupport.Constants.restitution) < 25,
+                           "the first bounce keeps \(DesktopThrowSupport.Constants.restitution) of the impact")
                 }
                 bounced = true
             }
@@ -18165,6 +18166,19 @@ struct MetricsTests {
             }
         }
         expect(hitCeiling, "an upward throw meets the ceiling, not outer space")
+
+        // Floaters: gravity off — a flicked flyer glides level and comes to
+        // rest hovering mid-air instead of arcing to the floor.
+        st = DesktopThrowSupport.State(x: 700, y: 500, vx: 600, vy: 0)
+        var floatLanded = false
+        for _ in 0..<2400 {
+            let (next, events) = DesktopThrowSupport.step(
+                st, dt: 1.0 / 120, box: box, bounds: bounds, floats: true)
+            st = next
+            if events.landed { floatLanded = true; break }
+        }
+        expect(floatLanded && st.y == 500 && st.vx == 0 && st.vy == 0,
+               "a floater's toss glides to a mid-air stop instead of falling")
 
         // Flick reading: clean samples give mean velocity; junk gives zero.
         let t0 = Date()
