@@ -188,7 +188,6 @@ struct HUDBackdrop: View {
                     .fill(colorScheme == .dark ? Color.black : Color.white)
                     .opacity(plateOpacity)
             )
-        #endif
     }
 }
 
