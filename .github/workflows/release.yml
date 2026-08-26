@@ -55,7 +55,7 @@ jobs:
           fi
 
       - name: Build
-        run: ./build.sh
+        run: ./build.sh --allow-adhoc
 
       - name: Selftest
         run: ./build/Croissaint --selftest
