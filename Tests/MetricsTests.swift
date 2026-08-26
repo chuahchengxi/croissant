@@ -17817,6 +17817,138 @@ struct MetricsTests {
         expect(PetSpriteMetrics.scale(for: 900_004, frames: []) == 1.0,
                "undecoded sprites render unscaled rather than guessing")
 
+        // MARK: Desktop buddy throw physics
+
+        // The buddy flies under the same feel as the ball throw: fixed-step
+        // gravity, bouncy walls, a floor that turns the bounce into a skid.
+        let box = CGSize(width: 170, height: 170)
+        let bounds = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let floorY = Double(bounds.minY)
+
+        // Free fall from rest accelerates by g·dt each step, bounces off the
+        // floor at restitution, then friction ends the roll with one landed.
+        var st = DesktopThrowSupport.State(x: 700, y: 500, vx: 0, vy: 0)
+        var bounced = false
+        var landedCount = 0
+        let dropHeight = 500.0
+        let incoming = (2 * DesktopThrowSupport.Constants.gravity * dropHeight).squareRoot()
+        for _ in 0..<1800 {
+            let (next, events) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
+            st = next
+            if events.hitFloor {
+                if !bounced {
+                    // First touchdown reflects at floor restitution.
+                    expect(abs(st.vy - incoming * DesktopThrowSupport.Constants.floorRestitution) < 25,
+                           "the first bounce keeps \(DesktopThrowSupport.Constants.floorRestitution) of the impact")
+                }
+                bounced = true
+            }
+            if events.landed { landedCount += 1 }
+            if events.landed, st.vx == 0 { break }
+        }
+        expect(bounced, "a fall from height bounces at least once")
+        expect(st.y == floorY && st.vx == 0 && st.vy >= 0,
+               "friction brings the roll to a full stop on the floor")
+        expect(landedCount == 1, "landed fires exactly once per throw")
+
+        // A gentle touch-down under the bounce cutoff collapses straight
+        // into a skid: no bounce event, immediate rest.
+        st = DesktopThrowSupport.State(x: 700, y: floorY, vx: 40, vy: -60)
+        var gentle = DesktopThrowSupport.Events()
+        (st, gentle) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
+        expect(!gentle.hitFloor && st.vy == 0,
+               "an under-cutoff touchdown collapses instead of bouncing")
+
+        // Walls reflect with their own restitution and keep the body inside.
+        st = DesktopThrowSupport.State(x: 10, y: 400, vx: -800, vy: 0)
+        var wallEvents = DesktopThrowSupport.Events()
+        for _ in 0..<60 {
+            let (next, events) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
+            st = next
+            if events.hitWall { wallEvents = events; break }
+        }
+        expect(wallEvents.hitWall && st.x == Double(bounds.minX) && st.vx > 0,
+               "a left wall hit reflects rightward at the boundary")
+        st = DesktopThrowSupport.State(x: 1300, y: 400, vx: 800, vy: 0)
+        for _ in 0..<60 {
+            let (next, events) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
+            st = next
+            if events.hitWall { break }
+        }
+        expect(st.x == Double(bounds.maxX) - Double(box.width),
+               "a right wall hit clamps to the visible frame edge")
+
+        // The ceiling stops upward flight inside the screen.
+        st = DesktopThrowSupport.State(x: 700, y: 700, vx: 0, vy: 2000)
+        var hitCeiling = false
+        for _ in 0..<240 {
+            let (next, events) = DesktopThrowSupport.step(st, dt: 1.0 / 120, box: box, bounds: bounds)
+            st = next
+            if events.hitCeiling {
+                hitCeiling = true
+                expect(st.y == Double(bounds.maxY) - Double(box.height),
+                       "ceiling hits clamp to the top of the visible frame")
+                break
+            }
+        }
+        expect(hitCeiling, "an upward throw meets the ceiling, not outer space")
+
+        // Flick reading: clean samples give mean velocity; junk gives zero.
+        let t0 = Date()
+        let good = DesktopThrowSupport.releaseVelocity(samples: [
+            (t0, CGPoint(x: 100, y: 100)),
+            (t0.addingTimeInterval(0.05), CGPoint(x: 150, y: 190)),
+        ])
+        expectClose(good.dx, 1000, "flick x velocity is the sample delta over dt", tol: 0.01)
+        expectClose(good.dy, 1800, "flick y velocity is the sample delta over dt", tol: 0.01)
+        expect(DesktopThrowSupport.releaseVelocity(samples: []).dx == 0,
+               "no samples means no flick")
+
+        // MARK: Notification payloads (any posting app)
+
+        // The usernoted store hands over binary property lists with short
+        // keys; apps fill them unevenly, and every shape must render.
+        func payload(_ title: String?, _ subtitle: String?, _ body: String?, _ app: String?) -> Data? {
+            PetNoticeParsing.encode(title: title, subtitle: subtitle, body: body, app: app)
+        }
+
+        if let data = payload("Mail", "Inbox", "New message from Ada", "com.apple.mail") {
+            let parsed = PetNoticeParsing.parse(data)
+            expectEqual(parsed?.text ?? "", "Mail — Inbox — New message from Ada",
+                        "title, subtitle and body join in order")
+            expect(parsed?.bundleID == "com.apple.mail",
+                   "the bundle id survives for icon lookup")
+        } else {
+            expect(false, "a full payload encodes")
+        }
+
+        if let data = payload("Timer", nil, "Done!", "com.apple.mobiletimer") {
+            expectEqual(PetNoticeParsing.parse(data)?.text ?? "",
+                        "Timer — Done!", "a missing subtitle is skipped, not an empty segment")
+        } else {
+            expect(false, "a body-only-plus-title payload encodes")
+        }
+
+        if let data = payload(nil, nil, "Your battery is low", nil) {
+            let parsed = PetNoticeParsing.parse(data)
+            expectEqual(parsed?.text ?? "", "Your battery is low",
+                        "body-only notifications (no title) still show")
+            expect(parsed?.bundleID == nil,
+                   "an anonymous notification has no bundle to look up")
+        } else {
+            expect(false, "a body-only payload encodes")
+        }
+
+        if let data = payload("  ", "\n", "   ", "com.silent") {
+            expect(PetNoticeParsing.parse(data) == nil,
+                   "a whitespace-only notification shows nothing at all")
+        } else {
+            expect(false, "a whitespace payload encodes")
+        }
+        expect(PetNoticeParsing.parse(Data("not a plist".utf8)) == nil,
+               "garbage bytes never crash the poller")
+        expect(PetNoticeParsing.parse(Data()) == nil, "an empty blob reads as nothing")
+
         // MARK: Pet moves
 
         // Signature moves win over types; Greninja flings shurikens.

@@ -45,7 +45,21 @@ final class DesktopViewModel: ObservableObject {
     @Published var zzzs: [FloatingZzz] = []
     @Published var moves: [PetMoveInstance] = []
     @Published var fetched: [FloatingFetch] = []
+    @Published var dizzyStars: [FloatingDizzy] = []
     @Published var notice: PetNotice?
+    /// Live while the buddy is mid-throw: the accumulated tumble angle the
+    /// sprite spins through, updated per physics step.
+    @Published var throwTumble: Double = 0
+    /// True from launch until the buddy settles, so views know to animate
+    /// flight instead of walk cycles.
+    @Published var thrown = false {
+        didSet { if !thrown { throwTumble = 0 } }
+    }
+    /// Bumped on every floor bounce; views play a landing squash per bump.
+    @Published var impactCount = 0
+    /// Bumped whenever a real system notification reaches the buddy, so the
+    /// it reacts (startled hop) instead of just growing a banner.
+    @Published var alertPulse = 0
 
     func spawnHearts(_ count: Int) {
         for _ in 0..<count {
@@ -63,10 +77,16 @@ final class DesktopViewModel: ObservableObject {
     }
 
     /// Replaces any visible banner; auto-dismisses unless a newer one lands.
-    func showNotice(text: String, icon: NSImage?) {
+    /// System notifications (not in-app toasts) also startle the buddy —
+    /// the hop + popped app icon are what tie the notice to the pokemon.
+    func showNotice(text: String, icon: NSImage?, startles: Bool = false) {
         let notice = PetNotice(text: PetPixelArt.text(text), icon: icon.flatMap(PetPixelArt.icon))
         withAnimation(.easeOut(duration: 0.25)) {
             self.notice = notice
+        }
+        if startles {
+            alertPulse += 1
+            spawnFetch(icon: icon)
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.5) { [weak self] in
             withAnimation(.easeIn(duration: 0.3)) {
@@ -87,6 +107,13 @@ final class DesktopViewModel: ObservableObject {
     func spawnFetch(icon: NSImage?) {
         fetched.append(FloatingFetch(icon: icon.flatMap(PetPixelArt.icon), x: .random(in: (-46)...(-24))))
         if fetched.count > 3 { fetched.removeFirst(fetched.count - 3) }
+    }
+
+    /// Post-landing dizzy stars for a rough touchdown.
+    func spawnDizzy() {
+        let star = FloatingDizzy(x: .random(in: -14...14), size: .random(in: 9...13))
+        dizzyStars.append(star)
+        if dizzyStars.count > 4 { dizzyStars.removeFirst(dizzyStars.count - 4) }
     }
 }
 
@@ -130,6 +157,39 @@ struct FloatingFetchView: View {
             withAnimation(.easeOut(duration: 1.5)) { risen = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) { onDone() }
         }
+    }
+}
+
+/// A dizzy star circling the buddy's head after a hard landing.
+struct FloatingDizzy: Identifiable {
+    let id = UUID()
+    let x: CGFloat
+    let size: CGFloat
+}
+
+struct FloatingDizzyView: View {
+    let star: FloatingDizzy
+    let onDone: () -> Void
+    @State private var spin = false
+    @State private var faded = false
+
+    var body: some View {
+        Image(systemName: "star.fill")
+            .font(.system(size: star.size))
+            .foregroundStyle(.yellow.opacity(0.9))
+            .shadow(color: .black.opacity(0.2), radius: 1)
+            .offset(x: star.x + (spin ? -star.x * 2 : 0), y: -14)
+            .rotationEffect(.degrees(spin ? 260 : -60))
+            .opacity(faded ? 0 : 0.95)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    spin = true
+                }
+                withAnimation(.easeIn(duration: 0.4).delay(1.0)) {
+                    faded = true
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) { onDone() }
+            }
     }
 }
 
@@ -185,6 +245,13 @@ final class DesktopPetController {
     private var lastSleeping = false
     private var nextZzzAt = Date.distantPast
     private var lastTickAt = Date()
+    /// Trailing drag samples for the release flick that starts a throw.
+    private var dragSamples: [(time: Date, point: CGPoint)] = []
+    /// Live throw physics; nil while the buddy is standing on the ground.
+    private var flightState: DesktopThrowSupport.State?
+    private var flightTimer: Timer?
+    private var flightLastStepAt = Date()
+    private var flightAccumulator: TimeInterval = 0
     /// Origin last pushed to the window server; skips redundant frame moves.
     private var appliedOrigin: NSPoint?
     private static let speed: CGFloat = 60 // px/s
@@ -250,6 +317,7 @@ final class DesktopPetController {
     func stop() {
         timer?.invalidate()
         timer = nil
+        cancelFlight()
         PetNotificationBridge.shared.stop()
         noticeCancellable?.cancel()
         noticeCancellable = nil
@@ -322,6 +390,10 @@ final class DesktopPetController {
         updateVisibility()
 
         guard window?.isVisible == true, !isDragging, pet.snapshot.species != nil else { return }
+
+        // Mid-flight the physics timer owns the body: no wander AI, no nap
+        // gliding — just the arc.
+        if flightState != nil { return }
 
         // React to sleep/wake transitions.
         let sleeping = pet.snapshot.sleeping
@@ -436,12 +508,133 @@ final class DesktopPetController {
         }
     }
 
-    fileprivate func dragBegan() { isDragging = true; walking = false }
-    fileprivate func dragMoved(to point: CGPoint) { pos = point; clampPos(); applyFrame() }
+    fileprivate func dragBegan() {
+        isDragging = true
+        walking = false
+        // Grabbing a buddy mid-flight catches it out of the air.
+        cancelFlight()
+        dragSamples = [(Date(), NSEvent.mouseLocation)]
+    }
+
+    fileprivate func dragMoved(to point: CGPoint) {
+        pos = point
+        clampPos()
+        applyFrame()
+        let now = Date()
+        dragSamples.append((now, point))
+        while dragSamples.count > 2,
+              let first = dragSamples.first,
+              now.timeIntervalSince(first.time) > 0.09 {
+            dragSamples.removeFirst()
+        }
+    }
+
     fileprivate func dragEnded() {
         isDragging = false
         remaining = Double.random(in: 1...2.5)
+        let velocity = DesktopThrowSupport.releaseVelocity(samples: dragSamples)
+        dragSamples = []
+        let speed = (velocity.dx * velocity.dx + velocity.dy * velocity.dy).squareRoot()
+        if speed >= Self.minThrowSpeed {
+            beginThrow(vx: velocity.dx, vy: velocity.dy)
+        } else {
+            pet?.setDesktopPos(x: Double(pos.x), y: Double(pos.y))
+        }
+    }
+}
+
+// MARK: - Buddy throw physics
+
+extension DesktopPetController {
+    static let minThrowSpeed: Double = 380
+
+    /// Launches the buddy with the release flick; it then flies, bounces and
+    /// rolls under the same feel as the wild-encounter ball.
+    private func beginThrow(vx: Double, vy: Double) {
+        cancelFlight()
+        vm.thrown = true
+        vm.throwTumble = 0
+        vm.walking = false
+        flightState = DesktopThrowSupport.State(
+            x: Double(pos.x), y: Double(pos.y), vx: vx, vy: vy
+        )
+        flightLastStepAt = Date()
+        flightAccumulator = 0
+        let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            self?.stepThrow()
+        }
+        t.tolerance = 0.004
+        RunLoop.main.add(t, forMode: .common)
+        flightTimer = t
+    }
+
+    /// One timer tick: drain the accumulator in fixed substeps so the arc
+    /// feels identical at any frame rate.
+    private func stepThrow() {
+        guard var state = flightState else { return }
+        let now = Date()
+        var dt = now.timeIntervalSince(flightLastStepAt)
+        flightLastStepAt = now
+        dt = min(0.1, dt)
+        flightAccumulator += dt
+
+        let substep = 1.0 / 120.0
+        let box = window?.frame.size ?? CGSize(width: 170, height: 170)
+        while flightAccumulator >= substep, flightState != nil {
+            flightAccumulator -= substep
+            let (next, events) = DesktopThrowSupport.step(
+                state, dt: substep, box: box, bounds: boundsRect
+            )
+            state = next
+            if events.hitFloor || events.hitCeiling {
+                vm.impactCount += 1
+            }
+            if events.hitWall || events.hitFloor || events.hitCeiling {
+                // A bounce kicks up dizzy stars only when it was hard enough
+                // to hurt: the impact squash plays regardless.
+                if abs(state.vy) > 260 || abs(state.vx) > 420 {
+                    vm.spawnDizzy()
+                }
+            }
+            // Tumble through the air like the thrown ball rolls.
+            let speed = (state.vx * state.vx + state.vy * state.vy).squareRoot()
+            if speed > 1 {
+                let direction: Double = state.vx >= 0 ? 1 : -1
+                vm.throwTumble += direction
+                    * (520 + speed * 0.22) * substep
+            }
+            pos = CGPoint(x: state.x, y: state.y)
+            applyFrame()
+            if events.landed, abs(state.vx) < 0.5, abs(state.vy) < 0.5 {
+                settleFromThrow(at: state)
+                return
+            }
+        }
+        flightState = state
+    }
+
+    /// The buddy came to rest: save the spot, shake off the stars, resume life.
+    private func settleFromThrow(at state: DesktopThrowSupport.State) {
+        cancelFlight()
+        pos = CGPoint(x: state.x, y: state.y)
+        clampPos()
+        applyFrame()
         pet?.setDesktopPos(x: Double(pos.x), y: Double(pos.y))
+        remaining = Double.random(in: 2...4)
+        vm.spawnDizzy()
+        vm.thrown = false
+    }
+
+    /// Stops the sim where it is (a mid-air grab or teardown), keeping position.
+    private func cancelFlight() {
+        flightTimer?.invalidate()
+        flightTimer = nil
+        flightState = nil
+        flightAccumulator = 0
+        if vm.thrown {
+            vm.thrown = false
+            pet?.setDesktopPos(x: Double(pos.x), y: Double(pos.y))
+        }
     }
 }
 
@@ -512,6 +705,10 @@ struct DesktopPetView: View {
     /// lives in this view (so it can wrap sprite + eyelids together) and must
     /// recompute once real frames exist.
     @State private var spriteEpoch = false
+    /// True for a beat after each floor bounce: the landing squash.
+    @State private var impactSquash = false
+    /// Start of the startled hop that greets a new system notification.
+    @State private var noticeHopStart: Date?
 
     /// True while a blink has the lids shut; driven by a scheduled task, so
     /// between blinks nothing renders at all.
@@ -522,7 +719,8 @@ struct DesktopPetView: View {
     /// that the timeline is paused so a calm buddy costs no redraws. A hidden
     /// buddy pauses everything.
     private var timelinePaused: Bool {
-        !vm.buddyVisible || !(vm.walking || pet.snapshot.sleeping || joyStart != nil)
+        !vm.buddyVisible || !(vm.walking || pet.snapshot.sleeping || joyStart != nil
+                              || vm.thrown || noticeHopStart != nil)
     }
 
     var body: some View {
@@ -550,9 +748,27 @@ struct DesktopPetView: View {
             ) { timeline in
                 let now = timeline.date
                 sprite
+                    .rotationEffect(
+                        .degrees(vm.thrown ? vm.throwTumble : 0),
+                        anchor: .center
+                    )
+                    .scaleEffect(
+                        x: impactSquash ? 1.14 : 1,
+                        y: impactSquash ? 0.78 : 1,
+                        anchor: .bottom
+                    )
                     .offset(y: bodyOffset(at: now))
                     .scaleEffect(bodyScale(at: now), anchor: .bottom)
                     .rotationEffect(.degrees(bodyRotation(at: now)), anchor: .bottom)
+            }
+            .onChange(of: vm.impactCount) { _ in
+                guard vm.thrown else { return }
+                withAnimation(.easeOut(duration: 0.07)) { impactSquash = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
+                        impactSquash = false
+                    }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .pokePalCelebrate)) { _ in
                 joyStart = Date()
@@ -590,6 +806,12 @@ struct DesktopPetView: View {
                 .offset(y: pet.snapshot.sleeping ? 10 : -18)
             }
 
+            ForEach(vm.dizzyStars) { star in
+                FloatingDizzyView(star: star) {
+                    vm.dizzyStars.removeAll { $0.id == star.id }
+                }
+            }
+
             if pet.snapshot.sleeping {
                 SleepBubble()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -602,6 +824,17 @@ struct DesktopPetView: View {
             // Re-evaluates body so the normalization scale recomputes now
             // that real frames exist.
             spriteEpoch.toggle()
+        }
+        .onReceive(vm.$alertPulse.dropFirst()) { _ in
+            // A system notification just reached the buddy: a startled
+            // double-hop toward its banner.
+            noticeHopStart = Date()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                if let start = noticeHopStart,
+                   Date().timeIntervalSince(start) >= 0.95 {
+                    noticeHopStart = nil
+                }
+            }
         }
     }
 
@@ -741,6 +974,14 @@ struct DesktopPetView: View {
             if dt < 1.5 {
                 let flavour: Double = gait.gaitClass == 0 ? 0.45 : (gait.gaitClass == 2 ? 1.25 : 1.0)
                 y -= max(0, sin(dt * .pi * 4)) * 16 * flavour * exp(-dt * 1.8)
+            }
+        }
+
+        // A new notification lands: two sharp little start hops.
+        if let noticeHopStart {
+            let dt = now.timeIntervalSince(noticeHopStart)
+            if dt < 0.9 {
+                y -= abs(sin(dt * .pi * 5)) * 7 * exp(-dt * 2.2)
             }
         }
         return CGFloat(y)

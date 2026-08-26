@@ -278,12 +278,20 @@ struct WildPokemonView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("WILD!")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.yellow.opacity(0.95)))
-                .foregroundStyle(Color.black.opacity(0.7))
+            // One top slot: WILD! until the catch lands, Gotcha! after —
+            // they share the space instead of stacking over the sprite.
+            // Pet-world copy is all one pixel font at one size, the same
+            // renderer as the notification banner.
+            ZStack {
+                PixelTextView(text: "WILD!")
+                    .opacity(gotcha ? 0 : 1)
+                if gotcha {
+                    PixelTextView(text: "Gotcha!")
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .frame(height: 38)
+            .animation(.easeInOut(duration: 0.18), value: gotcha)
 
             encounterArea
                 .frame(height: 210)
@@ -338,23 +346,8 @@ struct WildPokemonView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: spriteGone)
             }
 
-            if gotcha {
-                Text("Gotcha!")
-                    .font(.system(size: 19, weight: .heavy, design: .rounded))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.yellow.opacity(0.95)))
-                    .foregroundStyle(Color.black.opacity(0.75))
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-
             if let message {
-                Text(message)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.white.opacity(0.85)))
-                    .foregroundStyle(Color.black.opacity(0.65))
+                PixelTextView(text: message)
                     .transition(.opacity)
                     .offset(y: 72)
             }
