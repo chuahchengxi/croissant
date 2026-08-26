@@ -25,11 +25,14 @@ SwiftPM aware editors can index the code.
 Hitting a build or permission snag while developing? See the
 [troubleshooting guide](docs/TROUBLESHOOTING.md).
 
-### Stable signing (optional)
+### Stable signing (required once)
 
-By default `build.sh` signs ad hoc, and that code hash changes on every build,
-so macOS asks again for Accessibility and Screen Recording after each rebuild.
-Run this once
+`build.sh` refuses to build until it can find a signing identity. That is
+deliberate. An ad hoc signature's designated requirement is the binary's own
+code hash, so it changes on every build and every permission you granted goes
+stale with it — macOS keeps showing a ticked box in Accessibility while the app
+sees `AXIsProcessTrusted()` as false, which reads as a bug in the app rather
+than a signing problem. Run this once
 
 ```sh
 ./Tools/setup-signing.sh
@@ -40,6 +43,17 @@ dedicated keychain. `build.sh` then signs local builds with it and gives them a
 constant designated requirement, so granted permissions stick across rebuilds.
 It is a local convenience only and never shows up outside the keychain.
 
+If you already ran that and the build still refuses, the login keychain is
+probably locked — `security find-identity` returns nothing either way, which is
+exactly why the script cannot tell the two apart and stops instead of guessing:
+
+```sh
+security unlock-keychain ~/Library/Keychains/login.keychain-db
+```
+
+`./build.sh --allow-adhoc` builds without an identity anyway. Use it for a
+throwaway build or on CI, not for anything you plan to grant permissions to.
+
 Official releases work differently. CI signs the app and DMG with an Apple
 **Developer ID**, using credentials isolated in the protected `release-signing`
 environment, then
@@ -47,7 +61,9 @@ environment, then
 `NOTARY_API_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`, so downloads open
 with no Gatekeeper warning. `build.sh` prefers the Developer ID identity when it
 is present, with the hardened runtime and `Resources/Croissaint.entitlements`,
-and falls back to the self signed identity, then to ad hoc.
+and falls back to the self signed identity. Ad hoc is never automatic; CI asks
+for it explicitly with `--allow-adhoc`, since a runner has no granted
+permissions to lose.
 
 ## Project layout
 

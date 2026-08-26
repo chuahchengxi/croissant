@@ -36,13 +36,13 @@ jobs:
           test "$(xcrun --sdk macosx --show-sdk-version)" = "15.2"
 
       - name: Build
-        run: ./build.sh
+        run: ./build.sh --allow-adhoc
 
       - name: Selftest
         run: ./build/Croissaint --selftest
 
       - name: Unit tests
-        run: ./build.sh --test
+        run: ./build.sh --test --allow-adhoc
 
   build:
     name: Build & selftest
@@ -54,10 +54,10 @@ jobs:
           persist-credentials: false
 
       - name: Unit tests
-        run: ./build.sh --test
+        run: ./build.sh --test --allow-adhoc
 
       - name: Build
-        run: ./build.sh
+        run: ./build.sh --allow-adhoc
 
       - name: Selftest
         run: ./build/Croissaint --selftest
