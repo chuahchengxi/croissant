@@ -44,6 +44,7 @@ final class DesktopViewModel: ObservableObject {
     @Published var hearts: [FloatingHeart] = []
     @Published var zzzs: [FloatingZzz] = []
     @Published var moves: [PetMoveInstance] = []
+    @Published var fetched: [FloatingFetch] = []
     @Published var notice: PetNotice?
 
     func spawnHearts(_ count: Int) {
@@ -80,6 +81,13 @@ final class DesktopViewModel: ObservableObject {
         zzzs.append(FloatingZzz(x: .random(in: 24...46), size: .random(in: 9...14)))
         if zzzs.count > 5 { zzzs.removeFirst(zzzs.count - 5) }
     }
+
+    /// The buddy proudly presents the app it just fetched: the icon pops out
+    /// pixelated and drifts up beside it.
+    func spawnFetch(icon: NSImage?) {
+        fetched.append(FloatingFetch(icon: icon.flatMap(PetPixelArt.icon), x: .random(in: (-46)...(-24))))
+        if fetched.count > 3 { fetched.removeFirst(fetched.count - 3) }
+    }
 }
 
 /// One drifting "z" puff while the buddy naps.
@@ -87,6 +95,42 @@ struct FloatingZzz: Identifiable {
     let id = UUID()
     let x: CGFloat
     let size: CGFloat
+}
+
+/// The pixelated app icon the buddy "retrieved" — floats up and fades.
+struct FloatingFetch: Identifiable {
+    let id = UUID()
+    /// Already pixelated (tiny bitmap, nearest-neighbour upscale).
+    let icon: CGImage?
+    let x: CGFloat
+}
+
+struct FloatingFetchView: View {
+    let fetch: FloatingFetch
+    let onDone: () -> Void
+    @State private var risen = false
+
+    var body: some View {
+        Group {
+            if let icon = fetch.icon {
+                Image(decorative: icon, scale: 2)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: "app.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .offset(x: fetch.x + (risen ? 6 : 0), y: risen ? -58 : 8)
+        .opacity(risen ? 0 : 1)
+        .scaleEffect(risen ? 1.15 : 0.4)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.5)) { risen = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.55) { onDone() }
+        }
+    }
 }
 
 struct FloatingZzzView: View {
@@ -128,6 +172,7 @@ final class DesktopPetController {
 
     private var timer: Timer?
     private var celebrateToken: NSObjectProtocol?
+    private var fetchToken: NSObjectProtocol?
     private var noticePanel: PetNoticePanel?
     private var noticeCancellable: AnyCancellable?
     private var walking = false
@@ -191,6 +236,13 @@ final class DesktopPetController {
                 self?.vm.spawnMove(pet: pet)
             }
         }
+
+        fetchToken = NotificationCenter.default.addObserver(
+            forName: .pokePalFetch, object: nil, queue: .main
+        ) { [weak self] notification in
+            let icon = notification.userInfo?["icon"] as? NSImage
+            self?.vm.spawnFetch(icon: icon)
+        }
     }
 
     /// Tears the walker down: stops ticking and takes the window off screen,
@@ -206,6 +258,10 @@ final class DesktopPetController {
         if let celebrateToken {
             NotificationCenter.default.removeObserver(celebrateToken)
             self.celebrateToken = nil
+        }
+        if let fetchToken {
+            NotificationCenter.default.removeObserver(fetchToken)
+            self.fetchToken = nil
         }
         window?.orderOut(nil)
         isShown = false
@@ -444,8 +500,18 @@ struct DesktopPetView: View {
     @EnvironmentObject private var vm: DesktopViewModel
     @EnvironmentObject private var pet: PetState
 
+    /// Deliberately small — the buddy reads as a pocket creature, and pixel
+    /// art keeps its details at this size. Normalization (PetSpriteMetrics)
+    /// evens out species-to-species differences on top of this.
+    static let buddySpriteHeight: CGFloat = 76
+
     /// When the current joy dance started; nil while the buddy is calm.
     @State private var joyStart: Date?
+
+    /// Bumped whenever any sprite finishes decoding: the normalization scale
+    /// lives in this view (so it can wrap sprite + eyelids together) and must
+    /// recompute once real frames exist.
+    @State private var spriteEpoch = false
 
     /// True while a blink has the lids shut; driven by a scheduled task, so
     /// between blinks nothing renders at all.
@@ -517,6 +583,13 @@ struct DesktopPetView: View {
                 }
             }
 
+            ForEach(vm.fetched) { fetch in
+                FloatingFetchView(fetch: fetch) {
+                    vm.fetched.removeAll { $0.id == fetch.id }
+                }
+                .offset(y: pet.snapshot.sleeping ? 10 : -18)
+            }
+
             if pet.snapshot.sleeping {
                 SleepBubble()
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -525,16 +598,28 @@ struct DesktopPetView: View {
                     .allowsHitTesting(false)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .spriteCacheDidUpdate)) { _ in
+            // Re-evaluates body so the normalization scale recomputes now
+            // that real frames exist.
+            spriteEpoch.toggle()
+        }
     }
 
     @ViewBuilder
     private var sprite: some View {
         if let id = pet.dexID {
             let motion = PetAnimationEngine.motion(for: id)
+            // One normalization for the whole stack: the sprite's visible
+            // artwork lands on a common fraction of the box no matter how
+            // much padding its source canvas carries, and the eyelids ride
+            // the same transform so they never drift off the face.
+            let fit = CGFloat(PetSpriteMetrics.scale(
+                for: id, frames: SpriteCache.frames(for: id) ?? []
+            ))
             ZStack {
                 AnimatedSpriteView(
                     id: id,
-                    height: 96,
+                    height: Self.buddySpriteHeight,
                     sleeping: pet.snapshot.sleeping,
                     legMotion: motion,
                     walking: vm.walking,
@@ -542,22 +627,25 @@ struct DesktopPetView: View {
                     // Frozen while asleep: the GIF's own idle frames would
                     // bob the face under the fixed eyelid rects. Frame 0 is
                     // the neutral pose the eye rects were measured on.
-                    paused: !vm.buddyVisible || pet.snapshot.sleeping
+                    paused: !vm.buddyVisible || pet.snapshot.sleeping,
+                    normalizeSize: false
                 )
                 // Eyelids sit inside the same flipped, offset, scaled
                 // hierarchy as the sprite, so they track every body motion.
                 if let motion {
                     PetEyelidsView(
                         motion: motion,
-                        height: 96,
+                        height: Self.buddySpriteHeight,
                         closed: eyesClosed || pet.snapshot.sleeping,
                         sleeping: pet.snapshot.sleeping
                     )
                 }
             }
+            .scaleEffect(fit, anchor: .bottom)
             .modifier(PetSleepPose(
                 sleeping: pet.snapshot.sleeping,
-                widthOverHeight: motion?.widthOverHeight ?? 1
+                widthOverHeight: motion?.widthOverHeight ?? 1,
+                spriteHeight: Self.buddySpriteHeight * fit
             ))
             // PokeAPI front sprites natively face LEFT, so the mirror is
             // what turns a buddy to the right: facing left draws the raw
@@ -734,12 +822,14 @@ struct DesktopPetView: View {
 struct PetSleepPose: ViewModifier {
     let sleeping: Bool
     let widthOverHeight: Double
-    static let spriteHeight: CGFloat = 96
+    /// Display height AFTER size normalization — the tip-over lift is half
+    /// the buddy's real width, so it needs the scaled number.
+    var spriteHeight: CGFloat = 96
 
     func body(content: Content) -> some View {
         let pose = PetAnimationPackSupport.sleepPose(
             canvasWidthOverHeight: widthOverHeight,
-            spriteHeight: Double(Self.spriteHeight)
+            spriteHeight: Double(spriteHeight)
         )
         content
             .rotationEffect(

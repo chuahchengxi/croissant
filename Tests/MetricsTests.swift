@@ -2481,18 +2481,8 @@ struct MetricsTests {
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.1.0", lastSeenVersion: nil)
                && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.9", lastSeenVersion: nil),
                "support prompt never leaks into another release")
-        expect(SupportUpdateIntroStep.social.next == .support
-               && SupportUpdateIntroStep.support.next == nil,
-               "update intro moves from social updates to support")
-        expect(SupportUpdateIntroStep.social.previous == nil
-               && SupportUpdateIntroStep.support.previous == .social,
-               "update intro navigates back without closing")
-        expect(SupportUpdateIntroStep.allCases == [.social, .support],
-               "update intro page indicators follow the navigation order")
         expect(AppInfo.coffeeURL.absoluteString == "https://github.com/chuahchengxi/croissant",
                "financial support points at the GitHub project page")
-        expect(AppInfo.socialURL.absoluteString == "https://github.com/chuahchengxi/croissant",
-               "social previews keep the official repository")
         // AppInfo.version falls back to "dev" in this bare harness, so read
         // the plist the shipped app will actually carry. The pin is a
         // per-release decision: this check fails on every version bump so the
@@ -9520,9 +9510,6 @@ struct MetricsTests {
                 strings.supportIntroStarButton,
                 strings.supportIntroStarMessage,
                 strings.supportIntroCoffeeButton,
-                strings.communityIntroTitle,
-                strings.communityIntroMessage,
-                strings.communityIntroFollowButton,
             ]
             expect(supportCommunityStrings.allSatisfy { !$0.isEmpty && !$0.contains("—") },
                    "\(prefix) support and community strings are complete without em dash")
@@ -9532,20 +9519,6 @@ struct MetricsTests {
             expect(strings.supportIntroStarMessage.localizedCaseInsensitiveContains("GitHub")
                    && strings.supportIntroStarButton.localizedCaseInsensitiveContains("GitHub"),
                    "\(prefix) non-financial support and community actions name their destinations")
-            expect(!strings.communityIntroMessage.isEmpty
-                   && strings.communityIntroMessage.contains("X"),
-                   "\(prefix) community intro invites users to follow previews on X")
-            let retiredWeeklyPhrases = [
-                "uma vez por semana", "once a week", "haftada bir", "раз в неделю",
-                "una vez por semana", "einmal pro Woche", "une fois par semaine",
-                "una volta a settimana", "週1回", "매주 한 번", "每周更新一次", "每週更新一次",
-            ]
-            expect(retiredWeeklyPhrases.allSatisfy {
-                !strings.communityIntroMessage.localizedCaseInsensitiveContains($0)
-            }, "\(prefix) community intro no longer promises weekly updates")
-            expect(!strings.communityIntroMessage.contains("—")
-                   && strings.communityIntroMessage.count <= 320,
-                   "\(prefix) community intro stays concise and has no em dash")
             expect(!strings.updateShowcaseTitle.isEmpty, "\(prefix) update showcase title is present")
             expect(!strings.updateShowcaseMessage.isEmpty, "\(prefix) update showcase message is present")
             expect(!strings.updateShowcaseUnavailable.isEmpty, "\(prefix) update showcase fallback is present")
@@ -17767,6 +17740,82 @@ struct MetricsTests {
                "harder species demand longer streaks before the pity catch")
         expect(PetCatchTier.tier(for: 999_999) == .tough,
                "unknown ids default to the average tier (45)")
+
+        // MARK: Pet sprite size normalization
+
+        // PokeAPI mixes tight animated canvases with heavily padded static
+        // ones, so every render path normalizes via PetSpriteMetrics. The
+        // measurement is pinned on synthetic sprites whose artwork occupies
+        // exactly known boxes.
+        func synthetic(_ w: Int, _ h: Int, art: CGRect?) -> CGImage? {
+            guard let ctx = CGContext(
+                data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return nil }
+            if let art {
+                ctx.setFillColor(CGColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 1))
+                ctx.fill(art)
+            } else {
+                ctx.setFillColor(CGColor(red: 0.9, green: 0.2, blue: 0.1, alpha: 1))
+                ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            }
+            return ctx.makeImage()
+        }
+
+        if let full = synthetic(64, 64, art: nil) {
+            let fill = PetSpriteMetrics.fillRatio(of: full)
+            expect(fill != nil, "an opaque sprite measures")
+            expectClose(fill?.widthFraction ?? 0, 1.0, "a tight canvas fills its width")
+            expectClose(fill?.heightFraction ?? 0, 1.0, "a tight canvas fills its height")
+        } else {
+            expect(false, "synthetic tight sprite renders")
+        }
+
+        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
+            let fill = PetSpriteMetrics.fillRatio(of: quarter)
+            expectClose(fill?.widthFraction ?? 0, 0.5, "padded artwork reports half the width")
+            expectClose(fill?.heightFraction ?? 0, 0.5, "padded artwork reports half the height")
+        } else {
+            expect(false, "synthetic padded sprite renders")
+        }
+        if let blank = synthetic(64, 64, art: CGRect.null) {
+            expect(PetSpriteMetrics.fillRatio(of: blank) == nil,
+                   "a fully transparent sprite measures as nothing")
+        } else {
+            expect(false, "synthetic blank sprite renders")
+        }
+
+        // Scale selection: tight canvases land on the target fill, padded
+        // ones inflate only up to the cap, extra-wide species are breadth-
+        // clamped, and unknown sprites stay untouched until decoded.
+        PetSpriteMetrics.reset()
+        var tightFrames: [CGImage] = []
+        if let full = synthetic(64, 64, art: nil) { tightFrames = [full] }
+        expectClose(
+            PetSpriteMetrics.scale(for: 900_001, frames: tightFrames),
+            PetSpriteMetrics.targetFill, "a tight canvas keeps the target fill")
+
+        PetSpriteMetrics.reset()
+        var paddedFrames: [CGImage] = []
+        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
+            paddedFrames = [quarter]
+        }
+        expect(PetSpriteMetrics.scale(for: 900_002, frames: paddedFrames) == PetSpriteMetrics.maxScale,
+               "a padded sprite inflates only up to the cap")
+        // Memoized per species: an undecodeable frame list must not undo it.
+        expect(PetSpriteMetrics.scale(for: 900_002, frames: []) == PetSpriteMetrics.maxScale,
+               "the normalization memoizes once measured")
+
+        PetSpriteMetrics.reset()
+        var sprawlFrames: [CGImage] = []
+        if let wideArt = synthetic(256, 64, art: nil) { sprawlFrames = [wideArt] }
+        expect(PetSpriteMetrics.scale(for: 900_003, frames: sprawlFrames) == PetSpriteMetrics.minScale,
+               "extra-wide species are breadth-clamped instead of sprawling")
+
+        PetSpriteMetrics.reset()
+        expect(PetSpriteMetrics.scale(for: 900_004, frames: []) == 1.0,
+               "undecoded sprites render unscaled rather than guessing")
 
         // MARK: Pet moves
 

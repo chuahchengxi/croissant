@@ -47,6 +47,11 @@ struct AnimatedSpriteView: View {
     /// Freezes playback entirely (hidden buddy windows): no timeline ticks,
     /// no body re-evaluations, zero cost while off screen.
     var paused = false
+    /// Normalizes the sprite so its visible artwork fills a consistent,
+    /// small fraction of the box regardless of source canvas padding
+    /// (see `PetSpriteMetrics`). The desktop buddy turns this off and wraps
+    /// sprite + eyelids in one shared scale instead, so overlays stay glued.
+    var normalizeSize = true
 
     @State private var refresh = false
 
@@ -75,6 +80,9 @@ struct AnimatedSpriteView: View {
                 // Frame index derives from the timeline date instead of @State,
                 // so each tick is a plain re-render — and the whole timeline
                 // parks itself when the view leaves the hierarchy or pauses.
+                let fit = normalizeSize
+                    ? CGFloat(PetSpriteMetrics.scale(for: id, frames: frames))
+                    : 1
                 TimelineView(.animation(minimumInterval: playInterval, paused: paused)) { timeline in
                     let idx = paused
                         ? 0
@@ -82,6 +90,7 @@ struct AnimatedSpriteView: View {
                             % frames.count
                     spriteBody(frames: frames, frameIndex: max(0, idx))
                 }
+                .scaleEffect(fit, anchor: .bottom)
             } else {
                 VStack(spacing: 4) {
                     ProgressView()
@@ -187,7 +196,7 @@ struct SpriteArea: View {
             if let id = pet.dexID {
                 AnimatedSpriteView(
                     id: id,
-                    height: pet.stage == 2 ? 104 : 92,
+                    height: pet.stage == 2 ? 88 : 78,
                     sleeping: pet.snapshot.sleeping
                 )
             } else {
@@ -1041,7 +1050,7 @@ struct BuddyChooser: View {
             onPicked()
         } label: {
             VStack(spacing: 5) {
-                AnimatedSpriteView(id: def.baseID, height: 58)
+                AnimatedSpriteView(id: def.baseID, height: 48)
                 Text(def.name)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .lineLimit(1)
