@@ -55,6 +55,8 @@ struct PetSnapshot: Codable {
     var evolutionHeld: Bool?
     /// The stage the buddy was at when the stone was picked up.
     var frozenStage: Int?
+    /// When the current nap ends (see `PetNapSchedule`); nil while awake.
+    var wakeAt: Date?
 }
 
 final class PetState: ObservableObject {
@@ -268,6 +270,11 @@ final class PetState: ObservableObject {
     func toggleSleep() {
         guard snapshot.species != nil else { return }
         snapshot.sleeping.toggle()
+        // A pressed sleep is a timed nap: the buddy dozes off and wakes up
+        // on its own after a random stretch (or sooner if tapped again).
+        snapshot.wakeAt = snapshot.sleeping
+            ? Date().addingTimeInterval(PetNapSchedule.wakeDelay())
+            : nil
         normalizeAndSave()
     }
 
@@ -372,7 +379,9 @@ final class PetState: ObservableObject {
     @discardableResult
     func catchReward(speciesID: Int? = nil) -> Bool {
         guard snapshot.species != nil else { return false }
-        if snapshot.sleeping { snapshot.sleeping = false }
+        // Deliberately no wake here: the throw panel is its own little
+        // window, and a buddy that finally nods off shouldn't be jolted
+        // awake because the player caught something over on the side.
         snapshot.happiness += 8
         snapshot.xp += 12
         snapshot.caughtCount = (snapshot.caughtCount ?? 0) + 1
@@ -452,7 +461,14 @@ final class PetState: ObservableObject {
                 userInfo: ["message": "Level up! +\(reward) coins"]
             )
         }
-        if snapshot.sleeping && snapshot.energy >= 100 { snapshot.sleeping = false }
+        if PetNapSchedule.shouldWake(sleeping: snapshot.sleeping, wakeAt: snapshot.wakeAt, now: Date()) {
+            snapshot.sleeping = false
+            snapshot.wakeAt = nil
+        }
+        if snapshot.sleeping && snapshot.energy >= 100 {
+            snapshot.sleeping = false
+            snapshot.wakeAt = nil
+        }
         normalizeAndSave()
     }
 

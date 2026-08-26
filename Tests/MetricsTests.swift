@@ -194,6 +194,8 @@ struct MetricsTests {
                "clear on screen lock is off until asked for")
         expect(Defaults.registeredDefaults[DefaultsKey.clipboardAutoClearDelay] as? Int == 20,
                "auto clear starts at twenty seconds")
+        expect(Defaults.registeredDefaults[DefaultsKey.clipboardHistoryQuickPreview] as? Bool == false,
+               "clipboard history quick preview is closed by default")
 
         // MARK: Clipboard auto clear timing
 
@@ -512,6 +514,17 @@ struct MetricsTests {
                     "clipboard files preview lists the file names")
         expect(filesEntry.searchableText(imageLabel: "Image").contains("Report.pdf"),
                "clipboard files entries are searchable by file name")
+        expect(filesEntry.searchableText(imageLabel: "Image").contains("Image"),
+               "clipboard files with images include the localized image label in search")
+        expect(ClipboardHistoryImageSupport.isImageFileName("screenshot.PNG"),
+               "clipboard image file support recognizes png case-insensitively")
+        expect(ClipboardHistoryImageSupport.isImageFileName("photo.jpeg")
+               && ClipboardHistoryImageSupport.isImageFileName("picture.heic")
+               && ClipboardHistoryImageSupport.isImageFileName("art.webp"),
+               "clipboard image file support recognizes standard image extensions")
+        expect(!ClipboardHistoryImageSupport.isImageFileName("document.pdf")
+               && !ClipboardHistoryImageSupport.isImageFileName("archive.zip"),
+               "clipboard image file support rejects non-image extensions")
         expect(filesEntry.matchesContent(of: ClipboardHistoryEntry(text: "",
                                                                    kind: .files,
                                                                    filePaths: filesEntry.filePaths)),
@@ -575,7 +588,7 @@ struct MetricsTests {
         for _ in 0..<16 {
             pasteboardGroup.enter()
             DispatchQueue.global(qos: .userInitiated).async {
-                pasteboardAccess.sync {
+                pasteboardAccess.async {
                     pasteboardStateLock.lock()
                     activePasteboardOperations += 1
                     maximumPasteboardOperations = max(maximumPasteboardOperations,
@@ -585,19 +598,45 @@ struct MetricsTests {
                     pasteboardStateLock.lock()
                     activePasteboardOperations -= 1
                     pasteboardStateLock.unlock()
+                    pasteboardGroup.leave()
                 }
-                pasteboardGroup.leave()
             }
         }
-        expect(pasteboardGroup.wait(timeout: .now() + 2) == .success,
+        expect(pasteboardGroup.wait(timeout: .now() + 5) == .success,
                "pasteboard access operations finish without deadlock")
         expect(maximumPasteboardOperations == 1,
                "pasteboard access serializes concurrent service work")
-        let nestedPasteboardValue = pasteboardAccess.sync {
-            pasteboardAccess.sync { 230 }
+
+        // The freeze this lane exists to prevent (issue #887): a read stuck
+        // behind an app that promised pasteboard content and stopped answering
+        // holds the lane, and any caller that waited for it would be frozen
+        // with it. Wedge the lane, then ask for work from the main thread: the
+        // ask must return at once and the answer must arrive later, on main.
+        let wedgeReleased = DispatchSemaphore(value: 0)
+        pasteboardAccess.async { wedgeReleased.wait() }
+        // Released on its own, so a caller that waited for the lane comes out
+        // measurably late instead of hanging the whole test run.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.3) {
+            wedgeReleased.signal()
         }
-        expect(nestedPasteboardValue == 230,
-               "pasteboard access permits nested work without deadlock")
+        var laneAnswer: Int?
+        var laneAnsweredOnMain = false
+        let askedAt = Date()
+        pasteboardAccess.async({ 887 }, then: { value in
+            laneAnswer = value
+            laneAnsweredOnMain = Thread.isMainThread
+        })
+        let askDuration = Date().timeIntervalSince(askedAt)
+        expect(askDuration < 0.1,
+               "asking the wedged pasteboard lane for work returns without waiting "
+                   + "(took \(askDuration)s)")
+        expect(laneAnswer == nil, "the wedged lane has not answered yet")
+        let laneDeadline = Date().addingTimeInterval(5)
+        while laneAnswer == nil, Date() < laneDeadline {
+            RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+        expect(laneAnswer == 887, "the queued work runs once the lane comes free")
+        expect(laneAnsweredOnMain, "the pasteboard lane answers on the main queue")
 
         let maxCapacityStringJSON = Data(#"{"SPPowerDataType":[{"sppower_battery_health_info":{"sppower_battery_health_maximum_capacity":"93%"}}]}"#.utf8)
         expect(MaxCapacityProbe.percent(fromSystemProfilerJSON: maxCapacityStringJSON) == 93,
@@ -1472,6 +1511,10 @@ struct MetricsTests {
                "monitor memory metric is included in settings backups")
         expect(registeredDefaults[DefaultsKey.appearance] as? String == AppAppearance.system.rawValue,
                "the app follows the system appearance until the user picks a side")
+        expect(registeredDefaults[DefaultsKey.liquidGlassEnabled] as? Bool == false,
+               "liquid glass appearance is opt-in")
+        expect(SettingsBackupSupport.exportKeys().contains(DefaultsKey.liquidGlassEnabled),
+               "liquid glass appearance follows settings backups")
         expect(AppAppearance.sanitized(nil) == .system
                 && AppAppearance.sanitized("nonsense") == .system,
                "an unknown stored appearance falls back to the system one")
@@ -1569,6 +1612,17 @@ struct MetricsTests {
                "a pmset report with SleepDisabled 0 reads as lid sleep enabled")
         expect(!SudoersSupport.sleepDisabled(inPmsetOutput: ""),
                "an empty pmset report reads as lid sleep enabled")
+        // The rule is granted by uid so every short name works, including the
+        // email-style ones SSO enrollment produces (#915). The uid renders as
+        // bare digits and the rest is a fixed literal, so the whole line must
+        // stay inside a character set that neither sudoers nor a single-quoted
+        // shell string can read as anything but itself.
+        expect(SudoersSupport.clamshellRule(uid: 501)
+               == "#501 ALL=(root) NOPASSWD: /usr/bin/pmset disablesleep 1, /usr/bin/pmset disablesleep 0",
+               "the closed-lid sudoers rule grants pmset disablesleep to the uid")
+        expect(SudoersSupport.clamshellRule(uid: uid_t.max)
+               .range(of: #"^#[0-9]+ [A-Za-z0-9()=:,./ ]+$"#, options: .regularExpression) != nil,
+               "the closed-lid sudoers rule never contains shell or sudoers metacharacters")
         expect(registeredDefaults[DefaultsKey.switcherEnabled] as? Bool == true,
                "window switcher is on for clean installs")
         expect(registeredDefaults[DefaultsKey.switcherShortcut] as? String == "command:48",
@@ -1703,6 +1757,51 @@ struct MetricsTests {
             Defaults.migrateRestoredScreenCaptureShortcuts(in: migrationDefaults)
             expect(migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled),
                    "a distinct general capture shortcut stays enabled when dedicated ones return")
+            migrationDefaults.set(true, forKey: AppFeature.screenRecorder.availabilityKey)
+            migrationDefaults.set(true, forKey: AppFeature.screenOCR.availabilityKey)
+            Defaults.migrateOrphanedCaptureShortcut(in: migrationDefaults)
+            expect(migrationDefaults.bool(forKey: DefaultsKey.screenOCRShortcutEnabled)
+                   && migrationDefaults.string(forKey: DefaultsKey.screenOCRShortcut)
+                        == "control+option:42"
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled)
+                   && migrationDefaults.string(forKey: DefaultsKey.recorderShortcut)
+                        == "command:12",
+                   "an orphaned capture shortcut moves to the first available tool without its own")
+            migrationDefaults.set(true, forKey: DefaultsKey.screenshotShortcutEnabled)
+            migrationDefaults.set(false, forKey: DefaultsKey.screenOCRShortcutEnabled)
+            Defaults.migrateOrphanedCaptureShortcut(in: migrationDefaults)
+            expect(migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled)
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenOCRShortcutEnabled),
+                   "the orphaned capture shortcut migration runs once")
+            migrationDefaults.removeObject(forKey: DefaultsKey.orphanedCaptureShortcutMigrated)
+            migrationDefaults.set(true, forKey: AppFeature.screenshot.availabilityKey)
+            Defaults.migrateOrphanedCaptureShortcut(in: migrationDefaults)
+            expect(migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled)
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenOCRShortcutEnabled)
+                   && migrationDefaults.bool(
+                        forKey: DefaultsKey.orphanedCaptureShortcutMigrated),
+                   "a setup that kept the screenshot tool keeps its capture shortcut untouched")
+            migrationDefaults.removeObject(forKey: DefaultsKey.orphanedCaptureShortcutMigrated)
+            migrationDefaults.removeObject(forKey: DefaultsKey.screenshotShortcut)
+            migrationDefaults.removeObject(forKey: DefaultsKey.screenOCRShortcut)
+            migrationDefaults.set(false, forKey: AppFeature.screenshot.availabilityKey)
+            Defaults.migrateOrphanedCaptureShortcut(in: migrationDefaults)
+            expect(migrationDefaults.bool(forKey: DefaultsKey.screenOCRShortcutEnabled)
+                   && migrationDefaults.string(forKey: DefaultsKey.screenOCRShortcut)
+                        == GlobalShortcut.screenshotDefault.storageValue
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled),
+                   "a never-customized capture combination moves as the default combination")
+            migrationDefaults.removeObject(forKey: DefaultsKey.orphanedCaptureShortcutMigrated)
+            migrationDefaults.set(true, forKey: DefaultsKey.screenshotShortcutEnabled)
+            migrationDefaults.set(false, forKey: DefaultsKey.screenOCRShortcutEnabled)
+            migrationDefaults.set(true, forKey: AppFeature.colorPicker.availabilityKey)
+            Defaults.migrateOrphanedCaptureShortcut(in: migrationDefaults)
+            expect(migrationDefaults.bool(forKey: DefaultsKey.colorPickerShortcutEnabled)
+                   && migrationDefaults.string(forKey: DefaultsKey.colorPickerShortcut)
+                        == GlobalShortcut.screenshotDefault.storageValue
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenOCRShortcutEnabled)
+                   && !migrationDefaults.bool(forKey: DefaultsKey.screenshotShortcutEnabled),
+                   "a switched-off but customized shortcut is kept and the next tool takes over")
             migrationDefaults.removePersistentDomain(forName: shortcutSuite)
         } else {
             expect(false, "test suite defaults are available")
@@ -2722,6 +2821,33 @@ struct MetricsTests {
                                                                   showsCountdown: true,
                                                                   hasEndDate: false),
                "idle, hidden and indefinite Keep Awake titles need no timer")
+        let statusPlacementSuite = "com.croissaint.tests.statusItemPlacement"
+        if let statusDefaults = UserDefaults(suiteName: statusPlacementSuite) {
+            statusDefaults.removePersistentDomain(forName: statusPlacementSuite)
+            expect(StatusItemPlacementSupport.placementGeneration(in: statusDefaults) == 0,
+                   "initial placement generation is 0")
+            expect(StatusItemPlacementSupport.mainAutosaveName(in: statusDefaults) == "CroissaintMenuBarItem",
+                   "generation 0 uses base autosave name")
+
+            let legacyKey = "NSStatusItem Preferred Position CroissaintMenuBarItem"
+            statusDefaults.set(64.0, forKey: legacyKey)
+            StatusItemPlacementSupport.sanitizeStalePlacement(in: statusDefaults)
+            expect(statusDefaults.object(forKey: legacyKey) == nil,
+                   "sanitizeStalePlacement removes the buggy 64.0 system-colliding offset")
+
+            statusDefaults.set(320.5, forKey: legacyKey)
+            StatusItemPlacementSupport.sanitizeStalePlacement(in: statusDefaults)
+            expect(statusDefaults.double(forKey: legacyKey) == 320.5,
+                   "sanitizeStalePlacement preserves legitimate user-arranged coordinates")
+
+            StatusItemPlacementSupport.bumpPlacementGeneration(in: statusDefaults)
+            let gen1Name = StatusItemPlacementSupport.mainAutosaveName(in: statusDefaults)
+            expect(gen1Name == "CroissaintMenuBarItem.1",
+                   "bumped generation produces numbered autosave name")
+            expect(statusDefaults.object(forKey: "NSStatusItem Preferred Position CroissaintMenuBarItem.1") == nil,
+                   "bumpPlacementGeneration does not seed any hardcoded preferred position")
+            statusDefaults.removePersistentDomain(forName: statusPlacementSuite)
+        }
         expect(registeredDefaults[DefaultsKey.panelControlAutoQuit] as? Bool == true,
                "panel auto quit control is visible by default")
         expect(registeredDefaults[DefaultsKey.panelControlShelf] as? Bool == true,
@@ -3756,6 +3882,27 @@ struct MetricsTests {
                                                             visibleSpaces: nil,
                                                             hasTitle: true),
                "without Spaces to compare, the old cautious rule stands")
+
+        // Attaching to a watched app must never ask its application element for
+        // a role. A Chromium app (Electron, and the browsers) answers that by
+        // switching its renderers into full accessibility mode, and then pays
+        // to rebuild and ship an accessibility tree on every DOM change for the
+        // rest of its life — measured on an idle app that this feature only
+        // ever needed a window count from (issue #953). Windows are the same
+        // liveness signal and leave that mode alone. Comments are stripped
+        // first: the note above the probe names the attribute it avoids, and a
+        // check that cannot tell prose from a call would go red for it.
+        let autoQuitServiceCode = ((try? String(
+            contentsOfFile: "Sources/Croissaint/Services/AutoQuit/AutoQuitService.swift",
+            encoding: .utf8)) ?? "")
+            .components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        expect(autoQuitServiceCode.contains(
+                   "AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .cannotComplete"),
+               "AutoQuit probes a watched app for liveness by asking for its windows")
+        expect(!autoQuitServiceCode.contains("appElement, kAXRoleAttribute"),
+               "AutoQuit never asks a watched app's application element for its role")
         expect(Defaults.sanitizedPanelItemOrder("uninstaller,homebrew,homebrew,bad",
                                                 defaultOrder: ["homebrew", "media", "uninstaller", "cleanURL", "cleaning"])
                == ["uninstaller", "homebrew", "media", "cleanURL", "cleaning"],
@@ -4571,6 +4718,14 @@ struct MetricsTests {
         let decodedProfile = encodedProfile.flatMap { try? JSONDecoder().decode([MediaImageProfile].self, from: $0) }
         expect(decodedProfile?.first?.options == profileOptions,
                "Image profiles round-trip converter options")
+        let largeSideOptions = MediaImageOptions(quality: 0.8,
+                                                 maxDimension: 12_000,
+                                                 format: .jpeg,
+                                                 stripMetadata: true,
+                                                 resizeMode: nil)
+        expect(largeSideOptions.maxDimension == 12_000
+                && largeSideOptions.resizeMode.maxDimension == 12_000,
+               "Image profile fields share the same max-side sanitizer")
         let legacyResizeJSON = #"{"kind":"exact","maxDimension":1600,"width":320,"height":180}"#
         let legacyResize = legacyResizeJSON.data(using: .utf8).flatMap { try? JSONDecoder().decode(MediaImageResizeMode.self, from: $0) }
         expect(legacyResize?.exactMode == .stretch,
@@ -6603,6 +6758,28 @@ struct MetricsTests {
                                                                   availableHeight: 1200)
         expect(bogusSaved.width == 772 && bogusSaved.height == 838,
                "a saved size below the minimum falls back to the default")
+        let preferredSettingsFrame = CGRect(x: -50, y: 100, width: 1000, height: 700)
+        let overlappingPlacement = SettingsWindowSupport.panelPlacement(
+            preferredFrame: preferredSettingsFrame,
+            panelFrame: CGRect(x: 450, y: 500, width: 300, height: 300),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 900))
+        expect(overlappingPlacement.closesPanel
+                && overlappingPlacement.frame == CGRect(x: 20, y: 100, width: 1000, height: 700),
+               "failed avoidance closes the panel and clamps the preferred settings frame")
+        let separatePlacement = SettingsWindowSupport.panelPlacement(
+            preferredFrame: CGRect(x: 600, y: 100, width: 800, height: 700),
+            panelFrame: CGRect(x: 1200, y: 500, width: 300, height: 300),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1600, height: 900))
+        expect(!separatePlacement.closesPanel
+                && separatePlacement.frame.maxX == 1172,
+               "successful avoidance keeps the panel beside settings")
+        let verticalPlacement = SettingsWindowSupport.panelPlacement(
+            preferredFrame: CGRect(x: 100, y: 400, width: 1000, height: 300),
+            panelFrame: CGRect(x: 450, y: 500, width: 300, height: 100),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 900))
+        expect(!verticalPlacement.closesPanel
+                && verticalPlacement.frame.maxY == 472,
+               "vertical avoidance moves settings below the panel with the standard gap")
 
         expect(UpdateInstallerSupport.shouldForceAdminInstall(afterFailureCode: "fail-copy"),
                "a copy failure retries through the admin prompt")
@@ -8935,6 +9112,14 @@ struct MetricsTests {
               "homepage": "https://example.com/sample-formula",
               "versions": { "stable": "1.8.1" },
               "installed": [{ "version": "1.8.1" }]
+            },
+            {
+              "name": "tapped-formula",
+              "full_name": "example/tap/tapped-formula",
+              "desc": "Formula from a third-party tap",
+              "homepage": "https://example.com/tapped-formula",
+              "versions": { "stable": "2.0.0" },
+              "installed": [{ "version": "1.0.0" }]
             }
           ],
           "casks": [
@@ -8945,20 +9130,37 @@ struct MetricsTests {
               "homepage": "https://example.com/sample-tool",
               "version": "1.108.1",
               "installed": "1.107.0"
+            },
+            {
+              "token": "tapped-tool",
+              "full_token": "example/tap/tapped-tool",
+              "name": ["Tapped Tool"],
+              "desc": "Cask from a third-party tap",
+              "homepage": "https://example.com/tapped-tool",
+              "version": "2.0.0",
+              "installed": "1.0.0"
             }
           ]
         }
         """
         let homebrewPackages = (try? HomebrewParser.parseInfoJSON(Data(homebrewJSON.utf8))) ?? []
-        expect(homebrewPackages.count == 2, "Homebrew JSON parser keeps formulae and casks")
+        expect(homebrewPackages.count == 4, "Homebrew JSON parser keeps formulae and casks")
         expect(homebrewPackages.first?.kind == .cask,
                "Homebrew JSON parser sorts casks before formulae")
         expect(homebrewPackages.first(where: { $0.name == "sample-formula" })?.installedVersion == "1.8.1",
                "Homebrew parser reads installed formula version")
+        let tappedFormula = homebrewPackages.first { $0.name == "example/tap/tapped-formula" }
+        expect(tappedFormula?.displayName == "example/tap/tapped-formula",
+               "Homebrew parser keeps the canonical name for a formula from a tap")
         expect(homebrewPackages.first(where: { $0.name == "sample-tool" })?.displayName == "Sample Tool",
                "Homebrew parser reads cask display name")
+        let tappedCask = homebrewPackages.first { $0.name == "tapped-tool" }
+        expect(tappedCask != nil,
+               "Homebrew parser identifies a cask from a tap by its short token")
+        expect(tappedCask?.displayName == "Tapped Tool",
+               "Homebrew parser keeps the human-readable name for a cask from a tap")
         let cleanCommandPackages = (try? HomebrewParser.parseInfoCommandOutput(homebrewJSON)) ?? []
-        expect(cleanCommandPackages.count == 2,
+        expect(cleanCommandPackages.count == 4,
                "Homebrew command output parser keeps clean JSON")
         let noisyHomebrewOutput = """
         Warning: Skipping some beta metadata
@@ -8967,7 +9169,7 @@ struct MetricsTests {
         Warning: A newer Homebrew beta changed an optional field
         """
         let noisyCommandPackages = (try? HomebrewParser.parseInfoCommandOutput(noisyHomebrewOutput)) ?? []
-        expect(noisyCommandPackages.count == 2,
+        expect(noisyCommandPackages.count == 4,
                "Homebrew command output parser accepts warnings around JSON")
         expect(noisyCommandPackages.first(where: { $0.name == "sample-tool" })?.installedVersion == "1.107.0",
                "Homebrew command output parser keeps package data from noisy output")
@@ -8981,6 +9183,12 @@ struct MetricsTests {
               "installed_versions": ["12.1.0"],
               "current_version": "12.2.0",
               "pinned": false
+            },
+            {
+              "name": "example/tap/tapped-formula",
+              "installed_versions": ["1.0.0"],
+              "current_version": "2.0.0",
+              "pinned": false
             }
           ],
           "casks": [
@@ -8989,17 +9197,29 @@ struct MetricsTests {
               "installed_versions": ["1.107.0"],
               "current_version": "1.108.1",
               "pinned": true
+            },
+            {
+              "name": "tapped-tool",
+              "installed_versions": ["1.0.0"],
+              "current_version": "2.0.0",
+              "pinned": false
             }
           ]
         }
         """
         let outdatedPackages = (try? HomebrewParser.parseOutdatedJSON(Data(outdatedJSON.utf8))) ?? [:]
-        expect(outdatedPackages.count == 2,
+        expect(outdatedPackages.count == 4,
                "Homebrew outdated parser keeps formulae and casks")
         expect(outdatedPackages["formula:fmt"]?.versionSummary == "12.1.0 -> 12.2.0",
                "Homebrew outdated parser renders installed to current version")
         expect(outdatedPackages["cask:sample-tool"]?.isPinned == true,
                "Homebrew outdated parser reads pinned status")
+        expect(tappedFormula.flatMap { outdatedPackages[$0.id] }?.currentVersion == "2.0.0",
+               "Homebrew installed and outdated data use the same ID for tapped formulae")
+        expect(tappedCask?.id == "cask:tapped-tool",
+               "Homebrew installed cask data stays on the short token brew outdated reports")
+        expect(tappedCask.flatMap { outdatedPackages[$0.id] }?.currentVersion == "2.0.0",
+               "Homebrew installed and outdated data use the same short-token ID for tapped casks")
         let noisyOutdatedOutput = """
         Warning: Homebrew updated metadata
         {"notice": "not outdated data"}
@@ -9474,6 +9694,40 @@ struct MetricsTests {
                 && Date().timeIntervalSince(timeoutStarted) < 1.5,
                "a stalled subprocess is terminated inside its deadline")
 
+        // Reproduces the freeze in issue #971 from the other side: the app's
+        // own abandoned waits had filled the shared dispatch pool, so nothing
+        // submitted to it ran any more. A runner that waits on a pool thread
+        // reports a timeout here for a command that exits instantly, and parks
+        // one more worker doing it. Waiting on the child itself is immune, so
+        // the pool the runner starved can no longer starve the runner.
+        let poolGate = DispatchSemaphore(value: 0)
+        let poolOccupied = DispatchSemaphore(value: 0)
+        // The dispatch pool's soft limit is 64 threads blocked in synchronous
+        // work; one block per thread takes every one of them.
+        for _ in 0..<64 {
+            DispatchQueue.global(qos: .utility).async {
+                poolOccupied.signal()
+                poolGate.wait()
+            }
+        }
+        var occupiedWorkers = 0
+        for _ in 0..<64 where poolOccupied.wait(timeout: .now() + 5) == .success { occupiedWorkers += 1 }
+        let starvedProbe = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async { starvedProbe.signal() }
+        let poolIsStarved = starvedProbe.wait(timeout: .now() + 0.5) == .timedOut
+        let starvedStarted = Date()
+        let starvedPoolProcess = BoundedProcessRunner.run(
+            "/bin/echo", ["ready"], timeout: 1, maxOutputBytes: 1_024)
+        let starvedPoolElapsed = Date().timeIntervalSince(starvedStarted)
+        for _ in 0..<64 { poolGate.signal() }
+        _ = starvedProbe.wait(timeout: .now() + 5)
+        expect(occupiedWorkers == 64 && poolIsStarved,
+               "the dispatch pool starvation this check needs was actually reached")
+        expect(!starvedPoolProcess.timedOut && starvedPoolProcess.status == 0
+                && String(decoding: starvedPoolProcess.output, as: UTF8.self) == "ready\n"
+                && starvedPoolElapsed < 0.5,
+               "a subprocess is watched off the dispatch pool, so a starved pool cannot strand it")
+
         var networkDelta = NetworkProcessDeltaTracker(maxGap: 10)
         let baselineNetwork = [
             NetworkProcessSample(pid: 10, name: "Browser", bytesIn: 1_000, bytesOut: 500),
@@ -9805,6 +10059,46 @@ struct MetricsTests {
                 && AppFeature.fanControl.isBeta
                 && !AppFeature.monitorPower.isBeta,
                "fan control is an on-demand beta with no broad permission")
+
+        // MARK: Hardware-gated installs
+
+        // Availability is only ever written by the runtime that gates it, so
+        // a new install surface cannot walk around the hardware check the way
+        // the hub's install-all button and the first-run picker once did.
+        // Two files are allowed to write the key directly, and both run where
+        // the gate cannot matter: the first-run seed writes a preset holding
+        // no hardware-dependent feature (pinned below), and the fan control
+        // migration restores an install that already existed, which the gate
+        // never revokes. A third entry here is a bug, not a new allowance.
+        var availabilityWriters: Set<String> = []
+        if let sources = FileManager.default.enumerator(atPath: "Sources") {
+            for case let path as String in sources where path.hasSuffix(".swift") {
+                let text = (try? String(contentsOfFile: "Sources/" + path, encoding: .utf8)) ?? ""
+                let writes = text.split(separator: "\n").contains {
+                    $0.contains(".set(") && $0.contains("availabilityKey")
+                }
+                if writes { availabilityWriters.insert((path as NSString).lastPathComponent) }
+            }
+        }
+        expect(availabilityWriters == ["FeatureRuntime.swift",
+                                       "FeaturePresets.swift",
+                                       "Defaults.swift"],
+               "feature availability is written only where the hardware gate runs, "
+               + "found \(availabilityWriters.sorted())")
+        expect(FeaturePreset.allCases.allSatisfy { !$0.features.contains(.fanControl) },
+               "no first-run preset installs a feature whose hardware the Mac may lack")
+
+        let featureHubSource = (try? String(
+            contentsOfFile: "Sources/Croissaint/UI/Settings/FeatureHubSettings.swift",
+            encoding: .utf8)) ?? ""
+        let onboardingFeatureSource = (try? String(
+            contentsOfFile: "Sources/Croissaint/UI/Onboarding/OnboardingView.swift",
+            encoding: .utf8)) ?? ""
+        expect(featureHubSource.contains("installBlockedReason")
+                && onboardingFeatureSource.contains("installBlockedReason"),
+               "both feature pickers refuse an unsupported install from the same rule")
+        expect(featureHubSource.contains("installableCount"),
+               "the hub counts against what this Mac can install, so install-all can finish")
         expect(AppFeature.diskImageInstaller.group == .clipboardFiles
                 && AppFeature.diskImageInstaller.enabledKeys.isEmpty
                 && AppFeature.diskImageInstaller.permissions == [.appManagement]
@@ -10532,8 +10826,14 @@ struct MetricsTests {
                    "every Settings category name is set for \(language.rawValue)")
             let superKeyValues = Mirror(reflecting: FeatureStrings.superKey(language)).children
                 .compactMap { $0.value as? String }
-            expect(superKeyValues.count == 15 && superKeyValues.allSatisfy { !$0.isEmpty },
+            expect(superKeyValues.count == 17 && superKeyValues.allSatisfy { !$0.isEmpty },
                    "every super key string is set for \(language.rawValue)")
+            let refusals = SuperKeyMappingFailure.allCases.map {
+                FeatureStrings.superKey(language).mappingFailure($0)
+            }
+            expect(Set(refusals).count == SuperKeyMappingFailure.allCases.count
+                    && refusals.allSatisfy { !$0.isEmpty },
+                   "every reason the key mapping is refused reads differently (\(language.rawValue))")
             expect(superKeyValues.allSatisfy { !$0.contains("—") }
                     && FeatureStrings.superKey(language).panelCaptionFormat.contains("%@"),
                    "super key strings keep their format and avoid em-dashes (\(language.rawValue))")
@@ -10546,7 +10846,7 @@ struct MetricsTests {
                    "shortcut editor strings keep their format and avoid em-dashes (\(language.rawValue))")
             let appearanceValues = Mirror(reflecting: FeatureStrings.appearance(language)).children
                 .compactMap { $0.value as? String }
-            expect(appearanceValues.count == 4 && appearanceValues.allSatisfy { !$0.isEmpty },
+            expect(appearanceValues.count == 5 && appearanceValues.allSatisfy { !$0.isEmpty },
                    "every appearance string is set for \(language.rawValue)")
             expect(appearanceValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible appearance strings (\(language.rawValue))")
@@ -10572,7 +10872,7 @@ struct MetricsTests {
                    "no em-dash in visible camera preview strings (\(language.rawValue))")
             let radialMenuValues = Mirror(reflecting: FeatureStrings.radialMenu(language)).children
                 .compactMap { $0.value as? String }
-            expect(radialMenuValues.count == 58 && radialMenuValues.allSatisfy { !$0.isEmpty },
+            expect(radialMenuValues.count == 90 && radialMenuValues.allSatisfy { !$0.isEmpty },
                    "every radial menu string is set for \(language.rawValue)")
             expect(radialMenuValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible radial menu strings (\(language.rawValue))")
@@ -11018,6 +11318,30 @@ struct MetricsTests {
             drawableDisplayIDs: [], managedDisabledIDs: [], builtInDisabledIDs: [1]).isEmpty,
                "a display disabled elsewhere is never changed during headless recovery")
 
+        // The same transaction relays its screen change to AppKit inline, and
+        // switching off the display the panel is on makes AppKit lay that panel
+        // out again right there: the power button's body is evaluated while
+        // this app holds the display server busy, so anything it asks the
+        // display server is a question the same thread is still answering, and
+        // the app freezes with nothing left that can end it (issue #969). The
+        // body decides from the published snapshot instead, and the live
+        // reading stays where it guards the switch itself. Comments are
+        // stripped first: a note naming what it bans is not a call.
+        let brightnessSource = (try? String(
+            contentsOfFile: "Sources/Croissaint/Services/Display/BrightnessService.swift",
+            encoding: .utf8)) ?? ""
+        let canToggleCode = ((brightnessSource
+            .components(separatedBy: "func canToggleDisplay(").last ?? "")
+            .components(separatedBy: "\n    }").first ?? "")
+            .components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        expect(!canToggleCode.isEmpty
+               && canToggleCode.contains("drawableDisplays")
+               && !canToggleCode.contains("Self.drawableDisplayIDs(")
+               && !canToggleCode.contains("stateLock"),
+               "the panel reads whether a display can be switched off without asking the display server")
+
         expect(BrightnessSupport.ddcCommandDelay(nowMicroseconds: 1_000_000,
                                                  lastCommandEndMicroseconds: nil) == 0,
                "the first DDC command to a display waits nothing")
@@ -11230,6 +11554,18 @@ struct MetricsTests {
                "unknown variables stay visible")
         expect(TextSnippetSupport.expand("plain", date: fixedDate, clipboard: nil) == "plain",
                "text without variables passes through untouched")
+
+        // Only a replacement that names the clipboard pays for reading it: the
+        // pasteboard can hang on content nobody renders any more, and that read
+        // sits on the keystroke path (issue #887).
+        expect(TextSnippetSupport.needsClipboard("clip: {{clipboard}}"),
+               "a replacement naming the clipboard needs it read")
+        expect(!TextSnippetSupport.needsClipboard("Report on {{date}} at {{time}}."),
+               "a replacement with only date variables never reads the clipboard")
+        expect(!TextSnippetSupport.needsClipboard("plain"),
+               "a replacement without variables never reads the clipboard")
+        expect(!TextSnippetSupport.needsClipboard("keep {{unknown}}"),
+               "an unknown variable is not the clipboard one")
 
         // Custom date patterns after a colon (issue #348)
         let enUS = Locale(identifier: "en_US")
@@ -11538,6 +11874,158 @@ struct MetricsTests {
                 && RadialMenuTool.cleaningMode.isRunnable(isFeatureAvailable: { _ in true },
                                                           boolFor: { _ in false }),
                "Shelf wheel slices follow the Shelf master switch without affecting on-demand tools")
+
+        // MARK: Radial menu profiles
+
+        let allColors = RadialMenuColor.allCases
+        expect(allColors.count == 12
+                && Set(allColors.map(\.rawValue)).count == 12
+                && allColors.allSatisfy { $0.id == $0.rawValue },
+               "twelve distinct radial menu accent colors")
+        let enStrings = FeatureStrings.radialMenu(.enUS)
+        expect(RadialMenuColor.accent.title(enStrings) == "Accent"
+                && RadialMenuColor.blue.title(enStrings) == "Blue"
+                && RadialMenuColor.purple.title(enStrings) == "Purple"
+                && RadialMenuColor.pink.title(enStrings) == "Pink"
+                && RadialMenuColor.red.title(enStrings) == "Red"
+                && RadialMenuColor.orange.title(enStrings) == "Orange"
+                && RadialMenuColor.yellow.title(enStrings) == "Yellow"
+                && RadialMenuColor.green.title(enStrings) == "Green"
+                && RadialMenuColor.mint.title(enStrings) == "Mint"
+                && RadialMenuColor.cyan.title(enStrings) == "Cyan"
+                && RadialMenuColor.indigo.title(enStrings) == "Indigo"
+                && RadialMenuColor.graphite.title(enStrings) == "Graphite",
+               "radial menu color titles localize properly")
+
+        let allPresets = RadialMenuProfilePreset.allCases
+        expect(allPresets.count == 6
+                && Set(allPresets.map(\.rawValue)).count == 6
+                && allPresets.allSatisfy { $0.id == $0.rawValue },
+               "six distinct radial profile presets")
+        expect(RadialMenuProfilePreset.general.makeItems().count == 6
+                && RadialMenuProfilePreset.media.makeItems().count == 4
+                && RadialMenuProfilePreset.tools.makeItems().count == 6
+                && RadialMenuProfilePreset.windowLayout.makeItems().count == 5
+                && RadialMenuProfilePreset.quickToggles.makeItems().count == 5
+                && RadialMenuProfilePreset.blank.makeItems().isEmpty,
+               "presets generate expected initial item layouts")
+
+        let customProfile = RadialMenuProfile(
+            id: UUID(),
+            name: " Media Wheel ",
+            color: .purple,
+            shortcut: "control+command:49",
+            mouseButton: RadialMenuMouseTrigger.back.rawValue,
+            items: RadialMenuProfilePreset.media.makeItems()
+        )
+        expect(customProfile.displayName(enStrings) == " Media Wheel ",
+               "profile custom name is displayed")
+        let blankNamedProfile = RadialMenuProfile(name: "", color: .accent)
+        expect(blankNamedProfile.displayName(enStrings) == enStrings.presetGeneral,
+               "blank profile name falls back to General preset title")
+
+        let encodedProfilesData = RadialMenuSupport.encodeProfiles([customProfile])
+        let decodedProfiles = RadialMenuSupport.decodeProfiles(encodedProfilesData)
+        expect(decodedProfiles.count == 1
+                && decodedProfiles[0].id == customProfile.id
+                && decodedProfiles[0].name == "Media Wheel"
+                && decodedProfiles[0].color == .purple
+                && decodedProfiles[0].shortcut == "control+command:49"
+                && decodedProfiles[0].mouseButton == RadialMenuMouseTrigger.back.rawValue
+                && decodedProfiles[0].items.count == 4,
+               "profile encodes and decodes accurately with trimmed name")
+
+        let dupID = UUID()
+        let dups = [
+            RadialMenuProfile(id: dupID, name: "First"),
+            RadialMenuProfile(id: dupID, name: "Duplicate"),
+            RadialMenuProfile(id: UUID(), name: "  Trim Me  ", shortcut: "invalidShortcutFormat"),
+        ]
+        let sanitizedDups = RadialMenuSupport.sanitizedProfiles(dups)
+        expect(sanitizedDups.count == 2
+                && sanitizedDups[0].name == "First"
+                && sanitizedDups[1].name == "Trim Me"
+                && sanitizedDups[1].shortcut.isEmpty,
+               "sanitized profiles deduplicate IDs, trim names, and drop invalid shortcuts")
+
+        let emptySanitized = RadialMenuSupport.sanitizedProfiles([])
+        expect(emptySanitized.count == 1
+                && emptySanitized[0].color == .accent
+                && !emptySanitized[0].shortcut.isEmpty
+                && emptySanitized[0].items.count == 6,
+               "sanitizing empty profile list provides one default starter profile")
+
+        let appOnlyProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.off.rawValue,
+            items: [RadialMenuItem(kind: .app, payload: "/Applications/Safari.app")]
+        )
+        expect(!RadialMenuSupport.needsAccessibility([appOnlyProfile]),
+               "app-only profile without mouse button does not need Accessibility")
+        let mouseProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.forward.rawValue,
+            items: [RadialMenuItem(kind: .app, payload: "/Applications/Safari.app")]
+        )
+        expect(RadialMenuSupport.needsAccessibility([mouseProfile]),
+               "profile with mouse trigger needs Accessibility")
+        let shortcutProfile = RadialMenuProfile(
+            mouseButton: RadialMenuMouseTrigger.off.rawValue,
+            items: [RadialMenuItem(kind: .shortcut, payload: "command:8")]
+        )
+        expect(RadialMenuSupport.needsAccessibility([shortcutProfile]),
+               "profile with keyboard shortcut slice needs Accessibility")
+
+        let profileTestDefaults = UserDefaults(suiteName: "com.vorssaint.tests.radialProfiles")!
+        profileTestDefaults.removePersistentDomain(forName: "com.vorssaint.tests.radialProfiles")
+        profileTestDefaults.set(true, forKey: AppFeature.radialMenu.availabilityKey)
+        profileTestDefaults.set(true, forKey: DefaultsKey.radialMenuEnabled)
+
+        let profileA = RadialMenuProfile(
+            name: "Work",
+            mouseButton: RadialMenuMouseTrigger.back.rawValue
+        )
+        let profileB = RadialMenuProfile(
+            name: "Fun",
+            mouseButton: RadialMenuMouseTrigger.button(4).rawValue
+        )
+        profileTestDefaults.set(RadialMenuSupport.encodeProfiles([profileA, profileB]), forKey: DefaultsKey.radialMenuProfiles)
+
+        expect(RadialMenuSupport.claimsMouseButton(MouseButtonShortcutSupport.backButtonNumber, defaults: profileTestDefaults),
+               "claims button 3 from profile A")
+        expect(RadialMenuSupport.claimsMouseButton(4, defaults: profileTestDefaults),
+               "claims button 4 from profile B")
+        expect(!RadialMenuSupport.claimsMouseButton(5, defaults: profileTestDefaults),
+               "does not claim unclaimed button 5")
+
+        profileTestDefaults.set(false, forKey: DefaultsKey.radialMenuEnabled)
+        expect(!RadialMenuSupport.claimsMouseButton(MouseButtonShortcutSupport.backButtonNumber, defaults: profileTestDefaults),
+               "disabled radial menu never claims mouse buttons")
+        profileTestDefaults.removePersistentDomain(forName: "com.vorssaint.tests.radialProfiles")
+
+        let testImage = NSImage(size: NSSize(width: 16, height: 16))
+        testImage.lockFocus()
+        NSColor.red.set()
+        NSRect(x: 0, y: 0, width: 16, height: 16).fill()
+        testImage.unlockFocus()
+        let samplePNG = RadialMenuFaviconFetcher.scaledPNGData(from: testImage, targetSize: 32)
+        expect(samplePNG != nil && (samplePNG?.count ?? 0) > 0, "scaledPNGData produces valid PNG")
+
+        let itemWithFavicon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: samplePNG)
+        let encodedFaviconData = RadialMenuSupport.encode([itemWithFavicon])
+        let decodedFaviconItem = RadialMenuSupport.decode(encodedFaviconData).first
+        expect(decodedFaviconItem?.customIconData == samplePNG,
+               "customIconData survives encode and decode")
+
+        let oversizedData = Data(repeating: 0xFF, count: 70_000)
+        let itemWithOversizedIcon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: oversizedData)
+        let sanitizedOversized = RadialMenuSupport.sanitized([itemWithOversizedIcon]).first
+        expect(sanitizedOversized?.customIconData == nil,
+               "sanitized drops oversized customIconData")
+
+        let invalidImageData = Data([0x00, 0x01, 0x02, 0x03])
+        let itemWithInvalidIcon = RadialMenuItem(kind: .url, name: "Site", payload: "https://example.com", customIconData: invalidImageData)
+        let sanitizedInvalid = RadialMenuSupport.sanitized([itemWithInvalidIcon]).first
+        expect(sanitizedInvalid?.customIconData == nil,
+               "sanitized drops corrupted customIconData that cannot form an NSImage")
 
         // MARK: Dock click with AX-blind apps (issue #200)
 
@@ -12791,14 +13279,13 @@ struct MetricsTests {
             ]) == [oversizedCaptureIDs[0], oversizedCaptureIDs[2]],
                "recent captures keeps the latest screenshot and respects its disk budget")
         expect(GlobalShortcutRole.screenshot.requiredEnableKeys == [DefaultsKey.screenshotShortcutEnabled]
-                && Set(GlobalShortcutRole.screenshot.availabilityFeatures)
-                    == Set([.screenshot, .screenRecorder, .screenOCR, .colorPicker]),
-               "one capture shortcut follows every mode in the combined chooser")
-        expect(GlobalShortcutRole.availableRoles(isAvailable: recordingOnly.contains)
+                && GlobalShortcutRole.screenshot.availabilityFeatures == [.screenshot],
+               "the screenshot shortcut keeps its old keys and follows its own tool")
+        expect(!GlobalShortcutRole.availableRoles(isAvailable: recordingOnly.contains)
                 .contains(.screenshot)
                 && GlobalShortcutRole.availableRoles(isAvailable: recordingOnly.contains)
                     .contains(.screenRecorder),
-               "a recording-only install shows the general and dedicated shortcuts")
+               "a recording-only install shows only the recorder's own shortcut")
         expect(GlobalShortcutRole.screenshotFullScreen.requiredEnableKeys
                 == [DefaultsKey.screenshotFullScreenShortcutEnabled]
                 && GlobalShortcutRole.screenshotFullScreen.feature == .screenshot,
@@ -12864,6 +13351,64 @@ struct MetricsTests {
         ]
         expect(scratchpadHitTargetContracts.allSatisfy { scratchpadViewSource.contains($0) },
                "the scratchpad tab bar and header controls keep their full padded hit targets")
+        // An unpinned borderless Menu claims the free width of its row on
+        // macOS 15 and starves whatever shares that row (issue #569), so the
+        // rule is checked for every borderless menu in the app rather than for
+        // the one this fix touches. Kill Process is the one
+        // deliberate exception: its row controls take a shared minimum width
+        // so the Kill button and the menu beside it line up down the list.
+        let borderlessMenuException = "KillProcess/KillProcessView"
+        var unpinnedBorderlessMenus: [String] = []
+        let uiFiles = FileManager.default
+            .enumerator(atPath: "Sources/Croissaint/UI")?
+            .compactMap { $0 as? String }
+            .filter { $0.hasSuffix(".swift") && !$0.contains(" 2") } ?? []
+        for file in uiFiles.sorted() {
+            let path = "Sources/Croissaint/UI/\(file)"
+            guard !file.contains(borderlessMenuException),
+                  let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+            let lines = source.components(separatedBy: "\n")
+            for (index, line) in lines.enumerated()
+            where line.contains(".menuStyle(.borderlessButton)") {
+                // Read to the end of the menu's own modifier chain: the next
+                // line that is neither a modifier nor a comment belongs to
+                // something else.
+                var pinned = false
+                var cursor = index + 1
+                while cursor < lines.count {
+                    let text = lines[cursor].trimmingCharacters(in: .whitespaces)
+                    guard text.hasPrefix(".") || text.hasPrefix("//") else { break }
+                    if text.hasPrefix(".fixedSize()") { pinned = true; break }
+                    cursor += 1
+                }
+                if !pinned { unpinnedBorderlessMenus.append("\(file):\(index + 1)") }
+            }
+        }
+        expect(unpinnedBorderlessMenus.isEmpty,
+               "every borderless menu keeps its own size: \(unpinnedBorderlessMenus)")
+
+        // `waitUntilAllOperationsAreFinished` has no deadline, and the window
+        // walk that used it runs on the main thread while its operations run on
+        // the shared dispatch pool. Once unrelated work had taken every worker
+        // in that pool, not one operation started and the wait never returned,
+        // taking the whole app with it (issue #971). The call is unusable here
+        // for that reason, so the rule is the absence of it rather than the one
+        // caller that was found holding it.
+        var unboundedOperationWaits: [String] = []
+        let appSources = FileManager.default
+            .enumerator(atPath: "Sources/Croissaint")?
+            .compactMap { $0 as? String }
+            .filter { $0.hasSuffix(".swift") && !$0.contains(" 2") } ?? []
+        for file in appSources.sorted() {
+            guard let source = try? String(contentsOfFile: "Sources/Croissaint/\(file)",
+                                           encoding: .utf8) else { continue }
+            for (index, line) in source.components(separatedBy: "\n").enumerated()
+            where line.contains("waitUntilAllOperationsAreFinished") {
+                unboundedOperationWaits.append("\(file):\(index + 1)")
+            }
+        }
+        expect(!appSources.isEmpty && unboundedOperationWaits.isEmpty,
+               "no operation queue is waited on without a deadline: \(unboundedOperationWaits)")
         expect(ScratchpadRetention.sanitized("day") == .day
                 && ScratchpadRetention.sanitized("week") == .week
                 && ScratchpadRetention.sanitized("month") == .month
@@ -13353,8 +13898,6 @@ struct MetricsTests {
 
         let capsMapping = SuperKeyMapping(source: SuperKeySupport.capsLockUsage,
                                           destination: SuperKeySupport.triggerUsage)
-        let noActionMapping = SuperKeyMapping(source: SuperKeySupport.noActionUsage,
-                                              destination: SuperKeySupport.triggerUsage)
         let foreignMapping = SuperKeyMapping(source: 0x700000064, destination: 0x700000035)
         expect(SuperKeySupport.mappings(enablingSuperKey: true, existing: []) == [capsMapping],
                "turning the key on maps caps lock to the key it arrives as")
@@ -13382,15 +13925,6 @@ struct MetricsTests {
                 && SuperKeySupport.mappings(enablingSuperKey: true,
                                             existing: [capsMapping]) == [capsMapping],
                "an identical external Caps Lock mapping is not claimed without ownership proof")
-        expect(SuperKeySupport.mappings(enablingSuperKey: true,
-                                        existing: [foreignMapping],
-                                        includeNoAction: true)
-                == [capsMapping, noActionMapping, foreignMapping]
-                && SuperKeySupport.mappings(enablingSuperKey: false,
-                                            existing: [capsMapping, noActionMapping, foreignMapping],
-                                            ownsExistingMapping: true)
-                == [foreignMapping],
-               "the no-action mapping belongs to the feature and leaves with it")
         expect(SuperKeySupport.mappingArgument([capsMapping])
                 == "{\"UserKeyMapping\":[{\"HIDKeyboardModifierMappingSrc\":30064771129,\"HIDKeyboardModifierMappingDst\":30064771181}]}",
                "the mapping table goes out in the form the system takes")
@@ -13479,50 +14013,27 @@ struct MetricsTests {
             ownsExistingMapping: true
         ) == [foreignMapping], "a newly connected keyboard can converge when only the owned mapping differs")
 
-        let disabledCaps = SuperKeyMapping(source: SuperKeySupport.capsLockUsage,
-                                           destination: SuperKeySupport.noActionUsage)
-        let disabledControl = SuperKeyMapping(source: 0x7000000E0,
-                                              destination: SuperKeySupport.noActionUsage)
-        expect(SuperKeySupport.canMapNoAction(from: [disabledCaps])
-                && !SuperKeySupport.canMapNoAction(from: [disabledControl])
-                && !SuperKeySupport.canMapNoAction(from: [disabledCaps, disabledControl])
-                && !SuperKeySupport.canMapNoAction(from: []),
-               "the shared no-action sentinel is recovered only when Caps Lock owns it")
-        expect(SuperKeySupport.modifierMappingsAllowSuperKey([])
-                && SuperKeySupport.modifierMappingsAllowSuperKey([disabledControl])
-                && SuperKeySupport.modifierMappingsAllowSuperKey([disabledCaps])
-                && !SuperKeySupport.modifierMappingsAllowSuperKey(
-                    [disabledCaps, disabledControl]
-                )
-                && !SuperKeySupport.modifierMappingsAllowSuperKey([foreignCapsMapping]),
-               "an external or shared Modifier Keys rule for Caps Lock blocks activation")
         let noActionReport = """
         HIDKeyboardModifierMappingPairs = {
           HIDKeyboardModifierMappingSrc = 30064771129;
           HIDKeyboardModifierMappingDst = "-1";
         }
         """
-        expect(SuperKeySupport.parseMappings(noActionReport) == [disabledCaps],
+        expect(SuperKeySupport.parseMappings(noActionReport)
+                == [SuperKeyMapping(source: SuperKeySupport.capsLockUsage,
+                                    destination: UInt64.max)],
                "hidutil's signed no-action value keeps its unsigned HID meaning")
-        let heterogeneousModifierReport = """
-        RegistryID  Key                               Value
-        100000a84   HIDKeyboardModifierMappingPairs   (
-                {
-                HIDKeyboardModifierMappingDst = "-1";
-                HIDKeyboardModifierMappingSrc = 30064771129;
-            }
-        )
-        100000a85   HIDKeyboardModifierMappingPairs   (
-                {
-                HIDKeyboardModifierMappingDst = 30064771113;
-                HIDKeyboardModifierMappingSrc = 30064771129;
-            }
-        )
-        """
-        expect(SuperKeySupport.consistentMappings(
-            heterogeneousModifierReport,
-            property: SuperKeySupport.modifierMappingProperty
-        ) == nil, "different per-keyboard Modifier Keys rules block Super key activation")
+        // The page is the only place a refused mapping is visible, so the
+        // reason has to reach it and be spelled out there.
+        let superKeySettingsSource = (try? String(
+            contentsOfFile: "Sources/Croissaint/UI/Settings/SuperKeySettings.swift",
+            encoding: .utf8)) ?? ""
+        let failureMark = superKeySettingsSource.range(of: "superKey.mappingFailure")
+        let runningMark = superKeySettingsSource.range(of: "superKey.isRunning")
+        expect(failureMark != nil && runningMark != nil
+                && failureMark!.lowerBound < runningMark!.lowerBound
+                && superKeySettingsSource.contains("text.mappingFailure(failure)"),
+               "the Super key page names a refused mapping ahead of the working state")
 
         var superKeyState = SuperKeySupport.State()
         expect(superKeyState.decide(.otherKey) == .pass,
@@ -14393,13 +14904,15 @@ struct MetricsTests {
         expect(HomebrewCommandBuilder.outdatedCasksIncludingSelfUpdating(brewPath: "/opt/x/brew").arguments
                 == ["outdated", "--cask", "--greedy", "--json=v2"],
                "the update check asks for the apps that carry their own updater too")
-        let caskJSON = #"{"formulae":[],"casks":[{"token":"editor","name":["Editor"],"installed":"1.129.0","artifacts":[{"app":["Source.app",{"target":"Editor.app"}],"target":"/Applications/Editor.app"},{"zap":[]}]}]}"#
+        let caskJSON = #"{"formulae":[],"casks":[{"token":"editor","name":["Editor"],"installed":"1.129.0","artifacts":[{"app":["Source.app",{"target":"Editor.app"}],"target":"/Applications/Editor.app"},{"zap":[]}]},{"token":"tapped-tool","full_token":"example/tap/tapped-tool","name":["Tapped Tool"],"installed":"1.0.0","artifacts":[{"app":["Tapped Tool.app"]}]}]}"#
         let parsedRecords = HomebrewParser.parseInstalledCaskRecords(caskJSON)
-        expect(parsedRecords.count == 1 && parsedRecords[0].appFileNames == ["Editor.app"]
+        expect(parsedRecords.count == 2 && parsedRecords[0].appFileNames == ["Editor.app"]
                 && parsedRecords[0].appPaths == ["/Applications/Editor.app"]
                 && parsedRecords[0].displayName == "Editor"
                 && parsedRecords[0].installedVersion == "1.129.0",
                "an installed package is traced to the final app name after a rename")
+        expect(parsedRecords.first { $0.token == "tapped-tool" }?.displayName == "Tapped Tool",
+               "parseInstalledCaskRecords keeps the short token brew outdated reports for a cask from a tap")
         expect(HomebrewParser.parseInstalledCaskRecords("garbage").isEmpty,
                "unreadable package output yields no records")
         let managedPackage = HomebrewOwnershipSupport.packageManagingApplication(
@@ -16417,24 +16930,52 @@ struct MetricsTests {
 
         // MARK: Capture tool shortcuts
 
-        expect(ScreenCaptureTool.screenshot.dedicatedShortcut == nil,
-               "the screenshot tool has no shortcut of its own: the general capture one is it")
-        expect(ScreenCaptureTool.allCases.compactMap { $0.dedicatedShortcut?.role }
-                == [.screenRecorder, .screenOCR, .colorPicker],
-               "every other capture tool owns a shortcut role, in tool order")
+        expect(ScreenCaptureTool.screenshot.dedicatedShortcut.role == .screenshot
+                && ScreenCaptureTool.screenshot.dedicatedShortcut.enabledKey
+                    == DefaultsKey.screenshotShortcutEnabled,
+               "the screenshot tool keeps the old general shortcut's keys as its own")
+        expect(ScreenCaptureTool.allCases.map { $0.dedicatedShortcut.role }
+                == [.screenshot, .screenRecorder, .screenOCR, .colorPicker],
+               "every capture tool owns a shortcut role, in tool order")
         // The keys a tool registers have to be the ones its settings row writes.
         // Three roles once had a row and no registrar, so the key was recorded
         // and the combination did nothing (issue #708).
         expect(ScreenCaptureTool.allCases.allSatisfy { tool in
-                guard let keys = tool.dedicatedShortcut else { return true }
+                let keys = tool.dedicatedShortcut
                 return keys.role.requiredEnableKeys == [keys.enabledKey]
                     && keys.role.feature == tool.feature
                },
                "a capture tool registers exactly the keys its own settings row reads")
-        expect(([.screenRecorder, .screenOCR, .colorPicker] as [GlobalShortcutRole]).allSatisfy { role in
-                ScreenCaptureTool.allCases.contains { $0.dedicatedShortcut?.role == role }
-               },
-               "no capture tool's shortcut row is left without something to register it")
+        expect(GlobalShortcutRole.captureRoles(in: GlobalShortcutRole.allCases)
+                == GlobalShortcutRole.captureDisplayOrder,
+               "every role of a capture feature reaches the shortcuts page, in display order")
+        expect(GlobalShortcutRole.captureRoles(in: [.colorPicker, .screenshot, .commandBar])
+                == [.screenshot, .colorPicker],
+               "capture roles are reordered for display and other roles fall away")
+        // MARK: A failed removal explains itself where it failed
+        // A green tick above "some items couldn't be moved to the Trash" told
+        // nobody that sandboxed app data needs Full Disk Access, and the note
+        // offering the permission only ever appeared before an app was picked.
+        expect(UninstallerSupport.doneSymbol(hasLeftovers: false) == "checkmark.circle.fill",
+               "a removal that took everything ends on a tick")
+        expect(UninstallerSupport.doneSymbol(hasLeftovers: true)
+                != UninstallerSupport.doneSymbol(hasLeftovers: false),
+               "a removal that left something behind does not end on the same mark")
+        // Both done states have to route through that decision and name what
+        // survived; neither may spell a tick of its own.
+        for path in ["Sources/Croissaint/UI/Uninstall/UninstallerView.swift",
+                     "Sources/Croissaint/UI/MenuPanel/PanelUninstallerView.swift"] {
+            let source = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+            expect(source.contains("UninstallFailureNote(items:"),
+                   "\(path) names what the removal left behind")
+            expect(!source.contains("\"checkmark.circle.fill\""),
+                   "\(path) takes its done symbol from UninstallerSupport")
+        }
+        let sharedUISource = (try? String(contentsOfFile: "Sources/Croissaint/UI/SharedUI.swift",
+                                          encoding: .utf8)) ?? ""
+        expect(sharedUISource.contains("uninstallerFailedNeedsFDA"),
+               "the failure note explains the permission the removal needed")
+
         // MARK: Private file store
 
         let privateRoot = FileManager.default.temporaryDirectory
@@ -16786,6 +17327,7 @@ struct MetricsTests {
                     291: ((8, 23, 6, 6), (20, 23, 6, 6)),   // Ninjask
                     357: ((18, 7, 6, 6), (18, 7, 6, 6)),    // Tropius
                     372: ((3, 19, 5, 5), (11, 20, 5, 5)),   // Shelgon (was a slab on the shell)
+                    448: ((16, 11, 6, 6), (16, 11, 6, 6)),  // Lucario (rescue read chest spikes)
                     487: ((35, 17, 8, 7), (47, 16, 8, 7)),  // Giratina
                     624: ((22, 14, 5, 5), (22, 14, 5, 5)),  // Pawniard
                     661: ((36, 37, 7, 7), (36, 37, 7, 7)),  // Fletchling
@@ -16814,10 +17356,34 @@ struct MetricsTests {
                 //    every species either carries measured lids or is pinned
                 //    eyeless, so a pack rebuild never silently re-rolls the
                 //    fuzzy detector over a species someone already vetted.
-                expect(lidded.count == 683,
+                //    777 = 683 tight-measured + 94 bright-eye rescues (the
+                //    yellow/red/cyan irises the detector is blind to), each
+                //    rescue vetted on a sleep contact sheet.
+                expect(lidded.count == 777,
                        "the measured lid roster stays exactly as vetted (\(lidded.count))")
-                expect(table.values.count - lidded.count == 342,
+                expect(table.values.count - lidded.count == 248,
                        "the eyeless roster stays exactly as vetted")
+                let rescues: [Int: ((Double, Double, Double, Double), (Double, Double, Double, Double))] = [
+                    151: ((10, 21, 12, 11), (40, 24, 6, 5)),   // Mew
+                    495: ((5, 9, 7, 8), (13, 8, 5, 9)),        // Snivy
+                    700: ((36, 40, 11, 12), (48, 39, 8, 8)),   // Sylveon
+                ]
+                for (id, rects) in rescues {
+                    guard let motion = table[id], motion.hasEyes,
+                          let l = motion.leftEye, let r = motion.rightEye else {
+                        expect(false, "rescued dex \(id) keeps its bright-eye lids")
+                        continue
+                    }
+                    let cw = motion.canvasWidth, chh = motion.canvasHeight
+                    let matches = { (e: PetEyeRect, rect: (Double, Double, Double, Double)) in
+                        abs(e.x * cw - rect.0) < 0.01
+                            && abs(e.y * chh - rect.1) < 0.01
+                            && abs(e.width * cw - rect.2) < 0.01
+                            && abs(e.height * chh - rect.3) < 0.01
+                    }
+                    expect(matches(l, rects.0) && matches(r, rects.1),
+                           "rescued dex \(id)'s lids stay on the vetted eyes")
+                }
 
                 // 6. The sleep pose lays the buddy onto the floor without
                 //    detaching the lids: upright species tip -90° and lift
@@ -16835,6 +17401,33 @@ struct MetricsTests {
                 let boundary = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 1.15, spriteHeight: 96)
                 expect(!boundary.liesOnSide,
                        "the 1.15 aspect boundary counts as round")
+
+                // 7. A pressed sleep is a timed nap, not a permanent state:
+                //    the schedule wakes the buddy on its own after a random
+                //    stretch, and catching a wild pokemon never disturbs it.
+                for _ in 0..<50 {
+                    let delay = PetNapSchedule.wakeDelay()
+                    expect(delay >= 5 * 60 && delay <= 15 * 60,
+                           "nap lengths stay in the 5-15 minute band")
+                }
+                let napStart = Date(timeIntervalSince1970: 1_000_000)
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(599.9)
+                ) == false, "a nap a second from its deadline keeps sleeping")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(600)
+                ), "the nap wakes exactly at its deadline")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true, wakeAt: nil, now: napStart.addingTimeInterval(999_999)
+                ) == false,
+                   "a nap with no scheduled wake (older save) runs until rested or tapped")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: false, wakeAt: napStart, now: napStart
+                ) == false, "an awake buddy has nothing to wake from")
 
             } else {
                 expect(false, "the committed animation pack parses")
@@ -16908,6 +17501,21 @@ struct MetricsTests {
 
 
         // MARK: Result
+
+        // MARK: Uninstallation paths stay aligned across SelfUninstall and Tools/uninstall.sh
+        let selfUninstallSource = (try? String(contentsOfFile: "Sources/Croissaint/Services/SelfUninstall.swift",
+                                              encoding: .utf8)) ?? ""
+        let uninstallScriptSource = (try? String(contentsOfFile: "Tools/uninstall.sh",
+                                                encoding: .utf8)) ?? ""
+        expect(!selfUninstallSource.isEmpty && !uninstallScriptSource.isEmpty,
+               "uninstall sources read back for uninstallation alignment check")
+        let requiredSubpaths = ["Library/Application Support", "Library/Caches", "Library/HTTPStorages"]
+        for subpath in requiredSubpaths {
+            expect(selfUninstallSource.contains(subpath) && uninstallScriptSource.contains(subpath),
+                   "both in-app and script uninstall sweep \(subpath)")
+        }
+        expect(uninstallScriptSource.contains("Library/Preferences/ByHost"),
+               "script uninstall sweeps ByHost preferences")
 
         if failures.isEmpty {
             print("TESTS OK (\(checks) checks)")

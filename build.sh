@@ -329,6 +329,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetAnimationPackSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
+        Sources/Croissaint/Services/DesktopPet/PetNapSchedule.swift \
         Sources/Croissaint/Services/DesktopPet/PetCatchDifficulty.swift \
         Tests/MetricsTests.swift \
         -o build/metrics-tests
