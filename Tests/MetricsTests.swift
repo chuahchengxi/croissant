@@ -17417,6 +17417,31 @@ struct MetricsTests {
         eyeless.leftEye = nil
         expect(PetAnimationPackSupport.lidRects(for: eyeless) == nil,
                "a species with no measured eyes has no lids to paint")
+
+        // Eyes drawn shut or as a squint line never blink: a lid painted
+        // over a 2-pixel slit is a smudge, not an eyelid.
+        expect(PetAnimationPackSupport.eyesWorthAnimating(face((30, 30, 10, 10), (60, 30, 10, 10))),
+               "an ordinary open eye blinks")
+        expect(!PetAnimationPackSupport.eyesWorthAnimating(face((30, 30, 10, 2), (60, 30, 10, 2))),
+               "a squint-line eye is left exactly as drawn")
+        expect(!PetAnimationPackSupport.eyesWorthAnimating(face((30, 30, 10, 10), (60, 30, 10, 2))),
+               "one shut eye is enough to skip the whole overlay")
+        expect(PetAnimationPackSupport.eyesWorthAnimating(face((30, 30, 10, 3), (60, 30, 10, 3))),
+               "the threshold itself still animates")
+        expect(!PetAnimationPackSupport.eyesWorthAnimating(eyeless),
+               "no measured eyes, nothing to animate")
+        // Snorlax's measured "eyes" are its sleeping arcs — tall enough to
+        // pass the size gate, so the curated list has to catch it.
+        let snorlax = PetFaceMotion(
+            dexID: 143,
+            leftEye: PetEyeRect(x: 0.3, y: 0.3, width: 0.08, height: 0.09),
+            rightEye: PetEyeRect(x: 0.6, y: 0.3, width: 0.07, height: 0.09),
+            lidColor: PetLidColor(red: 0.5, green: 0.5, blue: 0.5),
+            widthOverHeight: 1, gaitClass: 1,
+            canvasWidth: 100, canvasHeight: 100
+        )
+        expect(!PetAnimationPackSupport.eyesWorthAnimating(snorlax),
+               "always-shut faces never blink, whatever the measurement says")
         strider.hasLegs = true
         strider.legRX = 15   // feet too close: the crops would overlap
         expect(PetAnimationPackSupport.legSlices(for: strider, frameWidth: 40, frameHeight: 50) == nil,
