@@ -124,6 +124,40 @@ enum PetAnimationPackSupport {
     /// a species still peeks.
     static let lidPadPixels = 1.0
 
+    /// The smallest measured eye that still reads as an open eye, in canvas
+    /// pixels. Below this the art already shows the eye shut or as a squint
+    /// line — Snorlax, Abra and friends — and painting a lid over it just
+    /// stamps a smudge on the face. Calibration knob: raise it if a species
+    /// still blinks over closed eyes.
+    static let minAnimatableEyePixels = 3.0
+
+    /// Species whose art draws the eyes shut even though the measurement
+    /// finds a tall dark shape there — the closed-eye arc itself (Snorlax's
+    /// 9-pixel "eyes" are its sleeping lines). Size can't tell these apart
+    /// from open eyes, so they are named. Calibration list: add a dex id if
+    /// a species blinks over a face that was already asleep.
+    static let closedEyeDexIDs: Set<Int> = [
+        143,  // Snorlax
+        307,  // Meditite
+        324,  // Torkoal
+        343,  // Baltoy
+        446,  // Munchlax
+        518,  // Musharna
+        775,  // Komala
+    ]
+
+    /// Whether a species' eyes are worth animating at all. False for
+    /// designs whose measured eyes are shorter than the threshold above
+    /// (slits and squints) and for the named always-shut faces: no blink
+    /// loop, no lids, the face is left exactly as drawn.
+    static func eyesWorthAnimating(_ motion: PetFaceMotion) -> Bool {
+        guard let left = motion.leftEye, let right = motion.rightEye,
+              motion.canvasHeight > 0,
+              !closedEyeDexIDs.contains(motion.dexID) else { return false }
+        return left.height * motion.canvasHeight >= minAnimatableEyePixels
+            && right.height * motion.canvasHeight >= minAnimatableEyePixels
+    }
+
     /// Sleeping pose for a species, as transforms to apply to the whole
     /// sprite-and-eyelids stack: upright buddies tip over onto their side —
     /// a lossless 90° pixel rotation — and `liftY` raises the swung body back

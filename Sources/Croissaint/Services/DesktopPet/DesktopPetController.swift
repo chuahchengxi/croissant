@@ -578,8 +578,15 @@ final class DesktopPetController {
 extension DesktopPetController {
     static let minThrowSpeed: Double = 380
 
+    /// Winged species don't fall: a toss glides to a hover and the buddy
+    /// keeps living at whatever altitude it stopped at.
+    private var petFloats: Bool {
+        guard let id = pet?.dexID else { return false }
+        return PetAnimationEngine.motion(for: id)?.hasWings == true
+    }
+
     /// Launches the buddy with the release flick; it then flies, bounces and
-    /// rolls under the same feel as the wild-encounter ball.
+    /// rolls with the Ball.app desk-toy feel (floaters glide instead).
     private func beginThrow(vx: Double, vy: Double) {
         cancelFlight()
         vm.thrown = true
@@ -610,10 +617,11 @@ extension DesktopPetController {
 
         let substep = 1.0 / 120.0
         let box = window?.frame.size ?? CGSize(width: 170, height: 170)
+        let floats = petFloats
         while flightAccumulator >= substep, flightState != nil {
             flightAccumulator -= substep
             let (next, events) = DesktopThrowSupport.step(
-                state, dt: substep, box: box, bounds: boundsRect
+                state, dt: substep, box: box, bounds: boundsRect, floats: floats
             )
             state = next
             if events.hitFloor || events.hitCeiling {
@@ -651,7 +659,8 @@ extension DesktopPetController {
         applyFrame()
         pet?.setDesktopPos(x: Double(pos.x), y: Double(pos.y))
         remaining = Double.random(in: 2...4)
-        vm.spawnDizzy()
+        // A floater eases to a hover; only a grounded crash-landing dazes.
+        if !petFloats { vm.spawnDizzy() }
         vm.thrown = false
     }
 
@@ -744,6 +753,8 @@ struct DesktopPetView: View {
     /// between blinks nothing renders at all.
     @State private var eyesClosed = false
     @State private var blinkCount = 0
+    /// Settings toggle for the whole eyelid overlay (blinks and sleep lids).
+    @AppStorage(DefaultsKey.desktopPetBlinks) private var blinksEnabled = true
 
     /// Motion only matters while walking, napping or celebrating — outside of
     /// that the timeline is paused so a calm buddy costs no redraws. A hidden
@@ -899,7 +910,11 @@ struct DesktopPetView: View {
                 )
                 // Eyelids sit inside the same flipped, offset, scaled
                 // hierarchy as the sprite, so they track every body motion.
-                if let motion {
+                // Skipped when the art already draws the eyes shut or as a
+                // squint (a lid there is a smudge, not a blink), and when
+                // the settings toggle turns the overlay off.
+                if let motion, blinksEnabled,
+                   PetAnimationPackSupport.eyesWorthAnimating(motion) {
                     PetEyelidsView(
                         motion: motion,
                         height: Self.buddySpriteHeight,
@@ -935,7 +950,11 @@ struct DesktopPetView: View {
     private func runBlinks(for id: Int) async {
         let period = PetAnimationPackSupport.blinkPeriod(for: id)
         while !Task.isCancelled {
-            if PetAnimationEngine.motion(for: id) == nil {
+            // No pack entry, eyes drawn shut in the art, or the toggle off:
+            // no blinking at all — just idle cheaply and watch for changes.
+            let motion = PetAnimationEngine.motion(for: id)
+            if motion == nil || !blinksEnabled
+                || !PetAnimationPackSupport.eyesWorthAnimating(motion!) {
                 if eyesClosed { eyesClosed = false }
                 try? await Task.sleep(for: .seconds(2))
                 continue

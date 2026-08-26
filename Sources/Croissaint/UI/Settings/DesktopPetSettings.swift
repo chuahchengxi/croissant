@@ -7,6 +7,7 @@ struct DesktopPetSettings: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var service = DesktopPetService.shared
     @AppStorage(DefaultsKey.desktopPetEnabled) private var showOnDesktop = true
+    @AppStorage(DefaultsKey.desktopPetBlinks) private var blinks = true
 
     var body: some View {
         Form {
@@ -23,6 +24,13 @@ struct DesktopPetSettings: View {
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
+            }
+
+            Section {
+                Toggle(strings.blinkToggle, isOn: $blinks)
+                Text(strings.blinkCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if service.isRunning {
