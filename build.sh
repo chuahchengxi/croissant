@@ -11,15 +11,18 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # Flags: --dev builds the local-only "Croissaint (Developer)" variant (its own
-# bundle id, so it coexists with the official app); --install puts it in /Applications.
+# bundle id, so it coexists with the official app); --install puts it in /Applications;
+# --allow-adhoc permits signing without an identity (see the signing block below).
 DEV=0
 INSTALL=0
 TEST=0
+ALLOW_ADHOC=0
 for arg in "$@"; do
     case "$arg" in
-        --dev)     DEV=1 ;;
-        --install) INSTALL=1 ;;
-        --test)    TEST=1 ;;
+        --dev)         DEV=1 ;;
+        --install)     INSTALL=1 ;;
+        --test)        TEST=1 ;;
+        --allow-adhoc) ALLOW_ADHOC=1 ;;
     esac
 done
 
@@ -49,6 +52,34 @@ developer_id_identity() {
         | head -1 \
         | sed -E 's/.*"(.*)".*/\1/' || true
 }
+
+# Resolve the signing identity once, before anything is built, and reuse the
+# answer everywhere below — asking twice can give two answers if the keychain
+# locks mid-build, which is how a bundle ends up half signed.
+#
+# Refusing to fall back silently is the point. An ad-hoc signature's designated
+# requirement is the binary's cdhash, so it changes on every rebuild and every
+# TCC grant pinned to it goes stale: Accessibility keeps drawing a ticked box
+# while AXIsProcessTrusted() returns false. A locked login keychain makes
+# find-identity print nothing and is indistinguishable from owning no identity
+# at all, so the common case for hitting this is not "fresh clone" — it is a
+# working setup that quietly stopped signing.
+DEVID="$(developer_id_identity)"
+if [[ -n "$DEVID" ]]; then
+    SIGN_MODE=devid
+elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+    SIGN_MODE=legacy
+elif (( ALLOW_ADHOC )); then
+    SIGN_MODE=adhoc
+else
+    echo "error: no code signing identity available; refusing to sign ad-hoc." >&2
+    echo "  If you have never set one up:  Tools/setup-signing.sh" >&2
+    echo "  If you have one, the keychain is probably locked:" >&2
+    echo "      security unlock-keychain ~/Library/Keychains/login.keychain-db" >&2
+    echo "  To build anyway:  $0 $@ --allow-adhoc" >&2
+    echo "  Ad-hoc builds lose every granted permission on each rebuild." >&2
+    exit 1
+fi
 
 codesign_with_timestamp_retry() {
     local attempt
@@ -91,17 +122,15 @@ write_swift_output_file_map() {
 finalize_installed_bundle_after_child() {
     local bundle="$1"
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
-    local devid
-    devid="$(developer_id_identity)"
 
     echo "▸ Finalizing installed signature…"
     sleep 3
-    if [[ -n "$devid" ]]; then
+    if [[ "$SIGN_MODE" == devid ]]; then
         [[ -f "$helper" ]] && codesign_with_timestamp_retry --force --strip-disallowed-xattrs \
-            --options runtime --timestamp --identifier "$FAN_HELPER_ID" --sign "$devid" "$helper"
+            --options runtime --timestamp --identifier "$FAN_HELPER_ID" --sign "$DEVID" "$helper"
         codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
-            --entitlements "$ENTITLEMENTS" --sign "$devid" "$bundle"
-    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+            --entitlements "$ENTITLEMENTS" --sign "$DEVID" "$bundle"
+    elif [[ "$SIGN_MODE" == legacy ]]; then
         [[ -f "$helper" ]] && /usr/bin/codesign --force --strip-disallowed-xattrs \
             --identifier "$FAN_HELPER_ID" --sign "$LEGACY_IDENTITY" "$helper"
         /usr/bin/codesign --force --strip-disallowed-xattrs --sign "$LEGACY_IDENTITY" "$bundle"
@@ -328,6 +357,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift \
         Sources/Croissaint/Services/DesktopPet/PetAnimationPackSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetSpriteMetrics.swift \
+        Sources/Croissaint/Services/DesktopPet/PetNoticeParsing.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveArt.swift \
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
@@ -479,14 +509,14 @@ xattr -c -r "$STAGE" 2>/dev/null || true
 #   2. "Croissaint Utils Signing" — the legacy stable self-signed identity, kept
 #      as a fallback so contributors without a Developer ID still get a constant
 #      designated requirement across their local builds.
-#   3. Ad-hoc — fresh clone with no identity at all.
-DEVID="$(developer_id_identity)"
+#   3. Ad-hoc — only with --allow-adhoc, because the resulting designated
+#      requirement is a bare cdhash that every rebuild invalidates.
 codesign_app() {
     local target="$1"
-    if [[ -n "$DEVID" ]]; then
+    if [[ "$SIGN_MODE" == devid ]]; then
         codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" --sign "$DEVID" "$target"
-    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+    elif [[ "$SIGN_MODE" == legacy ]]; then
         codesign --force --strip-disallowed-xattrs --sign "$LEGACY_IDENTITY" "$target"
     else
         codesign --force --strip-disallowed-xattrs --sign - "$target"
@@ -495,10 +525,10 @@ codesign_app() {
 
 codesign_fan_helper() {
     local target="$1"
-    if [[ -n "$DEVID" ]]; then
+    if [[ "$SIGN_MODE" == devid ]]; then
         codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
             --identifier "$FAN_HELPER_ID" --sign "$DEVID" "$target"
-    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+    elif [[ "$SIGN_MODE" == legacy ]]; then
         codesign --force --strip-disallowed-xattrs --identifier "$FAN_HELPER_ID" \
             --sign "$LEGACY_IDENTITY" "$target"
     else
@@ -511,12 +541,12 @@ sign_bundle() {
     local executable="$bundle/Contents/MacOS/$EXECUTABLE"
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
 
-    if [[ -n "$DEVID" ]]; then
+    if [[ "$SIGN_MODE" == devid ]]; then
         echo "  signing with Developer ID (hardened runtime): $DEVID"
-    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+    elif [[ "$SIGN_MODE" == legacy ]]; then
         echo "  signing with legacy self-signed identity: $LEGACY_IDENTITY"
     else
-        echo "  signing ad-hoc (no identity installed — run Tools/setup-signing.sh)"
+        echo "  signing ad-hoc (--allow-adhoc) — permissions reset on every rebuild"
     fi
     [[ -f "$helper" ]] && codesign_fan_helper "$helper"
     codesign_app "$bundle"
