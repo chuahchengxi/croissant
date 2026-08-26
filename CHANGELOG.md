@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.0.9] - 2026-08-26
+
+### Added
+- The desktop pet gains dedicated move art instead of sharing sprites between actions: 28 moves now draw their own frames, with lids that properly cover the eye during motion.
+- Pets render at a uniform sprite size across species, banners share one font, and the fetch animation stays pixelated at any scale.
+
+### Removed
+- The X (Twitter) follow card is gone from the desktop pet UI.
+
 ## [0.0.8] - 2026-08-26
 
 ### Changed
