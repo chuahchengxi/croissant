@@ -278,13 +278,9 @@ struct WildPokemonView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            Text("WILD!")
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(Color.yellow.opacity(0.95)))
-                .foregroundStyle(Color.black.opacity(0.7))
-
+            // Pet-world copy is all one pixel font at one size — the same
+            // renderer as the notification banner.
+            PixelTextView(text: "WILD!")
             encounterArea
                 .frame(height: 210)
                 .background(frameReader { targetRect = $0 })
@@ -339,22 +335,12 @@ struct WildPokemonView: View {
             }
 
             if gotcha {
-                Text("Gotcha!")
-                    .font(.system(size: 19, weight: .heavy, design: .rounded))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.yellow.opacity(0.95)))
-                    .foregroundStyle(Color.black.opacity(0.75))
+                PixelTextView(text: "Gotcha!")
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
 
             if let message {
-                Text(message)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.white.opacity(0.85)))
-                    .foregroundStyle(Color.black.opacity(0.65))
+                PixelTextView(text: message)
                     .transition(.opacity)
                     .offset(y: 72)
             }
