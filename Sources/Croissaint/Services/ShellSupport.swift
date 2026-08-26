@@ -127,7 +127,10 @@ enum Sudoers {
     static let rulePath = "/etc/sudoers.d/croissaint-clamshell"
     // Rule files written under earlier names; removed whenever the rule is
     // (re)installed or removed, so the closed-lid permission migrates without an
-    // extra password prompt.
+    // extra password prompt. These are paths that may exist on a user's disk
+    // right now, not references to the upstream project: rename them and the
+    // stale NOPASSWD rules they point at survive forever, which is the one
+    // thing this list exists to prevent.
     private static let legacyRulePaths = [
         "/etc/sudoers.d/vorssaint-clamshell",
         "/etc/sudoers.d/vorssaint-utils-clamshell",

@@ -1576,7 +1576,7 @@ struct MetricsTests {
         expect(registeredDefaults[DefaultsKey.switcherWindowShortcut] as? String
                == GlobalShortcut.switcherWindowDefault.storageValue,
                "switcher window shortcut defaults to Cmd+Grave")
-        let shortcutSuite = "vorss.tests.switcher.shortcut"
+        let shortcutSuite = "com.croissaint.tests.switcher.shortcut"
         if let migrationDefaults = UserDefaults(suiteName: shortcutSuite) {
             migrationDefaults.removePersistentDomain(forName: shortcutSuite)
             migrationDefaults.set("control+option+command:50", forKey: DefaultsKey.switcherWindowShortcut)
@@ -3099,7 +3099,7 @@ struct MetricsTests {
 
         // MARK: WhatsApp downloads
 
-        let whatsAppEnabledSuite = "vorss.tests.whatsapp.enabled"
+        let whatsAppEnabledSuite = "com.croissaint.tests.whatsapp.enabled"
         if let migrationDefaults = UserDefaults(suiteName: whatsAppEnabledSuite) {
             migrationDefaults.removePersistentDomain(forName: whatsAppEnabledSuite)
             Defaults.migrateWhatsAppDownloadsEnabled(in: migrationDefaults)
@@ -3473,7 +3473,7 @@ struct MetricsTests {
                && CleanerSupport.isProtectedBundleID("243LU875E5.groups.com.apple.podcasts")
                && CleanerSupport.isProtectedBundleID("developer.apple.wwdc")
                && CleanerSupport.isProtectedBundleID("is.workflow.my.app")
-               && CleanerSupport.isProtectedBundleID("vorss.tests.switcher.shortcut"),
+               && CleanerSupport.isProtectedBundleID("com.croissaint.tests.switcher.shortcut"),
                "system domains stay protected in every wrapping, team prefixes included")
         expect(CleanerSupport.sharedInfrastructurePrefixes.allSatisfy {
                    CleanerSupport.isProtectedBundleID($0)
@@ -4877,7 +4877,7 @@ struct MetricsTests {
                "headphone disconnect protection lowers the speakers, it never silences them")
         expect(Defaults.sanitizedMixerHeadphonesDisconnectVolumePercent(105) == 100,
                "headphone disconnect volume clamps high values")
-        let headphonesSuite = "vorss.tests.mixer.headphones"
+        let headphonesSuite = "com.croissaint.tests.mixer.headphones"
         if let silentHeadphoneVolume = UserDefaults(suiteName: headphonesSuite) {
             silentHeadphoneVolume.removePersistentDomain(forName: headphonesSuite)
             silentHeadphoneVolume.set(0, forKey: DefaultsKey.mixerHeadphonesDisconnectVolumePercent)
@@ -6788,11 +6788,11 @@ struct MetricsTests {
 
         // Running a beta build no longer turns the beta channel on by itself;
         // automatic updates stay on the stable channel unless opted in.
-        let testDefaults = UserDefaults(suiteName: "CroissaintTests.BetaActivation")!
-        testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
+        let testDefaults = UserDefaults(suiteName: "com.croissaint.tests.beta-activation")!
+        testDefaults.removePersistentDomain(forName: "com.croissaint.tests.beta-activation")
         expect(testDefaults.bool(forKey: DefaultsKey.includeBetaUpdates) == false,
                "beta builds keep automatic updates on the stable channel")
-        testDefaults.removePersistentDomain(forName: "CroissaintTests.BetaActivation")
+        testDefaults.removePersistentDomain(forName: "com.croissaint.tests.beta-activation")
 
         // Localization completeness & formatting
         for language in AppLanguage.allCases {
@@ -10564,14 +10564,6 @@ struct MetricsTests {
                    "every recent capture string is set for \(language.rawValue)")
             expect(recentCaptureValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in recent capture strings (\(language.rawValue))")
-            let feedbackValues = Mirror(reflecting: FeatureStrings.feedback(language)).children
-                .compactMap { $0.value as? String }
-            expect(feedbackValues.count == 28 && feedbackValues.allSatisfy { !$0.isEmpty },
-                   "every feedback string is set for \(language.rawValue)")
-            expect(feedbackValues.allSatisfy { !$0.contains("—") },
-                   "no em-dash in visible feedback strings (\(language.rawValue))")
-            expect(FeatureStrings.feedback(language).charactersFormat.contains("%d"),
-                   "feedback character format keeps its placeholder (\(language.rawValue))")
             let cameraPreviewValues = Mirror(reflecting: FeatureStrings.cameraPreview(language)).children
                 .compactMap { $0.value as? String }
             expect(!cameraPreviewValues.isEmpty && cameraPreviewValues.allSatisfy { !$0.isEmpty },
@@ -12763,8 +12755,6 @@ struct MetricsTests {
                "screenshot number shortcuts ship enabled")
         expect(Defaults.registeredDefaults[DefaultsKey.screenshotPreviewPosition] as? String == "",
                "screenshot preview placement preserves the existing automatic behavior by default")
-        expect(Defaults.registeredDefaults[DefaultsKey.screenshotSharingEnabled] as? Bool == true,
-               "temporary screenshot links preserve their existing availability by default")
         expect(Defaults.registeredDefaults[DefaultsKey.screenshotToolOrder] as? String
                 == ScreenshotSupport.Tool.defaultOrderStorage,
                "the screenshot rail ships in its useful numbered order")
@@ -12785,45 +12775,6 @@ struct MetricsTests {
         expect(Defaults.registeredDefaults[DefaultsKey.screenshotLastCaptureShortcut] as? String
                 == "control+option+command:14",
                "the latest screenshot editor shortcut defaults to control option command E")
-        expect(ScreenshotShareDuration.allCases.map(\.rawValue) == [3_600, 21_600, 86_400],
-               "temporary links allow only one, six or twenty-four hours")
-        let testShareEndpoint = ScreenshotSharingSupport.endpoint(
-            bundleIdentifier: ScreenshotSharingSupport.developerBundleIdentifier,
-            developerOverride: "https://test.example/")
-        expect(testShareEndpoint.absoluteString == "https://test.example"
-                && ScreenshotSharingSupport.endpoint(
-                    bundleIdentifier: "com.croissaint.utils",
-                    developerOverride: "https://test.example").absoluteString
-                    == ScreenshotSharingSupport.productionEndpoint.absoluteString
-                && ScreenshotSharingSupport.endpoint(
-                    bundleIdentifier: ScreenshotSharingSupport.developerBundleIdentifier,
-                    developerOverride: "http://test.example")
-                    == ScreenshotSharingSupport.productionEndpoint,
-               "only the Developer build accepts a valid HTTPS test endpoint")
-        expect(ScreenshotSharingSupport.uploadURL(endpoint: testShareEndpoint,
-                                                  duration: .sixHours)?.absoluteString
-                == "https://test.example/v1/screenshots?expiresIn=21600",
-               "sharing builds the fixed upload route and expiration query")
-        let shareNow = Date(timeIntervalSince1970: 1_000)
-        let shareResponse = ScreenshotShareResponse(
-            id: String(repeating: "a", count: 32),
-            viewPath: "/s/\(String(repeating: "a", count: 32))",
-            expiresAt: "1970-01-01T01:16:40.125Z",
-            deleteToken: String(repeating: "b", count: 43))
-        expect(ScreenshotSharingSupport.record(response: shareResponse,
-                                                endpoint: testShareEndpoint,
-                                                now: shareNow)?.url.absoluteString
-                == "https://test.example/s/\(String(repeating: "a", count: 32))",
-               "a valid service response becomes an owner-held link record")
-        let forgedShareResponse = ScreenshotShareResponse(
-            id: "guessable",
-            viewPath: "/s/guessable",
-            expiresAt: "1970-01-01T01:16:40.125Z",
-            deleteToken: "short")
-        expect(ScreenshotSharingSupport.record(response: forgedShareResponse,
-                                                endpoint: testShareEndpoint,
-                                                now: shareNow) == nil,
-               "guessable ids and short deletion tokens are rejected")
         expect(Defaults.registeredDefaults[DefaultsKey.panelUtilityScreenshot] as? Bool == true,
                "the panel row ships visible like its siblings")
         let recentCaptureIDs = (0..<14).map { _ in UUID() }
@@ -13969,8 +13920,6 @@ struct MetricsTests {
                 && !backupKeys.contains(DefaultsKey.fanControlRecoveryNeeded)
                 && !backupKeys.contains(DefaultsKey.fanControlHelperVersion),
                "fan display and cooling preferences travel while helper recovery state stays on one Mac")
-        expect(backupKeys.contains(DefaultsKey.screenshotSharingEnabled),
-               "the temporary screenshot links preference travels with settings backup")
         expect(!backupKeys.contains(DefaultsKey.clipboardHistoryEntries)
                 && !backupKeys.contains(DefaultsKey.shelfItems)
                 && !backupKeys.contains(DefaultsKey.sleepDisabledFlag)
@@ -13979,8 +13928,7 @@ struct MetricsTests {
                 && !backupKeys.contains(DefaultsKey.micMuteMutedDevices)
                 && !backupKeys.contains(DefaultsKey.cleanerLastAutoRun)
                 && !backupKeys.contains(DefaultsKey.statusItemPlacementGeneration)
-                && !backupKeys.contains(DefaultsKey.displaysSwitchedOff)
-                && !backupKeys.contains(DefaultsKey.screenshotSharingDeveloperEndpoint),
+                && !backupKeys.contains(DefaultsKey.displaysSwitchedOff),
                "backup never carries private content, live state or machine markers")
         expect(Defaults.registeredDefaults[DefaultsKey.displaysSwitchedOff] == nil,
                "a display switched off is a repair note for this machine, not a setting")
@@ -15133,8 +15081,6 @@ struct MetricsTests {
                "a recording carries the sound of the Mac unless the person turns it off")
         expect(Defaults.registeredDefaults[DefaultsKey.recorderMicrophone] as? Bool == false,
                "microphone recording is optional and ships off")
-        expect(Defaults.registeredDefaults[DefaultsKey.recorderSharingEnabled] as? Bool == true,
-               "temporary recording links stay visible but do nothing until explicitly used")
         expect(Defaults.registeredDefaults[DefaultsKey.recorderQuality] as? String == "balanced"
                 && Defaults.registeredDefaults[DefaultsKey.recorderFrameRate] as? Int == 60
                 && Defaults.registeredDefaults[DefaultsKey.recorderCountdown] as? Int == 3
@@ -15179,58 +15125,11 @@ struct MetricsTests {
                 && SettingsBackupSupport.exportKeys().contains(DefaultsKey.recorderGIFSize)
                 && SettingsBackupSupport.exportKeys().contains(DefaultsKey.recorderMicrophone)
                 && SettingsBackupSupport.exportKeys().contains(DefaultsKey.recorderAutomaticZoom)
-                && SettingsBackupSupport.exportKeys().contains(DefaultsKey.recorderSharingEnabled)
                 && SettingsBackupSupport.exportKeys().contains(DefaultsKey.recorderSaveFolder),
                "dedicated capture shortcuts and recorder settings travel in backups")
         expect(RecorderSupport.exceptedOwnWindowIDs(
             ownWindowIDs: [1, 2, 3], protectedWindowIDs: [2, 4]) == [1, 3],
                "recording keeps existing ordinary app windows but never its protected chrome")
-
-        expect(RecordingShareDuration.allCases.map(\.rawValue) == [3_600, 21_600],
-               "recording links allow only one or six hours")
-        let recordingShareEndpoint = RecordingSharingSupport.endpoint(
-            bundleIdentifier: RecordingSharingSupport.developerBundleIdentifier,
-            developerOverride: "https://test.example/")
-        expect(RecordingSharingSupport.uploadURL(endpoint: recordingShareEndpoint,
-                                                 duration: .sixHours)?.absoluteString
-                == "https://test.example/v1/recordings?expiresIn=21600",
-               "recording sharing uses its fixed endpoint and expiration query")
-        let recordingID = String(repeating: "r", count: 32)
-        let recordingResponse = RecordingShareResponse(
-            id: recordingID,
-            viewPath: "/s/\(recordingID)",
-            expiresAt: "1970-01-01T06:16:40.000Z",
-            deleteToken: String(repeating: "t", count: 43))
-        expect(RecordingSharingSupport.record(response: recordingResponse,
-                                              endpoint: recordingShareEndpoint,
-                                              now: Date(timeIntervalSince1970: 1_000))?.id
-                == recordingID,
-               "a valid six-hour recording response becomes an owner-held record")
-        let recordingPlan = RecordingSharingSupport.encodingPlan(
-            duration: 30,
-            baseSize: CGSize(width: 3840, height: 2160),
-            sourceFrameRate: 60,
-            hasAudio: true)
-        expect(recordingPlan != nil
-                && max(recordingPlan!.size.width, recordingPlan!.size.height) <= 1920
-                && recordingPlan!.frameRate == 30
-                && recordingPlan!.audioBitRate == 128_000,
-               "a large short recording gets a web-sized video and keeps its audio")
-        if let recordingPlan {
-            let plannedBytes = (recordingPlan.videoBitRate + recordingPlan.audioBitRate)
-                * 30 / 8
-            expect(plannedBytes < RecordingSharingSupport.targetUploadBytes,
-                   "the first compression pass stays inside the upload budget")
-        }
-        expect(RecordingSharingSupport.encodingPlan(
-            duration: 3_600,
-            baseSize: CGSize(width: 1920, height: 1080),
-            sourceFrameRate: 30,
-            hasAudio: true) == nil,
-               "sharing refuses a duration that cannot fit without unusable quality")
-        expect(RecordingSharingSupport.retryScale(current: 1,
-                                                  actualBytes: 100_000_000) ?? 1 < 1,
-               "an oversized first pass retries at a lower bitrate")
 
         // MARK: Screen recorder geometry and policy
 
@@ -15988,16 +15887,6 @@ struct MetricsTests {
                    "every command bar string is set for \(language.rawValue)")
             expect(commandBarValues.allSatisfy { !$0.contains("—") },
                    "no em-dash in visible command bar strings (\(language.rawValue))")
-        }
-        for language in AppLanguage.allCases {
-            let recordingShareValues = Mirror(
-                reflecting: FeatureStrings.recorderShare(language)).children
-                .compactMap { $0.value as? String }
-            expect(recordingShareValues.count == 9
-                    && recordingShareValues.allSatisfy { !$0.isEmpty },
-                   "every recording share string is set for \(language.rawValue)")
-            expect(recordingShareValues.allSatisfy { !$0.contains("—") },
-                   "no em-dash in recording share strings (\(language.rawValue))")
         }
         expect(Set(GlobalShortcutRole.allCases.map(\.defaultShortcut)).count
                 == GlobalShortcutRole.allCases.count,

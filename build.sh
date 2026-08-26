@@ -146,21 +146,21 @@ VM_STATISTICS_COMPAT_FLAGS=(-I Sources/VMStatisticsCompat)
 # suite leaves an empty plist in ~/Library/Preferences. The tests already clear
 # the domains, but cfprefsd writes the emptied file back out around the time the
 # process that owned it exits, so only a caller that outlives the run can remove
-# them. `MetricsTests` keeps every suite name inside these two namespaces (a
-# check in the test file holds it to that), which is what makes this sweep
-# complete rather than a list to keep in step by hand.
+# them. `MetricsTests` keeps every suite name inside the single namespace swept
+# here, which is what makes this sweep complete rather than a list to keep in
+# step by hand. Adding a suite outside `com.croissaint.tests.` leaks a plist
+# into the user's Preferences on every run — that is exactly how the previous
+# namespaces drifted out of this sweep and left hundreds of stray files behind.
 discard_test_preferences() {
-    local preferences="$HOME/Library/Preferences" name
-    for name in "vorss.tests." "com.vorssaint.tests."; do
-        find "$preferences" -maxdepth 1 -name "$name*.plist" -delete 2>/dev/null || true
-    done
+    local preferences="$HOME/Library/Preferences"
+    find "$preferences" -maxdepth 1 -name "com.croissaint.tests.*.plist" -delete 2>/dev/null || true
     # The harness has no bundle identifier, so `UserDefaults.standard` writes
     # a file named after the executable.
     rm -f "$preferences/metrics-tests.plist"
     local survivors
     survivors=$(find "$preferences" -maxdepth 1 \
-        \( -name "vorss.tests.*.plist" -o -name "com.vorssaint.tests.*.plist" \
-           -o -name "metrics-tests.plist" \) 2>/dev/null | wc -l | tr -d ' ')
+        \( -name "com.croissaint.tests.*.plist" -o -name "metrics-tests.plist" \) \
+        2>/dev/null | wc -l | tr -d ' ')
     if [[ "$survivors" != "0" ]]; then
         echo "✗ the test run left $survivors preference file(s) in $preferences" >&2
         return 1
@@ -195,12 +195,10 @@ if (( TEST )); then
         Sources/Croissaint/Core/ScreenshotStrings.swift \
         Sources/Croissaint/Core/RecentCaptureStrings.swift \
         Sources/Croissaint/Core/RecorderStrings.swift \
-        Sources/Croissaint/Core/RecorderShareStrings.swift \
         Sources/Croissaint/Core/CameraPreviewStrings.swift \
         Sources/Croissaint/Core/ScratchpadStrings.swift \
         Sources/Croissaint/Core/FinderRenameStrings.swift \
         Sources/Croissaint/Core/CommandBarStrings.swift \
-        Sources/Croissaint/Core/FeedbackStrings.swift \
         Sources/Croissaint/Core/RadialMenuStrings.swift \
         Sources/Croissaint/Core/MenuBarAppearanceStrings.swift \
         Sources/Croissaint/Core/AppAppearance.swift \
@@ -215,7 +213,6 @@ if (( TEST )); then
         Sources/Croissaint/Services/QuickTools/ScratchpadSupport.swift \
         Sources/Croissaint/Services/KillProcess/KillProcessSupport.swift \
         Sources/Croissaint/Services/Recorder/RecorderSupport.swift \
-        Sources/Croissaint/Services/Recorder/RecordingSharingSupport.swift \
         Sources/Croissaint/Services/PrivateFileStore.swift \
         Sources/Croissaint/Services/Recorder/RecorderTakeStore.swift \
         Sources/Croissaint/Services/Recorder/RecorderMotion.swift \
@@ -288,7 +285,6 @@ if (( TEST )); then
         Sources/Croissaint/Services/QuickTools/QuickTogglesSupport.swift \
         Sources/Croissaint/Services/QuickTools/ScreenshotCapturePolicy.swift \
         Sources/Croissaint/Services/QuickTools/ScreenshotSupport.swift \
-        Sources/Croissaint/Services/QuickTools/ScreenshotSharingSupport.swift \
         Sources/Croissaint/Services/QuickTools/WindowActivationPolicy.swift \
         Sources/Croissaint/Services/KeyboardDebounce/KeyboardDebounceSupport.swift \
         Sources/Croissaint/Services/SuperKey/SuperKeySupport.swift \
@@ -606,6 +602,9 @@ if (( INSTALL )); then
     stop_process "$EXECUTABLE"
     # Remove the pre-rename apps so two menu bar items never coexist. Same bundle
     # id, so macOS keeps the granted permissions for the new bundle.
+    # "Vorss" is the filename of a bundle that may still sit in /Applications,
+    # not a reference to the upstream project: renaming it here would strand
+    # that app rather than remove it, so this string has to keep the old name.
     for legacy in "Vorss:Vorss" "Croissaint Utils:CroissaintUtils"; do
         name="${legacy%%:*}"; proc="${legacy##*:}"
         if [[ -d "/Applications/$name.app" ]]; then

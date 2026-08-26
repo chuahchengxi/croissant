@@ -116,7 +116,6 @@ enum SettingsBackupSupport {
         DefaultsKey.restoredScreenCaptureShortcutsMigrated,
         DefaultsKey.settingsWindowWidth,
         DefaultsKey.settingsWindowHeight,
-        DefaultsKey.screenshotSharingDeveloperEndpoint,
         DefaultsKey.fanControlRecoveryNeeded,
         DefaultsKey.fanControlHelperVersion,
         // DDC capability belongs to one physical monitor on one Mac port.

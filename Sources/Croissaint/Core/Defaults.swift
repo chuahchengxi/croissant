@@ -34,7 +34,7 @@ enum DefaultsKey {
     static let showCountdown = "showCountdownInMenuBar"
     static let statusItemPlacementGeneration = "statusItemPlacementGeneration"
     static let hasOnboarded = "hasOnboarded"
-    static let sleepDisabledFlag = "vorssDisabledSleep"   // internal guard for pmset disablesleep
+    static let sleepDisabledFlag = "croissaintDisabledSleep" // internal guard for pmset disablesleep
     static let scrollInverterEnabled = "scrollInverterEnabled"
     static let scrollInverterHorizontalEnabled = "scrollInverterHorizontalEnabled"
     static let focusFollowsMouseEnabled = "focusFollowsMouseEnabled"
@@ -505,10 +505,6 @@ enum DefaultsKey {
     static let screenshotOpenEditorDirectly = "screenshotOpenEditorDirectly"
     static let screenshotCopyToClipboard = "screenshotCopyToClipboard"
     static let screenshotPreviewPosition = "screenshotPreviewPosition"
-    static let screenshotSharingEnabled = "screenshotSharingEnabled"
-    // Developer-only endpoint for an isolated test tunnel. The official app
-    // ignores it, and settings backups must never carry it to another Mac.
-    static let screenshotSharingDeveloperEndpoint = "screenshotSharingDeveloperEndpoint"
     static let panelUtilityScreenshot = "panelUtilityScreenshot"
 
     // Screen recorder - records the picked area, keeps the untouched master
@@ -526,7 +522,6 @@ enum DefaultsKey {
     static let recorderGIFSize = "recorderGIFSize"
     static let recorderGIFFrameRate = "recorderGIFFrameRate"
     static let recorderEditorPresets = "recorderEditorPresets"
-    static let recorderSharingEnabled = "recorderSharingEnabled"
     static let panelUtilityScreenRecorder = "panelUtilityScreenRecorder"
 
     // Window Layout — snapping, global shortcuts and optional pointer gestures.
@@ -1163,7 +1158,6 @@ enum Defaults {
         DefaultsKey.recorderGIFSize: RecorderSupport.GIFSize.medium.rawValue,
         DefaultsKey.recorderGIFFrameRate: 12,
         DefaultsKey.recorderEditorPresets: Data(),
-        DefaultsKey.recorderSharingEnabled: true,
         DefaultsKey.panelUtilityScreenRecorder: true,
         DefaultsKey.screenshotShortcutEnabled: false,
         DefaultsKey.screenshotShortcut: GlobalShortcut.screenshotDefault.storageValue,
@@ -1199,7 +1193,6 @@ enum Defaults {
         DefaultsKey.screenshotOpenEditorDirectly: false,
         DefaultsKey.screenshotCopyToClipboard: false,
         DefaultsKey.screenshotPreviewPosition: ScreenshotSupport.QuickPreviewPosition.automatic.rawValue,
-        DefaultsKey.screenshotSharingEnabled: true,
         DefaultsKey.panelUtilityScreenshot: true,
         DefaultsKey.windowLayoutShortcutsEnabled: false,
         DefaultsKey.windowDirectionalEnabled: false,
@@ -1241,6 +1234,7 @@ enum Defaults {
         migrateFanControlVisibility(in: defaults)
         migrateScrollInverterAxes(in: defaults)
         migrateWhatsAppDownloadsEnabled(in: defaults)
+        migrateSleepDisabledFlag(in: defaults)
         defaults.register(defaults: registeredDefaults)
         defaults.register(defaults: AppFeature.availabilityDefaults)
         migrateLegacyMenuBarTemperatureMetric(in: defaults)
@@ -1259,6 +1253,22 @@ enum Defaults {
     /// everyone. Keep it visible only when someone already turned automatic
     /// cleanup or the organizer on; everyone else gets the new off-by-default
     /// choice.
+    /// The sleep guard was stored under a pre-rename key. Carrying it across
+    /// matters more than most migrations: this flag is the only record that the
+    /// app disabled lid sleep, and `KeepAwakeManager` restores sleep by reading
+    /// it back. Drop it and the machine is left with sleep disabled and nothing
+    /// left that knows to undo it — so the old key is read once and retired.
+    /// The literal below names a key that exists in users' preferences today;
+    /// it is a stored value, not a reference to the upstream project.
+    static func migrateSleepDisabledFlag(in defaults: UserDefaults) {
+        let legacyKey = "vorssDisabledSleep"
+        guard defaults.object(forKey: DefaultsKey.sleepDisabledFlag) == nil,
+              defaults.object(forKey: legacyKey) != nil
+        else { return }
+        defaults.set(defaults.bool(forKey: legacyKey), forKey: DefaultsKey.sleepDisabledFlag)
+        defaults.removeObject(forKey: legacyKey)
+    }
+
     static func migrateWhatsAppDownloadsEnabled(in defaults: UserDefaults) {
         guard defaults.object(forKey: DefaultsKey.whatsAppDownloadsEnabled) == nil else {
             return
