@@ -283,7 +283,7 @@ final class PetNotificationBridge {
             return
         }
         defer { sqlite3_finalize(statement) }
-        var newest: (rowID: Int64, text: String, icon: NSImage?)?
+        var newest: (rowID: Int64, payload: PetNoticeParsing.Payload, icon: NSImage?)?
         var highest = lastSeenRowID
         while sqlite3_step(statement) == SQLITE_ROW {
             let rowID = sqlite3_column_int64(statement, 0)
@@ -295,37 +295,22 @@ final class PetNotificationBridge {
             else { continue }
             let byteCount = Int(sqlite3_column_bytes(statement, 1))
             let data = Data(bytes: blob, count: byteCount)
-            guard let payload = parsePayload(data), !payload.text.isEmpty else { continue }
-            newest = (rowID, payload.text, payload.icon)
+            guard let payload = PetNoticeParsing.parse(data) else { continue }
+            newest = (rowID, payload, resolveIcon(for: payload.bundleID))
         }
         lastSeenRowID = highest
         if let newest {
-            deliver(text: newest.text, icon: newest.icon, startles: true)
+            deliver(text: newest.payload.text, icon: newest.icon, startles: true)
         }
     }
 
-    /// The store's `data` blob is a property list with short keys:
-    /// "app" (bundle id), "titl", "subt", "body".
-    private func parsePayload(_ data: Data) -> (text: String, icon: NSImage?)? {
-        guard
-            let plist = try? PropertyListSerialization.propertyList(
-                from: data, options: [], format: nil
-            ) as? [String: Any]
+    /// The posting app's icon at banner size; nil when the bundle can't be
+    /// located (web notifications without an app record, etc.).
+    private func resolveIcon(for bundleID: String?) -> NSImage? {
+        guard let bundleID,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
         else { return nil }
-        let title = plist["titl"] as? String
-        let subtitle = plist["subt"] as? String
-        let body = plist["body"] as? String
-        let text = [title, body]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: " — ")
-        guard !text.isEmpty else { return nil }
-        var icon: NSImage?
-        if let bundleID = plist["app"] as? String,
-           let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            icon = NSWorkspace.shared.icon(forFile: url.path)
-        }
-        return (text, icon)
+        return NSWorkspace.shared.icon(forFile: url.path)
     }
 }
 

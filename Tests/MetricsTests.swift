@@ -17904,6 +17904,51 @@ struct MetricsTests {
         expect(DesktopThrowSupport.releaseVelocity(samples: []).dx == 0,
                "no samples means no flick")
 
+        // MARK: Notification payloads (any posting app)
+
+        // The usernoted store hands over binary property lists with short
+        // keys; apps fill them unevenly, and every shape must render.
+        func payload(_ title: String?, _ subtitle: String?, _ body: String?, _ app: String?) -> Data? {
+            PetNoticeParsing.encode(title: title, subtitle: subtitle, body: body, app: app)
+        }
+
+        if let data = payload("Mail", "Inbox", "New message from Ada", "com.apple.mail") {
+            let parsed = PetNoticeParsing.parse(data)
+            expectEqual(parsed?.text ?? "", "Mail — Inbox — New message from Ada",
+                        "title, subtitle and body join in order")
+            expect(parsed?.bundleID == "com.apple.mail",
+                   "the bundle id survives for icon lookup")
+        } else {
+            expect(false, "a full payload encodes")
+        }
+
+        if let data = payload("Timer", nil, "Done!", "com.apple.mobiletimer") {
+            expectEqual(PetNoticeParsing.parse(data)?.text ?? "",
+                        "Timer — Done!", "a missing subtitle is skipped, not an empty segment")
+        } else {
+            expect(false, "a body-only-plus-title payload encodes")
+        }
+
+        if let data = payload(nil, nil, "Your battery is low", nil) {
+            let parsed = PetNoticeParsing.parse(data)
+            expectEqual(parsed?.text ?? "", "Your battery is low",
+                        "body-only notifications (no title) still show")
+            expect(parsed?.bundleID == nil,
+                   "an anonymous notification has no bundle to look up")
+        } else {
+            expect(false, "a body-only payload encodes")
+        }
+
+        if let data = payload("  ", "\n", "   ", "com.silent") {
+            expect(PetNoticeParsing.parse(data) == nil,
+                   "a whitespace-only notification shows nothing at all")
+        } else {
+            expect(false, "a whitespace payload encodes")
+        }
+        expect(PetNoticeParsing.parse(Data("not a plist".utf8)) == nil,
+               "garbage bytes never crash the poller")
+        expect(PetNoticeParsing.parse(Data()) == nil, "an empty blob reads as nothing")
+
         // MARK: Pet moves
 
         // Signature moves win over types; Greninja flings shurikens.
