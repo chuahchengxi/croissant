@@ -1833,7 +1833,7 @@ struct MetricsTests {
         // scope must be assigned before the layout pass or a window-scoped
         // panel is sized for the grouped layout on its first frame.
         let switcherSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/Services/Switcher/AppSwitcher.swift",
+            contentsOfFile: "Sources/Croissaint/Services/Switcher/AppSwitcher.swift",
             encoding: .utf8)) ?? ""
         // Ends on whatever declaration comes next rather than naming the
         // neighbour: a rename would find no separator, leave the slice running
@@ -2471,15 +2471,15 @@ struct MetricsTests {
                "update showcase intro starts unseen")
         expect(registeredDefaults[DefaultsKey.updateShowcaseMediaOverride] as? String == "",
                "update showcase media override is empty by default")
-        expect(SupportUpdateIntroInfo.releaseVersion == "3.4.0",
-               "support prompt is deliberately pinned to 3.4.0")
-        expect(SupportUpdateIntroInfo.shouldShow(appVersion: "3.4.0", lastSeenVersion: "3.3.3-beta.2"),
+        expect(SupportUpdateIntroInfo.releaseVersion == "0.0.8",
+               "support prompt is deliberately pinned to the fork's current release")
+        expect(SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.8", lastSeenVersion: "0.0.7"),
                "support prompt shows once after updating to its pinned release")
-        expect(!SupportUpdateIntroInfo.shouldShow(appVersion: "3.4.0", lastSeenVersion: "3.4.0"),
+        expect(!SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.8", lastSeenVersion: "0.0.8"),
                "support prompt stays hidden after it is seen")
-        expect(!SupportUpdateIntroInfo.shouldShow(appVersion: "3.3.2", lastSeenVersion: nil)
-               && !SupportUpdateIntroInfo.shouldShow(appVersion: "3.3.3-beta.2", lastSeenVersion: nil)
-               && !SupportUpdateIntroInfo.shouldShow(appVersion: "3.5.0", lastSeenVersion: nil),
+        expect(!SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.7", lastSeenVersion: nil)
+               && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.1.0", lastSeenVersion: nil)
+               && !SupportUpdateIntroInfo.shouldShow(appVersion: "0.0.9", lastSeenVersion: nil),
                "support prompt never leaks into another release")
         expect(SupportUpdateIntroStep.social.next == .support
                && SupportUpdateIntroStep.support.next == nil,
@@ -2504,23 +2504,19 @@ struct MetricsTests {
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
                "every app version needs its own incremented bundle build")
-        expect(SupportUpdateIntroInfo.releaseVersion == "3.4.0",
-               "the support prompt remains deliberately pinned to 3.4.0")
-        // 3.3.2 adds several headline features, so the tour is re-curated
-        // around only what this update genuinely introduces.
-        expect(UpdateHighlightsInfo.releaseVersion == "3.3.2",
+        expect(SupportUpdateIntroInfo.releaseVersion == "0.0.8",
+               "the support prompt remains deliberately pinned to the fork's current release")
+        // The highlights pin follows the fork's own versioning line now.
+        expect(UpdateHighlightsInfo.releaseVersion == "0.0.8",
                "re-decide the highlights tour on a feature release: re-curate its rows and move the pin to the shipping version")
-        expect(UpdateHighlightsInfo.shouldShow(appVersion: "3.3.2", lastSeenVersion: "3.3.1")
-               && UpdateHighlightsInfo.shouldShow(appVersion: "3.3.2", lastSeenVersion: nil),
+        expect(UpdateHighlightsInfo.shouldShow(appVersion: "0.0.8", lastSeenVersion: "0.0.7")
+               && UpdateHighlightsInfo.shouldShow(appVersion: "0.0.8", lastSeenVersion: nil),
                "highlights tour shows once after updating to its pinned release")
-        expect(!UpdateHighlightsInfo.shouldShow(appVersion: "3.3.2", lastSeenVersion: "3.3.2"),
+        expect(!UpdateHighlightsInfo.shouldShow(appVersion: "0.0.8", lastSeenVersion: "0.0.8"),
                "highlights tour stays hidden after it is seen")
-        expect(!UpdateHighlightsInfo.shouldShow(appVersion: "3.3.1", lastSeenVersion: nil)
-               && !UpdateHighlightsInfo.shouldShow(appVersion: "3.3.3", lastSeenVersion: nil),
+        expect(!UpdateHighlightsInfo.shouldShow(appVersion: "0.0.7", lastSeenVersion: nil)
+               && !UpdateHighlightsInfo.shouldShow(appVersion: "0.0.9", lastSeenVersion: nil),
                "highlights tour never leaks into another release")
-        expect(FileManager.default.fileExists(atPath: "Resources/Images/highlights-capture.png")
-               && FileManager.default.fileExists(atPath: "Resources/Images/highlights-clipboard.png"),
-               "3.3.2 highlights tour includes curated real captures for screenshot palette and clipboard")
         expect(registeredDefaults[DefaultsKey.mixerLowerVolumeOnHeadphonesDisconnect] as? Bool == false,
                "headphone disconnect volume lowering is opt-in")
         expect(registeredDefaults[DefaultsKey.mixerHeadphonesDisconnectVolumePercent] as? Int
@@ -2758,7 +2754,7 @@ struct MetricsTests {
         // These AppKit owners are not part of the pure-helper test binary, so
         // pin that neither caller can consume a parked status-item frame.
         let statusAnchorAppDelegateSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/App/AppDelegate.swift",
+            contentsOfFile: "Sources/Croissaint/App/AppDelegate.swift",
             encoding: .utf8)) ?? ""
         let stripCommentLines: (String) -> String = {
             $0.split(separator: "\n", omittingEmptySubsequences: false)
@@ -2772,7 +2768,7 @@ struct MetricsTests {
             .components(separatedBy: "ShelfService.shared.statusItemFrameProvider =").last ?? "")
             .components(separatedBy: "\n        }").first ?? "")
         let statusControllerSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/App/StatusItemController.swift",
+            contentsOfFile: "Sources/Croissaint/App/StatusItemController.swift",
             encoding: .utf8)) ?? ""
         let statusHitTestCode = stripCommentLines((statusControllerSource
             .components(separatedBy: "func containsStatusItem(at screenPoint: NSPoint) -> Bool {").last ?? "")
@@ -13511,7 +13507,7 @@ struct MetricsTests {
         // catch; both reads found so far were written the direct way.
         var applicationRoleReads: [String] = []
         for file in appSources.sorted() {
-            guard let source = try? String(contentsOfFile: "Sources/Vorssaint/\(file)",
+            guard let source = try? String(contentsOfFile: "Sources/Croissaint/\(file)",
                                            encoding: .utf8) else { continue }
             let lines = source.components(separatedBy: "\n")
             var applicationElements: Set<String> = []
@@ -13538,7 +13534,7 @@ struct MetricsTests {
         // it stops at the application element first, rather than a pin per copy.
         var unguardedParentWalks: [String] = []
         for file in appSources.sorted() {
-            guard let source = try? String(contentsOfFile: "Sources/Vorssaint/\(file)",
+            guard let source = try? String(contentsOfFile: "Sources/Croissaint/\(file)",
                                            encoding: .utf8) else { continue }
             let lines = source.components(separatedBy: "\n")
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
@@ -14235,7 +14231,7 @@ struct MetricsTests {
         // one place guaranteed to run before every session tap that reads
         // the flags. The service file is not in this binary; pin the shape.
         let superKeyServiceSource = (try? String(
-            contentsOfFile: "Sources/Vorssaint/Services/SuperKey/SuperKeyService.swift",
+            contentsOfFile: "Sources/Croissaint/Services/SuperKey/SuperKeyService.swift",
             encoding: .utf8)) ?? ""
         let superKeyServiceCode = superKeyServiceSource
             .split(separator: "\n", omittingEmptySubsequences: false)
