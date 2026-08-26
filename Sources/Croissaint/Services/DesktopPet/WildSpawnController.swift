@@ -278,9 +278,21 @@ struct WildPokemonView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // Pet-world copy is all one pixel font at one size — the same
+            // One top slot: WILD! until the catch lands, Gotcha! after —
+            // they share the space instead of stacking over the sprite.
+            // Pet-world copy is all one pixel font at one size, the same
             // renderer as the notification banner.
-            PixelTextView(text: "WILD!")
+            ZStack {
+                PixelTextView(text: "WILD!")
+                    .opacity(gotcha ? 0 : 1)
+                if gotcha {
+                    PixelTextView(text: "Gotcha!")
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                }
+            }
+            .frame(height: 38)
+            .animation(.easeInOut(duration: 0.18), value: gotcha)
+
             encounterArea
                 .frame(height: 210)
                 .background(frameReader { targetRect = $0 })
@@ -332,11 +344,6 @@ struct WildPokemonView: View {
                     .rotationEffect(.degrees(vm.missPulse ? -7 : 0))
                     .animation(.spring(response: 0.16, dampingFraction: 0.4), value: vm.missPulse)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: spriteGone)
-            }
-
-            if gotcha {
-                PixelTextView(text: "Gotcha!")
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
             }
 
             if let message {
