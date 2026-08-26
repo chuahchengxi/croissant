@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format follows
 - The Command Bar now offers a compact mode where the bar opens as a field alone and shows results once you type, with Down arrow revealing the full list. Under Command Bar, off by default. Thanks to @kobebrylant.
 - Command Bar script links can now be marked to run on their bare name without an argument, so scripts that work on the clipboard, selection, or files don't need a placeholder word typed after the name. Under Command Bar, off by default. Thanks to @rhukster.
 - Monitor alerts can now warn you when the battery stays above a temperature you choose. Under Monitor alerts, off by default. Thanks to @ywu73.
+- Text snippets now include a visual date and time variable builder to configure formatting and timezones with live previews. Thanks to @tenbux.
 - Radial Menu now supports custom profiles with distinct wheel layouts, color themes, shortcuts, mouse triggers and starter presets, and website links can fetch their actual website icons on demand.
 
 ### Changed
@@ -36,6 +37,7 @@ All notable changes to this project are documented here. The format follows
 - The Keyboard Shortcuts page now lists every capture shortcut under one Screen capture group, and expandable shortcut groups are toggled by their whole row, with the chevron moved to the trailing edge. Thanks to @RecoilGaming.
 
 ### Fixed
+- The battery icon in the menu bar now preserves its rectangular aspect ratio when split into its own item instead of rendering as a square. Thanks to @Yahddyyp.
 - Fan Control now updates manual and curve cooling speeds during an active session without verification timeouts.
 - The Homebrew panel now closes when you click outside it while browsing or searching, and stays open for a confirmation or a running job. Thanks to @pergioa.
 - Settings opened from the menu panel no longer stay covered when the two windows cannot fit side by side. Thanks to @FloatingPegasus.
