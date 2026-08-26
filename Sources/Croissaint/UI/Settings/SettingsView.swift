@@ -1439,25 +1439,6 @@ struct SupportSettings: View {
             .padding(.vertical, 26)
         }
     }
-
-    private var communityActions: some View {
-        socialButton
-    }
-
-    private var socialButton: some View {
-        Button {
-            openURL(AppInfo.socialURL)
-        } label: {
-            HStack(spacing: 7) {
-                XLogoShape()
-                    .fill(Color.primary, style: FillStyle(eoFill: true))
-                    .frame(width: 12, height: 12)
-                Text(l10n.s.communityIntroFollowButton)
-            }
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-    }
 }
 
 // MARK: - Shared settings rows
