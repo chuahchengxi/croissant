@@ -49,6 +49,10 @@ struct PetSnapshot: Codable {
     /// National Dex ids of every wild species ever caught; each one unlocks
     /// its catalog entry as a selectable buddy.
     var caughtSpecies: [Int]?
+    /// Spare copies per species (dex id as string, matching inventory's JSON
+    /// shape): catching a species again stacks here, and each copy can be
+    /// transferred for tier-ranked rewards.
+    var duplicates: [String: Int]?
     var inventory: [String: Int]?
     var activeBall: String?
     var coins: Int?
@@ -392,6 +396,12 @@ final class PetState: ObservableObject {
             if !caught.contains(speciesID) {
                 caught.append(speciesID)
                 snapshot.caughtSpecies = caught
+            } else {
+                // Already on the roster: the new copy stacks as a duplicate
+                // the player can transfer for rewards on the pet page.
+                var dupes = snapshot.duplicates ?? [:]
+                dupes["\(speciesID)", default: 0] += 1
+                snapshot.duplicates = dupes
             }
         }
         addItem(.pokeBall, 2)
@@ -406,6 +416,35 @@ final class PetState: ObservableObject {
 
     /// Every wild species ever caught (National Dex ids).
     var caughtSpeciesIDs: Set<Int> { Set(snapshot.caughtSpecies ?? []) }
+
+    /// Spare copies of a species beyond the first catch.
+    func duplicateCount(for speciesID: Int) -> Int {
+        snapshot.duplicates?["\(speciesID)"] ?? 0
+    }
+
+    /// Sends one spare copy away for tier-ranked rewards (a common spare
+    /// pays balls and berries; a legendary spare pays an Ultra Ball and
+    /// better). Returns the toast line, or nil when there is no spare.
+    func transferDuplicate(speciesID: Int) -> String? {
+        guard duplicateCount(for: speciesID) > 0 else { return nil }
+        var dupes = snapshot.duplicates ?? [:]
+        let key = "\(speciesID)"
+        dupes[key, default: 1] -= 1
+        if dupes[key] == 0 { dupes.removeValue(forKey: key) }
+        snapshot.duplicates = dupes
+
+        let tier = PetCatchTier.tier(for: speciesID)
+        var parts: [String] = []
+        for reward in tier.transferRewards {
+            addItem(reward.kind, reward.count)
+            parts.append("+\(reward.count)× \(reward.kind.displayName)")
+        }
+        addCoins(tier.transferCoins)
+        parts.append("+\(tier.transferCoins) coins")
+        save()
+        objectWillChange.send()
+        return parts.joined(separator: " · ")
+    }
 
     /// Puts an Ever Stone in the buddy's paws, or takes it back. Only works
     /// while the bag actually holds one; the stone is never consumed.

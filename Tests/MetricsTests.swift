@@ -17947,21 +17947,45 @@ struct MetricsTests {
         expect(speciesCaptureRate(for: 150) == 3, "Mewtwo's raw rate is 3")
         expect(speciesCaptureRate(for: 999_999) == 45, "unknown ids fall back to the average")
 
-        // A Poké Ball no longer catches everything: mythicals shrug it off.
-        expect(PetCatchTier.legendary.odds(for: .pokeBall) == 0.10,
-               "legendaries resist Poké Balls")
-        expect(PetCatchTier.tough.odds(for: .pokeBall) == 0.30,
-               "tough species sit at 30% with a Poké Ball")
+        // Each ball only holds its own difficulty band: a Poké Ball cannot
+        // catch above wary, a Great Ball tops out at tough, and legendaries
+        // demand an Ultra Ball. Below the gate, odds are exactly zero — the
+        // pity counter routes through the same odds, so it can't slip past.
+        expect(PetCatchTier.legendary.odds(for: .pokeBall) == 0,
+               "a Poké Ball cannot hold a legendary at all")
+        expect(PetCatchTier.legendary.odds(for: .greatBall) == 0,
+               "a Great Ball cannot hold a legendary either")
+        expect(PetCatchTier.tough.odds(for: .pokeBall) == 0,
+               "tough species need at least a Great Ball")
+        expect(abs(PetCatchTier.tough.odds(for: .greatBall) - 0.45) < 1e-9,
+               "a Great Ball works on tough species")
+        expect(PetCatchTier.wary.odds(for: .pokeBall) == 0.52,
+               "wary species still take a Poké Ball")
         expect(PetCatchTier.common.odds(for: .pokeBall) == 0.75,
                "common species stay generous")
+        expect(PetCatchTier.legendary.requiredBall == .ultraBall
+               && PetCatchTier.common.requiredBall == .pokeBall,
+               "the required ball tracks the tier")
+        expect(!PetCatchTier.legendary.canCatch(with: .greatBall)
+               && PetCatchTier.legendary.canCatch(with: .ultraBall),
+               "only the Ultra Ball passes the legendary gate")
         // Better balls multiply, capped so nothing becomes a formality.
         expect(PetCatchTier.legendary.odds(for: .ultraBall) == 0.20,
-               "an Ultra Ball doubles the legendary odds")
+               "an Ultra Ball gives legendaries their only, slim odds")
         expect(PetCatchTier.common.odds(for: .ultraBall) == 0.95,
                "odds cap at 95%")
         // Pity scales with difficulty.
         expect(PetCatchTier.common.pityMisses == 2 && PetCatchTier.legendary.pityMisses == 5,
                "harder species demand longer streaks before the pity catch")
+        // Transferring a spare copy pays by rank, in different gear per rank.
+        expect(PetCatchTier.common.transferRewards.contains { $0.kind == .pokeBall && $0.count == 2 },
+               "a spare common pays two Poké Balls")
+        expect(PetCatchTier.legendary.transferRewards.contains { $0.kind == .ultraBall },
+               "a spare legendary pays an Ultra Ball")
+        expect(PetCatchTier.legendary.transferRewards.contains { $0.kind == .everStone },
+               "a spare legendary also pays an Ever Stone")
+        expect(Set([PetCatchTier.common, .wary, .tough, .legendary].map(\.transferCoins)).count == 4,
+               "every rank's coin payout is distinct")
         expect(PetCatchTier.tier(for: 999_999) == .tough,
                "unknown ids default to the average tier (45)")
 
@@ -18172,6 +18196,72 @@ struct MetricsTests {
         expect(PetNoticeParsing.parse(Data("not a plist".utf8)) == nil,
                "garbage bytes never crash the poller")
         expect(PetNoticeParsing.parse(Data()) == nil, "an empty blob reads as nothing")
+
+        // MARK: Sleep choreography
+
+        // The nap is a performance now — breathing waves, dream twitches,
+        // settling shifts — all pure functions of (time, species seed).
+        let napA = PetSleepChoreography.pose(at: 1234.5, seed: 25, gaitClass: 1)
+        let napB = PetSleepChoreography.pose(at: 1234.5, seed: 25, gaitClass: 1)
+        expect(napA == napB, "the sleep routine is deterministic for a given moment")
+
+        var breathOK = true
+        for step in 0..<600 {
+            let p = PetSleepChoreography.pose(at: Double(step) * 0.5, seed: 6, gaitClass: 0)
+            breathOK = breathOK && p.breathScale > 0.9 && p.breathScale < 1.0
+        }
+        expect(breathOK, "squat-species breathing stays in its band around the squish base")
+
+        // Dream twitches are rare by design: over an hour of napping the
+        // buddy spends well under a tenth of the time mid-kick. Kicks are
+        // gauged by lift (yOffset) — xOffset also carries the restless
+        // style's continuous rocking, which is not a twitch.
+        var kicking = 0
+        var samples = 0
+        for step in 0..<18000 {
+            let p = PetSleepChoreography.pose(at: Double(step) * 0.2, seed: 25, gaitClass: 1)
+            if abs(p.yOffset) > 0.2 { kicking += 1 }
+            samples += 1
+        }
+        expect(Double(kicking) / Double(samples) < 0.1,
+               "twitches stay a garnish, not a seizure (\(kicking)/\(samples))")
+
+        // Settling shifts interpolate smoothly: no sample-to-sample jump of
+        // the tilt may exceed what 100 ms at the fastest settle could do.
+        var lastAngle = PetSleepChoreography.pose(at: 0, seed: 7, gaitClass: 2).angle
+        var continuous = true
+        for step in 1..<2000 {
+            let angle = PetSleepChoreography.pose(at: Double(step) * 0.1, seed: 7, gaitClass: 2).angle
+            if abs(angle - lastAngle) > 1.2 { continuous = false }
+            lastAngle = angle
+        }
+        expect(continuous, "the sleeping pose never snaps between re-settles")
+
+        expect(PetSleepChoreography.dreamSymbol(seed: 25, cycle: 3)
+               == PetSleepChoreography.dreamSymbol(seed: 25, cycle: 3),
+               "dream symbols are stable per night")
+        expect(PetSleepChoreography.dreamSymbols.contains(
+            PetSleepChoreography.dreamSymbol(seed: 999, cycle: 12)),
+               "dream symbols come from the known set")
+        let dreamEvery = PetSleepChoreography.dreamEvery(seed: 702)
+        expect(dreamEvery >= 3 && dreamEvery <= 5, "a dream surfaces every 3-5 z's")
+
+        // Every species rotates through at least two distinct sleep styles,
+        // so one nap is several animations rather than a single loop — and
+        // different species walk the style table differently.
+        var styleVariety = true
+        for seed in 1...1025 {
+            var distinct = Set<Int>()
+            for block in 0..<4 {
+                distinct.insert(PetSleepChoreography.styleIndex(block: block, seed: seed))
+            }
+            if distinct.count < 2 { styleVariety = false }
+        }
+        expect(styleVariety, "every species owns at least two sleep styles")
+        expect(
+            (0..<4).map { PetSleepChoreography.styleIndex(block: $0, seed: 3) }
+                != (0..<4).map { PetSleepChoreography.styleIndex(block: $0, seed: 6) },
+            "species walk the style rotation differently")
 
         // MARK: Pet moves
 

@@ -1045,6 +1045,7 @@ struct BuddyChooser: View {
 
     private func card(_ def: SpeciesDef) -> some View {
         let isCurrent = pet.species?.key == def.key
+        let spares = pet.duplicateCount(for: def.baseID)
         return Button {
             pet.switchTo(def.key)
             onPicked()
@@ -1074,6 +1075,41 @@ struct BuddyChooser: View {
             )
         }
         .buttonStyle(PressableStyle())
+        // Spare copies from repeat catches: a count badge, and — on the
+        // selected buddy — a transfer button that pays tier-ranked rewards.
+        .overlay(alignment: .topTrailing) {
+            if spares > 0 {
+                Text("×\(spares + 1)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded).monospacedDigit())
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.accentColor.opacity(0.85)))
+                    .foregroundStyle(.white)
+                    .offset(x: -4, y: 4)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if isCurrent, spares > 0 {
+                Button {
+                    if let rewards = pet.transferDuplicate(speciesID: def.baseID) {
+                        NotificationCenter.default.post(
+                            name: .pokePalToast, object: nil,
+                            userInfo: ["message": "Transferred \(def.name)! \(rewards)"]
+                        )
+                    }
+                } label: {
+                    Label("Transfer", systemImage: "arrow.up.forward.circle.fill")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.accentColor))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(PressableStyle())
+                .help("Send a spare \(def.name) away for rewards")
+                .offset(y: 8)
+            }
+        }
     }
 }
 

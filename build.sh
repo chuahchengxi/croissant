@@ -47,8 +47,15 @@ ENTITLEMENTS="Resources/Croissaint.entitlements"
 LEGACY_IDENTITY="Croissaint Utils Signing"
 
 developer_id_identity() {
-    security find-identity -v -p codesigning 2>/dev/null \
-        | grep 'Developer ID Application' \
+    # Any Apple-issued identity gives a stable, team-based designated
+    # requirement, which is what keeps TCC grants (Accessibility, Screen
+    # Recording) alive across rebuilds. Prefer Developer ID (notarizable),
+    # else fall back to an Apple Development certificate — without this,
+    # local builds went ad-hoc and every rebuild orphaned the grants.
+    local ids
+    ids="$(security find-identity -v -p codesigning 2>/dev/null)"
+    { grep 'Developer ID Application' <<< "$ids" \
+        || grep '"Apple Development' <<< "$ids"; } \
         | head -1 \
         | sed -E 's/.*"(.*)".*/\1/' || true
 }
@@ -359,6 +366,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetSpriteMetrics.swift \
         Sources/Croissaint/Services/DesktopPet/DesktopThrowSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetNoticeParsing.swift \
+        Sources/Croissaint/Services/DesktopPet/PetSleepChoreography.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveArt.swift \
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
@@ -502,8 +510,8 @@ fi
 xattr -c -r "$STAGE" 2>/dev/null || true
 
 # Signing, in order of preference:
-#   1. Developer ID Application — the real, Apple-issued identity used for
-#      notarized releases. Signed with the hardened runtime (required for
+#   1. An Apple-issued identity — Developer ID Application (notarizable) or,
+#      failing that, Apple Development. Signed with the hardened runtime (required for
 #      notarization), the app's entitlements and a secure timestamp. Gives a
 #      stable, team-based designated requirement, so permissions persist across
 #      updates AND Gatekeeper shows no "unverified developer" warning.
@@ -543,7 +551,7 @@ sign_bundle() {
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
 
     if [[ "$SIGN_MODE" == devid ]]; then
-        echo "  signing with Developer ID (hardened runtime): $DEVID"
+        echo "  signing with Apple-issued identity (hardened runtime): $DEVID"
     elif [[ "$SIGN_MODE" == legacy ]]; then
         echo "  signing with legacy self-signed identity: $LEGACY_IDENTITY"
     else
