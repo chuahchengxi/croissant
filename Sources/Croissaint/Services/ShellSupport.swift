@@ -129,6 +129,7 @@ enum Sudoers {
     // (re)installed or removed, so the closed-lid permission migrates without an
     // extra password prompt.
     private static let legacyRulePaths = [
+        "/etc/sudoers.d/vorssaint-clamshell",
         "/etc/sudoers.d/vorssaint-utils-clamshell",
         "/etc/sudoers.d/vorss-clamshell",
     ]
