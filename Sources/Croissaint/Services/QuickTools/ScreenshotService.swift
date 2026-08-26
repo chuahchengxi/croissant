@@ -435,13 +435,6 @@ final class ScreenshotService: ObservableObject {
                     return [.discard]
                 }
             },
-            share: { [weak self] duration, completion in
-                guard let self else {
-                    completion(nil)
-                    return
-                }
-                self.shareDirect(capture, duration: duration, completion: completion)
-            },
             onClose: { [weak self] in self?.preview = nil })
         preview = controller
         controller.show()
@@ -567,38 +560,6 @@ final class ScreenshotService: ObservableObject {
             }
             ScreenshotSupport.pruneCopiedFiles(in: folder, preserving: output.0)
             self.autoCopyTask = nil
-        }
-    }
-
-    private func shareDirect(_ capture: ScreenshotSelectionController.Capture,
-                             duration: ScreenshotShareDuration,
-                             completion: @escaping (ScreenshotShareRecord?) -> Void) {
-        let downscale = UserDefaults.standard.bool(forKey: DefaultsKey.screenshotDownscale)
-        Task { @MainActor [weak self] in
-            guard let self else {
-                completion(nil)
-                return
-            }
-            let data = await Task.detached(priority: .userInitiated) {
-                guard let image = Self.flatten(capture, downscaleTo1x: downscale) else {
-                    return nil as Data?
-                }
-                return ScreenshotRenderer.pngData(from: image)
-            }.value
-            guard let data else {
-                QuickToolHUD.show(icon: "link", message: self.strings.shareFailedHUD)
-                completion(nil)
-                return
-            }
-            do {
-                let record = try await ScreenshotShareService.shared.createLink(
-                    pngData: data, duration: duration)
-                completion(record)
-            } catch {
-                QuickToolHUD.show(icon: "link", message: self.strings.shareFailedHUD)
-                NSSound.beep()
-                completion(nil)
-            }
         }
     }
 

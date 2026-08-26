@@ -14,7 +14,7 @@ set -uo pipefail
 
 APP="/Applications/Croissaint (Developer).app"
 PROCESS="CroissaintDeveloper"
-OUT="${1:-$(mktemp -d /tmp/vorss-ui-smoke.XXXXXX)}"
+OUT="${1:-$(mktemp -d /tmp/croissaint-ui-smoke.XXXXXX)}"
 mkdir -p "$OUT"
 FAILURES=0
 

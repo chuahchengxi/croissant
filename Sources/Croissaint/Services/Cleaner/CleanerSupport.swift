@@ -42,7 +42,7 @@ enum CleanerSupport {
             || wrapped.contains(".developer.apple.") || wrapped.contains(".is.workflow.") {
             return true
         }
-        if lowered == "com.apple" || lowered.hasPrefix("vorss.") {
+        if lowered == "com.apple" {
             return true
         }
         return sharedInfrastructurePrefixes.contains { lowered.hasPrefix($0) }

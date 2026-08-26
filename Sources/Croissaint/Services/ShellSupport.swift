@@ -127,17 +127,15 @@ enum Sudoers {
     static let rulePath = "/etc/sudoers.d/croissaint-clamshell"
     // Rule files written under earlier names; removed whenever the rule is
     // (re)installed or removed, so the closed-lid permission migrates without an
-    // extra password prompt.
+    // extra password prompt. These are paths that may exist on a user's disk
+    // right now, not references to the upstream project: rename them and the
+    // stale NOPASSWD rules they point at survive forever, which is the one
+    // thing this list exists to prevent.
     private static let legacyRulePaths = [
+        "/etc/sudoers.d/vorssaint-clamshell",
         "/etc/sudoers.d/vorssaint-utils-clamshell",
         "/etc/sudoers.d/vorss-clamshell",
     ]
-
-    private static var safeUser: String? {
-        let user = NSUserName()
-        let valid = user.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil
-        return valid ? user : nil
-    }
 
     /// Serializes every touch of the SleepDisabled state. The probe below
     /// re-applies the value it just read; racing it against a concurrent
@@ -167,11 +165,10 @@ enum Sudoers {
     }
 
     static func install(completion: @escaping (Bool) -> Void) {
-        guard let user = safeUser else {
-            completion(false)
-            return
-        }
-        let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset disablesleep 1, /usr/bin/pmset disablesleep 0"
+        // Granted by uid, not username: a short name is free-form text on
+        // SSO-enrolled Macs (name@company.com, #915) and the old validation
+        // rejected it before the password prompt could even appear.
+        let rule = SudoersSupport.clamshellRule(uid: getuid())
         // Clear any earlier-named rule first, then write and validate the new one
         // (a failed check rolls back). Same password prompt either way.
         let legacy = legacyRulePaths.joined(separator: " ")
