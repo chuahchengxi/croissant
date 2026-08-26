@@ -4,10 +4,11 @@
 import CoreGraphics
 import Foundation
 
-/// Real-life physics for hurling the buddy across the desktop, tuned to feel
-/// like the wild-encounter ball throw (`WildSpawnController.ThrowPhysics`):
-/// fixed-step integration, gravity, horizontal air drag, bouncy walls and a
-/// floor that turns the bounce into a rolling skid.
+/// Real-life physics for hurling the buddy across the desktop, matched to the
+/// Ball.app desk toy (nate-parrott/ball, `brew install --cask ball`): SpriteKit
+/// gravity, uniform 0.6 restitution on every edge, and its default 0.1/s
+/// linear damping — plus a floor skid so the buddy ends standing, and a
+/// float mode where winged species glide to a hover instead of falling.
 ///
 /// Coordinates are Cocoa screen points, y increasing upward. The moving box
 /// is the buddy's whole window; `bounds` is the visible-frame rect the window
@@ -32,29 +33,39 @@ enum DesktopThrowSupport {
     }
 
     struct Constants {
-        static let gravity: Double = 1500          // pt/s², matches the ball arc
-        static let airDrag: Double = 0.9           // fraction of vx lost per second
-        static let wallRestitution: Double = 0.62
-        static let ceilingRestitution: Double = 0.45
-        static let floorRestitution: Double = 0.52
+        /// SpriteKit's default field: 9.8 m/s² at 150 pt/m ≈ 1470.
+        static let gravity: Double = 1500          // pt/s²
+        /// Ball.app leaves SpriteKit's default damping: 0.1/s, both axes.
+        static let linearDamping: Double = 0.1
+        /// Ball.app: `body.restitution = 0.6`, one value for every edge.
+        static let restitution: Double = 0.6
         /// Bounces slower than this collapse into a ground skid instead.
         static let bounceCutoff: Double = 110
         static let rollFriction: Double = 850      // pt/s² against the ground
         /// Below this ground speed the buddy stops pretending to roll.
         static let restSpeed: Double = 26
+        /// Floaters brake harder so a toss glides to a hover in a beat or two.
+        static let floatDamping: Double = 1.4
     }
 
     /// Integrates one fixed step. `box` is the window size; `bounds` the
-    /// rect origins are clamped into. Returns the new state plus what happened.
+    /// rect origins are clamped into. `floats` turns gravity off for winged
+    /// species: the toss glides to a mid-air stop instead of arcing down.
+    /// Returns the new state plus what happened.
     static func step(
-        _ s: State, dt: Double, box: CGSize, bounds: CGRect
+        _ s: State, dt: Double, box: CGSize, bounds: CGRect, floats: Bool = false
     ) -> (state: State, events: Events) {
         var st = s
         var events = Events()
 
         // Forces.
-        st.vy -= Constants.gravity * dt
-        st.vx *= max(0, 1 - Constants.airDrag * dt)
+        if !floats {
+            st.vy -= Constants.gravity * dt
+        }
+        let damping = floats ? Constants.floatDamping : Constants.linearDamping
+        let keep = max(0, 1 - damping * dt)
+        st.vx *= keep
+        st.vy *= keep
 
         // Integrate.
         st.x += st.vx * dt
@@ -66,18 +77,18 @@ enum DesktopThrowSupport {
         // Walls.
         if st.x < Double(bounds.minX) {
             st.x = Double(bounds.minX)
-            st.vx = abs(st.vx) * Constants.wallRestitution
+            st.vx = abs(st.vx) * Constants.restitution
             events.hitWall = true
         } else if st.x > maxX {
             st.x = maxX
-            st.vx = -abs(st.vx) * Constants.wallRestitution
+            st.vx = -abs(st.vx) * Constants.restitution
             events.hitWall = true
         }
 
         // Ceiling.
         if st.y > maxY, st.vy > 0 {
             st.y = maxY
-            st.vy = -st.vy * Constants.ceilingRestitution
+            st.vy = -st.vy * Constants.restitution
             events.hitCeiling = true
         }
 
@@ -85,11 +96,21 @@ enum DesktopThrowSupport {
         if st.y <= Double(bounds.minY), st.vy < 0 {
             st.y = Double(bounds.minY)
             if -st.vy > Constants.bounceCutoff {
-                st.vy = -st.vy * Constants.floorRestitution
+                st.vy = -st.vy * Constants.restitution
                 events.hitFloor = true
             } else {
                 st.vy = 0
             }
+        }
+
+        // Floaters rest wherever the glide runs out — mid-air included.
+        if floats {
+            if st.vx * st.vx + st.vy * st.vy < Constants.restSpeed * Constants.restSpeed {
+                st.vx = 0
+                st.vy = 0
+                events.landed = true
+            }
+            return (st, events)
         }
 
         // Ground friction while rolling.
