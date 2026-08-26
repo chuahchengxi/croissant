@@ -36,7 +36,7 @@ final class TapOnlyContainerView: NSView {
 // MARK: - View model shared with SwiftUI
 
 final class DesktopViewModel: ObservableObject {
-    @Published var facingLeft = false
+    @Published var facingLeft = true
     @Published var walking = false
     /// Mirrors whether the desktop panel is on screen; views freeze every
     /// timeline while it is hidden so an invisible buddy costs no redraws.
@@ -300,10 +300,10 @@ final class DesktopPetController {
 
         let moving = walking && !pet.snapshot.sleeping
         if vm.walking != moving { vm.walking = moving }
-        let shouldFaceLeft = dir == -1 && moving
-        if vm.facingLeft != shouldFaceLeft { vm.facingLeft = shouldFaceLeft }
-
+        // Facing only tracks the walk while actually walking, so a buddy
+        // that stops keeps standing the way it last headed.
         if moving {
+            if vm.facingLeft != (dir == -1) { vm.facingLeft = dir == -1 }
             pos.x += CGFloat(dir) * Self.speed * CGFloat(dt)
             clampPos()
             applyFrame()
@@ -331,7 +331,7 @@ final class DesktopPetController {
         if dist < 3 {
             pos = target
             applyFrame()
-            if vm.facingLeft { vm.facingLeft = false }
+            if !vm.facingLeft { vm.facingLeft = true }
             return
         }
         if abs(dx) > 2 { vm.facingLeft = dx < 0 }
@@ -559,7 +559,10 @@ struct DesktopPetView: View {
                 sleeping: pet.snapshot.sleeping,
                 widthOverHeight: motion?.widthOverHeight ?? 1
             ))
-            .scaleEffect(x: vm.facingLeft ? -1 : 1, anchor: .center)
+            // PokeAPI front sprites natively face LEFT, so the mirror is
+            // what turns a buddy to the right: facing left draws the raw
+            // sprite untouched, and it waddles the way it looks.
+            .scaleEffect(x: vm.facingLeft ? 1 : -1, anchor: .center)
             .task(id: id) { await runBlinks(for: id) }
         }
     }

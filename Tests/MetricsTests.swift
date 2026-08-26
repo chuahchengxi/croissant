@@ -17438,6 +17438,7 @@ struct MetricsTests {
                     291: ((8, 23, 6, 6), (20, 23, 6, 6)),   // Ninjask
                     357: ((18, 7, 6, 6), (18, 7, 6, 6)),    // Tropius
                     372: ((3, 19, 5, 5), (11, 20, 5, 5)),   // Shelgon (was a slab on the shell)
+                    448: ((16, 11, 6, 6), (16, 11, 6, 6)),  // Lucario (rescue read chest spikes)
                     487: ((35, 17, 8, 7), (47, 16, 8, 7)),  // Giratina
                     624: ((22, 14, 5, 5), (22, 14, 5, 5)),  // Pawniard
                     661: ((36, 37, 7, 7), (36, 37, 7, 7)),  // Fletchling
@@ -17466,10 +17467,34 @@ struct MetricsTests {
                 //    every species either carries measured lids or is pinned
                 //    eyeless, so a pack rebuild never silently re-rolls the
                 //    fuzzy detector over a species someone already vetted.
-                expect(lidded.count == 683,
+                //    777 = 683 tight-measured + 94 bright-eye rescues (the
+                //    yellow/red/cyan irises the detector is blind to), each
+                //    rescue vetted on a sleep contact sheet.
+                expect(lidded.count == 777,
                        "the measured lid roster stays exactly as vetted (\(lidded.count))")
-                expect(table.values.count - lidded.count == 342,
+                expect(table.values.count - lidded.count == 248,
                        "the eyeless roster stays exactly as vetted")
+                let rescues: [Int: ((Double, Double, Double, Double), (Double, Double, Double, Double))] = [
+                    151: ((10, 21, 12, 11), (40, 24, 6, 5)),   // Mew
+                    495: ((5, 9, 7, 8), (13, 8, 5, 9)),        // Snivy
+                    700: ((36, 40, 11, 12), (48, 39, 8, 8)),   // Sylveon
+                ]
+                for (id, rects) in rescues {
+                    guard let motion = table[id], motion.hasEyes,
+                          let l = motion.leftEye, let r = motion.rightEye else {
+                        expect(false, "rescued dex \(id) keeps its bright-eye lids")
+                        continue
+                    }
+                    let cw = motion.canvasWidth, chh = motion.canvasHeight
+                    let matches = { (e: PetEyeRect, rect: (Double, Double, Double, Double)) in
+                        abs(e.x * cw - rect.0) < 0.01
+                            && abs(e.y * chh - rect.1) < 0.01
+                            && abs(e.width * cw - rect.2) < 0.01
+                            && abs(e.height * chh - rect.3) < 0.01
+                    }
+                    expect(matches(l, rects.0) && matches(r, rects.1),
+                           "rescued dex \(id)'s lids stay on the vetted eyes")
+                }
 
                 // 6. The sleep pose lays the buddy onto the floor without
                 //    detaching the lids: upright species tip -90° and lift
@@ -17487,6 +17512,33 @@ struct MetricsTests {
                 let boundary = PetAnimationPackSupport.sleepPose(canvasWidthOverHeight: 1.15, spriteHeight: 96)
                 expect(!boundary.liesOnSide,
                        "the 1.15 aspect boundary counts as round")
+
+                // 7. A pressed sleep is a timed nap, not a permanent state:
+                //    the schedule wakes the buddy on its own after a random
+                //    stretch, and catching a wild pokemon never disturbs it.
+                for _ in 0..<50 {
+                    let delay = PetNapSchedule.wakeDelay()
+                    expect(delay >= 5 * 60 && delay <= 15 * 60,
+                           "nap lengths stay in the 5-15 minute band")
+                }
+                let napStart = Date(timeIntervalSince1970: 1_000_000)
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(599.9)
+                ) == false, "a nap a second from its deadline keeps sleeping")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true,
+                    wakeAt: napStart.addingTimeInterval(600),
+                    now: napStart.addingTimeInterval(600)
+                ), "the nap wakes exactly at its deadline")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: true, wakeAt: nil, now: napStart.addingTimeInterval(999_999)
+                ) == false,
+                   "a nap with no scheduled wake (older save) runs until rested or tapped")
+                expect(PetNapSchedule.shouldWake(
+                    sleeping: false, wakeAt: napStart, now: napStart
+                ) == false, "an awake buddy has nothing to wake from")
 
             } else {
                 expect(false, "the committed animation pack parses")
