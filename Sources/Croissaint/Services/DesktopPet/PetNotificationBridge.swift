@@ -120,6 +120,21 @@ enum PetPixelArt {
     }
 }
 
+/// Pixel type on its own, for anywhere the pet world needs text: same fixed
+/// scale and outline as the notification banner, so every piece of pet copy
+/// reads as one font at one size.
+struct PixelTextView: View {
+    let text: String
+
+    var body: some View {
+        if let image = PetPixelArt.text(text) {
+            Image(decorative: image, scale: 2)
+                .interpolation(.none)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
 // MARK: - Notice model + banner
 
 struct PetNotice: Identifiable, Equatable {
@@ -232,9 +247,10 @@ final class PetNotificationBridge {
     }
 
     /// Delivers a banner; used by the toast observer and the store poller.
-    private func deliver(text: String, icon: NSImage?) {
+    /// System-store notifications startle the buddy; in-app toasts don't.
+    private func deliver(text: String, icon: NSImage?, startles: Bool = false) {
         DispatchQueue.main.async {
-            self.vm?.showNotice(text: text, icon: icon)
+            self.vm?.showNotice(text: text, icon: icon, startles: startles)
         }
     }
 
@@ -284,7 +300,7 @@ final class PetNotificationBridge {
         }
         lastSeenRowID = highest
         if let newest {
-            deliver(text: newest.text, icon: newest.icon)
+            deliver(text: newest.text, icon: newest.icon, startles: true)
         }
     }
 
