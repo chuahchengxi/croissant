@@ -329,6 +329,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetAnimationPackSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetSpriteMetrics.swift \
         Sources/Croissaint/Services/DesktopPet/DesktopThrowSupport.swift \
+        Sources/Croissaint/Services/DesktopPet/PetNoticeParsing.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveCatalog.swift \
         Sources/Croissaint/Services/DesktopPet/PetMoveArt.swift \
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
