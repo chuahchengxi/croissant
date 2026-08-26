@@ -758,6 +758,11 @@ struct PetSleepPose: ViewModifier {
 /// the species' own sampled fur colour, so slight over-coverage melts into
 /// the body; only the darker lash line carries the shape. Fades in and out
 /// with plain Core Animation transitions — no render loop of its own.
+///
+/// Geometry comes from `PetAnimationPackSupport.lidRects`, which grows the
+/// measured eye box a touch: drawn at exactly the measured size, the eye's
+/// sclera and outline ring stayed visible around the lid and the buddy
+/// napped with its eyes half open.
 struct PetEyelidsView: View {
     let motion: PetFaceMotion
     let height: CGFloat
@@ -768,9 +773,10 @@ struct PetEyelidsView: View {
     var body: some View {
         let canvasWidth = height * CGFloat(motion.widthOverHeight)
         ZStack {
-            if let left = motion.leftEye, let right = motion.rightEye {
-                lid(left)
-                lid(right)
+            if let rects = PetAnimationPackSupport.lidRects(for: motion),
+               let left = motion.leftEye, let right = motion.rightEye {
+                lid(rects.left, lash: left)
+                lid(rects.right, lash: right)
             }
         }
         .frame(width: canvasWidth, height: height)
@@ -779,22 +785,40 @@ struct PetEyelidsView: View {
         .allowsHitTesting(false)
     }
 
+    /// One shut eye: fur over the whole grown lid box, and the lash line
+    /// sized off the *measured* eye instead of the grown box. Scaling the
+    /// lash with the fur turned every wide lid into a black bar — sunglasses,
+    /// not sleep — while the fur itself, being the species' own colour, can
+    /// spread as far as it needs to without being seen.
     @ViewBuilder
-    private func lid(_ eye: PetEyeRect) -> some View {
-        let width = CGFloat(eye.width) * height * CGFloat(motion.widthOverHeight)
-        let lidHeight = CGFloat(eye.height) * height
-        let x = (CGFloat(eye.x) + CGFloat(eye.width) / 2) * height * CGFloat(motion.widthOverHeight)
-        let y = (CGFloat(eye.y) + CGFloat(eye.height) / 2) * height
+    private func lid(_ fill: PetEyeRect, lash eye: PetEyeRect) -> some View {
+        let canvasWidth = height * CGFloat(motion.widthOverHeight)
+        let width = CGFloat(fill.width) * canvasWidth
+        let lidHeight = CGFloat(fill.height) * height
+        let x = (CGFloat(fill.x) + CGFloat(fill.width) / 2) * canvasWidth
+        let y = (CGFloat(fill.y) + CGFloat(fill.height) / 2) * height
+        let lashWidth = CGFloat(eye.width) * canvasWidth
+        // Centred on the eye, not on the lid: the unibrow trim can pull one
+        // side of a close-set lid in, and the lash must stay on the eye.
+        let lashCentreX = (CGFloat(eye.x) + CGFloat(eye.width) / 2) * canvasWidth
+        let lashCentreY = (CGFloat(eye.y) + CGFloat(eye.height) / 2) * height
         let color = motion.lidColor
         ZStack {
-            RoundedRectangle(cornerRadius: lidHeight * 0.3)
+            // Barely rounded: at the old 0.3 the corners cut back inside the
+            // eye and left four crumbs of it showing.
+            RoundedRectangle(cornerRadius: lidHeight * 0.16)
                 .fill(Color(red: color.red, green: color.green, blue: color.blue))
             // Lash line along the lower lid: the part that actually reads.
             Capsule()
                 .fill(Color(red: color.red * 0.42, green: color.green * 0.42, blue: color.blue * 0.42))
-                .frame(height: max(1.1, lidHeight * 0.24))
-                .offset(y: lidHeight * 0.34)
-                .padding(.horizontal, width * 0.08)
+                .frame(
+                    width: lashWidth * 0.84,
+                    height: max(1.1, CGFloat(eye.height) * height * 0.24)
+                )
+                .offset(
+                    x: lashCentreX - x,
+                    y: lashCentreY - y + CGFloat(eye.height) * height * 0.34
+                )
         }
         .frame(width: width, height: lidHeight)
         .position(x: x, y: y)
