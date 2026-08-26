@@ -59,8 +59,13 @@ final class StatusItemController {
 
     func containsStatusItem(at screenPoint: NSPoint) -> Bool {
         let buttons = ([statusItem?.button] + metricStatusItems.values.map(\.button)).compactMap { $0 }
+        // Bound once for the whole scan: a default argument is evaluated per
+        // call, so leaving it to the default would rebuild this per button.
+        let screenFrames = NSScreen.screens.map(\.frame)
         return buttons.contains { button in
-            guard let frame = button.window?.frame else { return false }
+            guard let frame = button.window?.frame,
+                  StatusItemAnchorSupport.isTrustworthyStatusFrame(frame, screenFrames: screenFrames)
+            else { return false }
             return frame.insetBy(dx: -4, dy: -8).contains(screenPoint)
         }
     }

@@ -1815,10 +1815,47 @@ struct MetricsTests {
                "App Switcher keeps shortcut hints visible by default and carries the choice in backups")
         expect(SwitcherSupport.usesIconRowLayout(iconRowMode: false, simpleMode: true),
                "App Switcher simple mode always uses the app icon row")
-        expect(SwitcherSupport.usesWindowRow(simpleMode: true, mergeWindowsByApp: false)
-               && !SwitcherSupport.usesWindowRow(simpleMode: true, mergeWindowsByApp: true)
-               && !SwitcherSupport.usesWindowRow(simpleMode: false, mergeWindowsByApp: false),
-               "App Switcher simple mode lists windows unless one-entry-per-app is enabled")
+        expect(SwitcherSupport.usesWindowRow(simpleMode: true,
+                                             mergeWindowsByApp: false,
+                                             sessionScope: .allApps)
+               && !SwitcherSupport.usesWindowRow(simpleMode: true,
+                                                  mergeWindowsByApp: true,
+                                                  sessionScope: .allApps)
+               && SwitcherSupport.usesWindowRow(simpleMode: true,
+                                                 mergeWindowsByApp: true,
+                                                 sessionScope: .frontmostApp)
+               && !SwitcherSupport.usesWindowRow(simpleMode: false,
+                                                  mergeWindowsByApp: false,
+                                                  sessionScope: .allApps),
+               "App Switcher groups all-app sessions but keeps window-scoped simple sessions per-window")
+        // The session-start layout pass reads usesWindowRow, which now depends
+        // on the session scope; teardown resets the scope to .allApps, so the
+        // scope must be assigned before the layout pass or a window-scoped
+        // panel is sized for the grouped layout on its first frame.
+        let switcherSource = (try? String(
+            contentsOfFile: "Sources/Vorssaint/Services/Switcher/AppSwitcher.swift",
+            encoding: .utf8)) ?? ""
+        // Ends on whatever declaration comes next rather than naming the
+        // neighbour: a rename would find no separator, leave the slice running
+        // to end of file, and quietly restore the whole-file search this
+        // replaced — a failure that makes the slice bigger, so an empty check
+        // cannot see it. Hence the count assertion below.
+        let beginSessionParts = (switcherSource.components(separatedBy: "private func beginPendingSession")
+            .last ?? "").components(separatedBy: "\n    private func ")
+        let beginSessionBody = beginSessionParts.first ?? ""
+        expect(beginSessionParts.count > 1,
+               "the App Switcher ordering guard finds the end of beginPendingSession")
+        let switcherCode = beginSessionBody
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        let scopeAssign = switcherCode.range(of: "sessionScope = pending.scope")
+        let startLayout = switcherCode.range(of: "recomputeLayouts(for: list)")
+        expect(!beginSessionBody.isEmpty,
+               "the App Switcher session-start ordering guard finds beginPendingSession")
+        expect(scopeAssign != nil && startLayout != nil
+               && scopeAssign!.lowerBound < startLayout!.lowerBound,
+               "the App Switcher session scope is assigned before the session-start layout pass")
         expect(!SwitcherSupport.usesAppGroupsForMainShortcut(iconRowLayout: true,
                                                               windowRow: true)
                && SwitcherSupport.usesAppGroupsForMainShortcut(iconRowLayout: true,
@@ -2462,7 +2499,7 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "0.0.7",
+        expect(plistVersion == "0.0.8",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
         expect(plistBuild == "82",
@@ -2704,6 +2741,47 @@ struct MetricsTests {
         expect(!StatusItemAnchorSupport.isTrustworthyStatusFrame(CGRect(x: 1135, y: 0, width: 38, height: 37),
                                                                  screenFrames: attachedScreens),
                "a frame down at the bottom of a screen is not a menu bar item")
+
+        // A screen showing a fullscreen window reserves no menu bar: its
+        // visible area is the whole frame. The band is a fixed thickness off
+        // the screen's own top edge, so an item revealed on hover still counts;
+        // a band measured as `frame.maxY - visibleFrame.maxY` would collapse to
+        // nothing here and decline the icon while it is visible and clickable.
+        let fullscreenScreen = CGRect(x: 0, y: 0, width: 1470, height: 956)
+        let fullscreenVisibleFrame = fullscreenScreen
+        expect(StatusItemAnchorSupport.menuBarBand > fullscreenScreen.maxY - fullscreenVisibleFrame.maxY,
+               "the menu bar band does not shrink to what a fullscreen screen reserves")
+        expect(StatusItemAnchorSupport.isTrustworthyStatusFrame(CGRect(x: 1135, y: 919, width: 38, height: 37),
+                                                                screenFrames: [fullscreenScreen]),
+               "a status item revealed over a fullscreen window is a trustworthy anchor")
+
+        // These AppKit owners are not part of the pure-helper test binary, so
+        // pin that neither caller can consume a parked status-item frame.
+        let statusAnchorAppDelegateSource = (try? String(
+            contentsOfFile: "Sources/Vorssaint/App/AppDelegate.swift",
+            encoding: .utf8)) ?? ""
+        let stripCommentLines: (String) -> String = {
+            $0.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+        }
+        // Sliced at the closing brace of the closure/function itself, so the
+        // slice can never run past it into an unrelated body that happens to
+        // carry the same words.
+        let shelfProviderCode = stripCommentLines((statusAnchorAppDelegateSource
+            .components(separatedBy: "ShelfService.shared.statusItemFrameProvider =").last ?? "")
+            .components(separatedBy: "\n        }").first ?? "")
+        let statusControllerSource = (try? String(
+            contentsOfFile: "Sources/Vorssaint/App/StatusItemController.swift",
+            encoding: .utf8)) ?? ""
+        let statusHitTestCode = stripCommentLines((statusControllerSource
+            .components(separatedBy: "func containsStatusItem(at screenPoint: NSPoint) -> Bool {").last ?? "")
+            .components(separatedBy: "\n    }").first ?? "")
+        let statusFrameCall = "StatusItemAnchorSupport.isTrustworthyStatusFrame("
+        expect(shelfProviderCode.contains("guard \(statusFrameCall)") && shelfProviderCode.contains("return nil"),
+               "the Shelf provider rejects an untrustworthy status-item frame")
+        expect(statusHitTestCode.contains(statusFrameCall) && statusHitTestCode.contains("return false"),
+               "status-item hit testing rejects an untrustworthy frame")
 
         // The panel keeps its top edge and its center while its content resizes.
         let panelArea = CGRect(x: 0, y: 0, width: 1470, height: 932)
@@ -3901,8 +3979,10 @@ struct MetricsTests {
         expect(autoQuitServiceCode.contains(
                    "AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .cannotComplete"),
                "AutoQuit probes a watched app for liveness by asking for its windows")
-        expect(!autoQuitServiceCode.contains("appElement, kAXRoleAttribute"),
-               "AutoQuit never asks a watched app's application element for its role")
+        // The same read reached the application element a second way, up the
+        // parent chain of an element that never yields a window. Two files
+        // carried that walk, so both the rule and its guard are repo wide
+        // further down rather than a grep per copy here.
         expect(Defaults.sanitizedPanelItemOrder("uninstaller,homebrew,homebrew,bad",
                                                 defaultOrder: ["homebrew", "media", "uninstaller", "cleanURL", "cleaning"])
                == ["uninstaller", "homebrew", "media", "cleanURL", "cleaning"],
@@ -10246,6 +10326,13 @@ struct MetricsTests {
                 && FanControlPolicy.coolingTargetRPM(minimum: 5_800, maximum: 5_800,
                                                      level: 100) == nil,
                "manual targets map the full percentage scale into reported hardware bounds")
+        expect(FanControlPolicy.targetRPMMatches(target: 3_121, expected: 3_121)
+                && FanControlPolicy.targetRPMMatches(target: 3_122, expected: 3_121)
+                && FanControlPolicy.targetRPMMatches(target: 1_201.5, expected: 1_200)
+                && !FanControlPolicy.targetRPMMatches(target: 3_500, expected: 3_121)
+                && !FanControlPolicy.targetRPMMatches(target: 1_205, expected: 1_200)
+                && !FanControlPolicy.targetRPMMatches(target: .nan, expected: 1_200),
+               "fan target verification allows a narrow tolerance and rejects stale or malformed targets")
 
         let defaultCurve = FanControlConfiguration.defaultCurve
         expect(FanControlPolicy.validConfiguration(.manual(level: 0))
@@ -13409,6 +13496,63 @@ struct MetricsTests {
         }
         expect(!appSources.isEmpty && unboundedOperationWaits.isEmpty,
                "no operation queue is waited on without a deadline: \(unboundedOperationWaits)")
+
+        // Asking an application element for its role switches a Chromium app's
+        // renderers into full accessibility mode for the rest of the process's
+        // life (issue #953). It was fixed at the liveness probe, then found
+        // again in the walk up an element's parents, where the chain above a
+        // window is the application element — so the rule is the absence of
+        // that read anywhere, rather than one grep per door somebody noticed.
+        // This is a text scan, not dataflow: it knows an element is an
+        // application element only when the same file names it in a `let x =
+        // AXUIElementCreateApplication(...)`, and it reads the role attribute
+        // and its element off one line. An application element handed to a
+        // helper, stored in a property, or passed inline is still on review to
+        // catch; both reads found so far were written the direct way.
+        var applicationRoleReads: [String] = []
+        for file in appSources.sorted() {
+            guard let source = try? String(contentsOfFile: "Sources/Vorssaint/\(file)",
+                                           encoding: .utf8) else { continue }
+            let lines = source.components(separatedBy: "\n")
+            var applicationElements: Set<String> = []
+            for line in lines where line.contains("AXUIElementCreateApplication(") {
+                let assigned = (line.components(separatedBy: "=").first ?? "")
+                    .trimmingCharacters(in: .whitespaces)
+                    .components(separatedBy: " ")
+                guard assigned.count == 2, assigned[0] == "let" || assigned[0] == "var" else { continue }
+                applicationElements.insert(assigned[1])
+            }
+            for (index, line) in lines.enumerated()
+            where line.contains("kAXRoleAttribute")
+                && !line.trimmingCharacters(in: .whitespaces).hasPrefix("//")
+                && applicationElements.contains(where: { line.contains("(\($0), ") }) {
+                applicationRoleReads.append("\(file):\(index + 1)")
+            }
+        }
+        expect(!appSources.isEmpty && applicationRoleReads.isEmpty,
+               "no application element is ever asked for its role: \(applicationRoleReads)")
+        // The scan above cannot see the other way in: a walk up kAXParent asks
+        // `parent` for its role, and the application element is what sits above
+        // the last window, so the element it reads is never named after one.
+        // Two files carried the same walk, so the rule is that anywhere doing
+        // it stops at the application element first, rather than a pin per copy.
+        var unguardedParentWalks: [String] = []
+        for file in appSources.sorted() {
+            guard let source = try? String(contentsOfFile: "Sources/Vorssaint/\(file)",
+                                           encoding: .utf8) else { continue }
+            let lines = source.components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            // Per occurrence and in order: a guard sitting anywhere in the file
+            // would let a second walk go unguarded, and one written after the
+            // read would let the read happen first, which is the whole failure.
+            for (index, line) in lines.enumerated() where line.contains("role(of: parent)") {
+                let guarded = lines[max(0, index - 3)..<index]
+                    .contains { $0.contains("isApplicationElement(parent)") }
+                if !guarded { unguardedParentWalks.append("\(file):\(index + 1)") }
+            }
+        }
+        expect(!appSources.isEmpty && unguardedParentWalks.isEmpty,
+               "a walk up the parent chain stops at the application element: \(unguardedParentWalks)")
         expect(ScratchpadRetention.sanitized("day") == .day
                 && ScratchpadRetention.sanitized("week") == .week
                 && ScratchpadRetention.sanitized("month") == .month
@@ -14085,6 +14229,50 @@ struct MetricsTests {
         expect(soloState.decide(.triggerUp(timestamp: 4_000_000_000)) == .swallow,
                "holding it together with another modifier is not a tap either")
 
+        // Drag chords read their modifiers off the mouse-down, not off any
+        // keyboard event (#888), so the service must classify mouse presses
+        // like other keys and stamp them from a tap at the HID stage — the
+        // one place guaranteed to run before every session tap that reads
+        // the flags. The service file is not in this binary; pin the shape.
+        let superKeyServiceSource = (try? String(
+            contentsOfFile: "Sources/Vorssaint/Services/SuperKey/SuperKeyService.swift",
+            encoding: .utf8)) ?? ""
+        let superKeyServiceCode = superKeyServiceSource
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        expect(superKeyServiceCode.contains(".leftMouseDown, .rightMouseDown, .otherMouseDown")
+               && superKeyServiceCode.contains("mouseDownTypes.reduce(CGEventMask(0))")
+               && superKeyServiceCode.contains("mouseDownTypes.contains(type) { return .otherKey }")
+               && superKeyServiceCode.range(of: "tap: .cghidEventTap") != nil,
+               "every mouse press while the super key is held carries the modifiers, stamped at the HID stage")
+        // A mouse event carries no keycode of its own: the field reads back as
+        // 0 on one, which is the keycode for A. The read lives inside classify,
+        // below the line that answers the mouse types, so no caller holds a
+        // phantom key it could hand to something that looks keys up.
+        let keycodeReads = superKeyServiceCode
+            .components(separatedBy: ".keyboardEventKeycode").count - 1
+        let mouseAnswer = superKeyServiceCode.range(of: "mouseDownTypes.contains(type)")?.lowerBound
+        let keycodeRead = superKeyServiceCode.range(of: ".keyboardEventKeycode")?.lowerBound
+        expect(keycodeReads == 1
+               && mouseAnswer.flatMap({ answer in keycodeRead.map { answer < $0 } }) == true,
+               "a mouse press is answered before the super key ever reads a keycode")
+        // A refused mouse tap counts as dead so the health check rebuilds it,
+        // but exactly once: the rebuild takes the healthy keyboard tap down
+        // with it, and a system that refuses refuses the retry too, so an
+        // unbounded flag would hiccup super-key input at whatever rate
+        // syncWithPreferences fires. The count has to outlive the teardown its
+        // own value asked for, so the only place it is put back to zero is its
+        // own declaration — never the tap thread's reset block, which the
+        // rebuild runs and which would start the loop over.
+        let refusalResets = superKeyServiceCode
+            .components(separatedBy: "mouseTapRefusals = 0").count - 1
+        expect(superKeyServiceCode.contains("?? (mouseTapRefusals == 1)")
+               && superKeyServiceCode.contains(
+                   "mouseTapRefusals = mouseTap == nil ? self.mouseTapRefusals + 1 : 0")
+               && refusalResets == 1,
+               "a refused mouse tap is worth one rebuild, and the count survives it")
+
         var noRepeatHoldState = SuperKeySupport.State()
         _ = noRepeatHoldState.decide(.triggerDown(
             isRepeat: false, hasPrimaryModifiers: false, timestamp: 6_000_000_000
@@ -14517,6 +14705,20 @@ struct MetricsTests {
             SettingsBackupSupport.formatVersionKey: 99,
             SettingsBackupSupport.settingsKey: [String: Any](),
         ]) == nil, "a future format version is rejected")
+        expect(SettingsBackupSupport.formatVersion(from: [SettingsBackupSupport.formatVersionKey: 1]) == 1
+                && SettingsBackupSupport.formatVersion(from: [SettingsBackupSupport.formatVersionKey: NSNumber(value: 1)]) == 1
+                && SettingsBackupSupport.formatVersion(from: [SettingsBackupSupport.formatVersionKey: "1"]) == 1
+                && SettingsBackupSupport.formatVersion(from: [SettingsBackupSupport.formatVersionKey: " 1 \n"]) == 1
+                && SettingsBackupSupport.formatVersion(from: [SettingsBackupSupport.formatVersionKey: "invalid"]) == nil,
+               "backup format version accepts integer, NSNumber and string representations")
+        let stringVersionBackup: [String: Any] = [
+            SettingsBackupSupport.formatVersionKey: "1",
+            SettingsBackupSupport.settingsKey: [
+                DefaultsKey.smoothScrollStep: 60,
+            ] as [String: Any],
+        ]
+        expect(SettingsBackupSupport.sanitizedSettings(from: stringVersionBackup)?[DefaultsKey.smoothScrollStep] as? Int == 60,
+               "a backup with a string-encoded format version restores correctly")
 
         // A backup file can be edited by hand, and a value of the wrong shape
         // would reach code that trusts its own settings.
