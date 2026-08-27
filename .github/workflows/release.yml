@@ -126,7 +126,17 @@ jobs:
             if [[ -n "${NOTARY_API_KEY_P8:-}" ]]; then
               echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
             else
-              echo "Ad-hoc signed build (no notarization credentials configured): on first launch, right-click the app and choose Open, or allow it under System Settings → Privacy & Security. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+              echo '## macOS will say this app is damaged. It is not.'
+              echo ''
+              echo 'This build is ad-hoc signed (no notarization credentials configured), so Gatekeeper refuses it and offers only Move to Trash. Right-click then Open does NOT work for ad-hoc code on macOS 15 or later, and no Open Anyway button appears under Privacy & Security.'
+              echo ''
+              echo 'Open the .dmg below, drag Croissaint to Applications, then run this once in Terminal:'
+              echo ''
+              echo '```sh'
+              echo 'xattr -dr com.apple.quarantine /Applications/Croissaint.app'
+              echo '```'
+              echo ''
+              echo 'Croissaint opens normally from then on. Requires macOS 14 or later.'
             fi
             echo "__VRSS_EOF__"
             if [[ "$VERSION" =~ (beta|rc|alpha) ]]; then
