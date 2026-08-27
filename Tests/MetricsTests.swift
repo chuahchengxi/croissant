@@ -18827,6 +18827,41 @@ struct MetricsTests {
             expect(false, "synthetic corner sprite renders for placement")
         }
 
+        // MARK: Pet tap reactions
+
+        // Petting the desktop buddy answers with one short body animation.
+        // Outside its window every channel is exactly at rest — the timeline
+        // can keep evaluating a finished reaction without moving the body.
+        for reaction in PetTapReaction.allCases {
+            for t in [-0.1, PetTapReaction.duration, PetTapReaction.duration + 1] {
+                expect(reaction.offsetY(at: t, height: 76) == 0
+                       && reaction.rotation(at: t, facingLeft: true) == 0
+                       && reaction.scaleY(at: t) == 1 && reaction.scaleX(at: t) == 1,
+                       "a tap reaction is identity outside its window (t=\(t))")
+            }
+        }
+        // The press starts squashed and fattened — soft creature, not a
+        // shrinking bitmap — and springs past rest on the way back.
+        expectClose(PetTapReaction.bounce.scaleY(at: 0), 0.70, "the bounce starts fully squashed")
+        expectClose(PetTapReaction.bounce.scaleX(at: 0), 1.18, "the squash fattens the body")
+        expect(PetTapReaction.bounce.scaleY(at: 0.15) > 1,
+               "the spring overshoots past rest on the way back")
+        // The hop lifts the body and the shimmy tilts it, mirrored with facing.
+        expect(PetTapReaction.hop.offsetY(at: 0.2, height: 76) < -4,
+               "the delight hop actually leaves the ground")
+        let tilt = PetTapReaction.wiggle.rotation(at: 0.05, facingLeft: true)
+        expect(tilt != 0, "the shimmy tilts the body")
+        expectClose(PetTapReaction.wiggle.rotation(at: 0.05, facingLeft: false), -tilt,
+                    "the shimmy mirrors with the buddy's facing")
+        // Consecutive taps never replay the same reaction, whatever the species.
+        for seed in [0, 1, 7, 702] {
+            for pulse in 1...12 {
+                expect(PetTapReaction.pick(pulse: pulse, seed: seed)
+                       != PetTapReaction.pick(pulse: pulse + 1, seed: seed),
+                       "consecutive taps pick different reactions (seed \(seed))")
+            }
+        }
+
         PetSpriteMetrics.reset()
         var sprawlFrames: [CGImage] = []
         if let wideArt = synthetic(256, 64, art: nil) { sprawlFrames = [wideArt] }

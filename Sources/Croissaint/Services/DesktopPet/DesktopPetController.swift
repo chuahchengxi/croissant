@@ -62,6 +62,8 @@ final class DesktopViewModel: ObservableObject {
     /// Bumped whenever a real system notification reaches the buddy, so the
     /// it reacts (startled hop) instead of just growing a banner.
     @Published var alertPulse = 0
+    /// Bumped per petting tap; the view answers with a `PetTapReaction`.
+    @Published var petPulse = 0
 
     func spawnHearts(_ count: Int) {
         for _ in 0..<count {
@@ -533,6 +535,7 @@ final class DesktopPetController {
             pet.toggleSleep() // wake up
         } else {
             _ = pet.pet()
+            vm.petPulse += 1
             vm.spawnHearts(3)
             vm.spawnMove(pet: pet)
         }
@@ -748,6 +751,9 @@ struct DesktopPetView: View {
     @State private var impactSquash = false
     /// Start of the startled hop that greets a new system notification.
     @State private var noticeHopStart: Date?
+    /// Start of the current pet-tap reaction and the flavour that tap picked.
+    @State private var petReactStart: Date?
+    @State private var petReaction: PetTapReaction = .bounce
 
     /// True while a blink has the lids shut; driven by a scheduled task, so
     /// between blinks nothing renders at all.
@@ -761,7 +767,8 @@ struct DesktopPetView: View {
     /// buddy pauses everything.
     private var timelinePaused: Bool {
         !vm.buddyVisible || !(vm.walking || pet.snapshot.sleeping || joyStart != nil
-                              || vm.thrown || noticeHopStart != nil)
+                              || vm.thrown || noticeHopStart != nil
+                              || petReactStart != nil)
     }
 
     var body: some View {
@@ -799,6 +806,13 @@ struct DesktopPetView: View {
                     .scaleEffect(
                         x: impactSquash ? 1.14 : 1,
                         y: impactSquash ? 0.78 : 1,
+                        anchor: .bottom
+                    )
+                    // Petting squash & stretch rides its own axis pair — the
+                    // shared bodyScale is uniform and can't flatten a body.
+                    .scaleEffect(
+                        x: petReactScaleX(at: now),
+                        y: petReactScaleY(at: now),
                         anchor: .bottom
                     )
                     .offset(y: bodyOffset(at: now))
@@ -869,6 +883,20 @@ struct DesktopPetView: View {
             // Re-evaluates body so the normalization scale recomputes now
             // that real frames exist.
             spriteEpoch.toggle()
+        }
+        .onReceive(vm.$petPulse.dropFirst()) { pulse in
+            // A petting tap: the body answers with a squish, shimmy or hop.
+            // Sleep taps wake instead (handled at the tap), and a mid-air
+            // buddy already has the throw physics animating it.
+            guard !pet.snapshot.sleeping, !vm.thrown else { return }
+            petReaction = PetTapReaction.pick(pulse: pulse, seed: pet.dexID ?? 0)
+            petReactStart = Date()
+            DispatchQueue.main.asyncAfter(deadline: .now() + PetTapReaction.duration + 0.05) {
+                if let start = petReactStart,
+                   Date().timeIntervalSince(start) >= PetTapReaction.duration {
+                    petReactStart = nil
+                }
+            }
         }
         .onReceive(vm.$alertPulse.dropFirst()) { _ in
             // A system notification just reached the buddy: a startled
@@ -1056,7 +1084,25 @@ struct DesktopPetView: View {
                 y -= abs(sin(dt * .pi * 5)) * 7 * exp(-dt * 2.2)
             }
         }
+
+        // A petting tap: the reaction's own lift (delight hops).
+        if let petReactStart {
+            y += petReaction.offsetY(
+                at: now.timeIntervalSince(petReactStart),
+                height: Double(Self.buddySpriteHeight)
+            )
+        }
         return CGFloat(y)
+    }
+
+    private func petReactScaleX(at now: Date) -> CGFloat {
+        guard let petReactStart else { return 1 }
+        return CGFloat(petReaction.scaleX(at: now.timeIntervalSince(petReactStart)))
+    }
+
+    private func petReactScaleY(at now: Date) -> CGFloat {
+        guard let petReactStart else { return 1 }
+        return CGFloat(petReaction.scaleY(at: now.timeIntervalSince(petReactStart)))
     }
 
     /// Sideways drift from dream twitches — zero while awake.
@@ -1100,6 +1146,14 @@ struct DesktopPetView: View {
                 let wiggle: Double = gait.gaitClass == 0 ? 10 : 7
                 angle += sin(dt * .pi * 6) * wiggle * exp(-dt * 2.2)
             }
+        }
+
+        // A petting tap: the reaction's shimmy or hop lean.
+        if let petReactStart {
+            angle += petReaction.rotation(
+                at: now.timeIntervalSince(petReactStart),
+                facingLeft: vm.facingLeft
+            )
         }
         return angle
     }
