@@ -47,10 +47,11 @@ struct AnimatedSpriteView: View {
     /// Freezes playback entirely (hidden buddy windows): no timeline ticks,
     /// no body re-evaluations, zero cost while off screen.
     var paused = false
-    /// Normalizes the sprite so its visible artwork fills a consistent,
-    /// small fraction of the box regardless of source canvas padding
-    /// (see `PetSpriteMetrics`). The desktop buddy turns this off and wraps
-    /// sprite + eyelids in one shared scale instead, so overlays stay glued.
+    /// Normalizes the sprite so its visible artwork fills a consistent
+    /// fraction of the box AND sits centred in it, regardless of source
+    /// canvas padding (see `PetSpriteMetrics`). The desktop buddy turns this
+    /// off and wraps sprite + eyelids in one shared placement instead, so
+    /// overlays stay glued.
     var normalizeSize = true
 
     @State private var refresh = false
@@ -80,9 +81,10 @@ struct AnimatedSpriteView: View {
                 // Frame index derives from the timeline date instead of @State,
                 // so each tick is a plain re-render — and the whole timeline
                 // parks itself when the view leaves the hierarchy or pauses.
-                let fit = normalizeSize
-                    ? CGFloat(PetSpriteMetrics.scale(for: id, frames: frames))
-                    : 1
+                let placement = normalizeSize
+                    ? PetSpriteMetrics.placement(for: id, frames: frames)
+                    : PetSpriteMetrics.identity
+                let aspect = CGFloat(frames[0].width) / CGFloat(frames[0].height)
                 TimelineView(.animation(minimumInterval: playInterval, paused: paused)) { timeline in
                     let idx = paused
                         ? 0
@@ -90,7 +92,14 @@ struct AnimatedSpriteView: View {
                             % frames.count
                     spriteBody(frames: frames, frameIndex: max(0, idx))
                 }
-                .scaleEffect(fit, anchor: .bottom)
+                // Centre the visible artwork in the box, then scale about the
+                // centre — asymmetric canvas padding can no longer push a
+                // buddy off-centre or leave it floating above a bottom gap.
+                .offset(
+                    x: CGFloat(placement.centerDX) * height * aspect,
+                    y: CGFloat(placement.centerDY) * height
+                )
+                .scaleEffect(CGFloat(placement.scale), anchor: .center)
             } else {
                 VStack(spacing: 4) {
                     ProgressView()

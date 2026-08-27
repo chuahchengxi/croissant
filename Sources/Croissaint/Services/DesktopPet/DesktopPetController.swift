@@ -891,9 +891,10 @@ struct DesktopPetView: View {
             // artwork lands on a common fraction of the box no matter how
             // much padding its source canvas carries, and the eyelids ride
             // the same transform so they never drift off the face.
-            let fit = CGFloat(PetSpriteMetrics.scale(
-                for: id, frames: SpriteCache.frames(for: id) ?? []
-            ))
+            let frames = SpriteCache.frames(for: id) ?? []
+            let placement = PetSpriteMetrics.placement(for: id, frames: frames)
+            let fit = CGFloat(placement.scale)
+            let aspect = frames.first.map { CGFloat($0.width) / CGFloat($0.height) } ?? 1
             ZStack {
                 AnimatedSpriteView(
                     id: id,
@@ -923,11 +924,22 @@ struct DesktopPetView: View {
                     )
                 }
             }
+            // Sink the canvas' empty bottom margin so feet actually touch the
+            // ground (gen 6+ PNGs carry up to a third of the canvas below the
+            // art), and pull off-centre artwork back over the shadow. Applied
+            // before the bottom-anchored scale, which multiplies both shifts.
+            .offset(
+                x: CGFloat(placement.centerDX) * Self.buddySpriteHeight * aspect,
+                y: CGFloat(placement.bottomMargin) * Self.buddySpriteHeight
+            )
             .scaleEffect(fit, anchor: .bottom)
+            // The tip-over judges the visible artwork, not the canvas: a
+            // padded PNG's canvas is square however round its body is, and
+            // lifting by half the canvas width left sleepers in mid-air.
             .modifier(PetSleepPose(
                 sleeping: pet.snapshot.sleeping,
-                widthOverHeight: motion?.widthOverHeight ?? 1,
-                spriteHeight: Self.buddySpriteHeight * fit
+                widthOverHeight: placement.artWidthOverHeight,
+                spriteHeight: Self.buddySpriteHeight * CGFloat(placement.visibleHeightFraction)
             ))
             // PokeAPI front sprites natively face LEFT, so the mirror is
             // what turns a buddy to the right: facing left draws the raw

@@ -18768,8 +18768,23 @@ struct MetricsTests {
             let fill = PetSpriteMetrics.fillRatio(of: quarter)
             expectClose(fill?.widthFraction ?? 0, 0.5, "padded artwork reports half the width")
             expectClose(fill?.heightFraction ?? 0, 0.5, "padded artwork reports half the height")
+            expectClose(fill?.centerX ?? 0, 0.5, "centred artwork measures a centred box")
+            expectClose(fill?.centerY ?? 0, 0.5, "centred artwork measures a centred box vertically")
+            expectClose(fill?.bottomMargin ?? 0, 0.25, "a quarter-inset box leaves a quarter below")
         } else {
             expect(false, "synthetic padded sprite renders")
+        }
+
+        // Orientation pin: art drawn in the CG top-left quadrant (CG y is
+        // bottom-up, so y 32..64 is the TOP half) must measure as top-down
+        // fractions — centre above the middle, half the canvas empty below.
+        if let corner = synthetic(64, 64, art: CGRect(x: 0, y: 32, width: 32, height: 32)) {
+            let fill = PetSpriteMetrics.fillRatio(of: corner)
+            expectClose(fill?.centerX ?? 0, 0.25, "left-side art measures left of centre")
+            expectClose(fill?.centerY ?? 0, 0.25, "top-half art measures above centre (top-down y)")
+            expectClose(fill?.bottomMargin ?? 0, 0.5, "top-half art leaves half the canvas below")
+        } else {
+            expect(false, "synthetic corner sprite renders")
         }
         if let blank = synthetic(64, 64, art: CGRect.null) {
             expect(PetSpriteMetrics.fillRatio(of: blank) == nil,
@@ -18790,14 +18805,27 @@ struct MetricsTests {
 
         PetSpriteMetrics.reset()
         var paddedFrames: [CGImage] = []
-        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
-            paddedFrames = [quarter]
+        if let sliver = synthetic(64, 64, art: CGRect(x: 24, y: 24, width: 16, height: 16)) {
+            paddedFrames = [sliver]
         }
         expect(PetSpriteMetrics.scale(for: 900_002, frames: paddedFrames) == PetSpriteMetrics.maxScale,
-               "a padded sprite inflates only up to the cap")
+               "a heavily padded sprite inflates only up to the cap")
         // Memoized per species: an undecodeable frame list must not undo it.
         expect(PetSpriteMetrics.scale(for: 900_002, frames: []) == PetSpriteMetrics.maxScale,
                "the normalization memoizes once measured")
+
+        // Placement re-centres asymmetric padding: art parked in the CG
+        // top-left quadrant shifts right and down to the canvas centre, and
+        // reports the half-canvas gap under its feet.
+        PetSpriteMetrics.reset()
+        if let corner = synthetic(64, 64, art: CGRect(x: 0, y: 32, width: 32, height: 32)) {
+            let placement = PetSpriteMetrics.placement(for: 900_005, frames: [corner])
+            expectClose(placement.centerDX, 0.25, "left-packed art shifts right to centre")
+            expectClose(placement.centerDY, 0.25, "top-packed art shifts down to centre")
+            expectClose(placement.bottomMargin, 0.5, "the desktop buddy sinks by the bottom gap")
+        } else {
+            expect(false, "synthetic corner sprite renders for placement")
+        }
 
         PetSpriteMetrics.reset()
         var sprawlFrames: [CGImage] = []
