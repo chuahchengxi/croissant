@@ -364,6 +364,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/SpeciesCatalogData.swift \
         Sources/Croissaint/Services/DesktopPet/PetAnimationPackSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetSpriteMetrics.swift \
+        Sources/Croissaint/Services/DesktopPet/PetTapReactions.swift \
         Sources/Croissaint/Services/DesktopPet/DesktopThrowSupport.swift \
         Sources/Croissaint/Services/DesktopPet/PetNoticeParsing.swift \
         Sources/Croissaint/Services/DesktopPet/PetSleepChoreography.swift \

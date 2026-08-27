@@ -14,12 +14,14 @@ enum PetPixelArt {
     /// "shrink long text" rule used to make consecutive notifications look
     /// like two different fonts.
     static func text(_ raw: String) -> CGImage? {
-        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .bold)
+        // 10 pt reads fine at the pixel scale and keeps the banner from
+        // dwarfing the ~70 pt buddy it hangs over.
+        let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [.font: font]
         let lines = wrap(raw, into: 2, of: 34, font: font)
         guard !lines.isEmpty else { return nil }
 
-        let lineHeight: CGFloat = 17
+        let lineHeight: CGFloat = 14
         let widths = lines.map { ceil(($0 as NSString).size(withAttributes: attrs).width) + 4 }
         let width = max(8, widths.max() ?? 8)
         let height = lineHeight * CGFloat(lines.count) + 4
@@ -146,14 +148,16 @@ struct PetNotice: Identifiable, Equatable {
 struct PetNoticeBannerView: View {
     let notice: PetNotice
 
-    /// Intrinsic size so the host panel can match it exactly.
+    /// Intrinsic size so the host panel can match it exactly. The pixel
+    /// bitmaps display at half their pixel size (scale 2), so the panel
+    /// hugs the visible box instead of doubling it.
     static func size(for notice: PetNotice) -> NSSize {
-        let textWidth = CGFloat(notice.text?.width ?? 0)
-        let textHeight = CGFloat(notice.text?.height ?? 0)
-        let iconSide: CGFloat = notice.icon == nil ? 0 : 28
+        let textWidth = CGFloat(notice.text?.width ?? 0) / 2
+        let textHeight = CGFloat(notice.text?.height ?? 0) / 2
+        let iconSide: CGFloat = notice.icon == nil ? 0 : 22
         let width = iconSide + (iconSide > 0 && textWidth > 0 ? 9 : 0) + textWidth + 22
         let height = max(iconSide, textHeight) + 14
-        return NSSize(width: max(60, width), height: max(34, height))
+        return NSSize(width: max(50, width), height: max(30, height))
     }
 
     var body: some View {
@@ -162,7 +166,7 @@ struct PetNoticeBannerView: View {
                 Image(decorative: icon, scale: 2)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: 28, height: 28)
+                    .frame(width: 22, height: 22)
             }
             if let text = notice.text {
                 Image(decorative: text, scale: 2)
@@ -202,11 +206,12 @@ final class PetNotificationBridge {
     private var queue = DispatchQueue(label: "croissaint.petNotifications", qos: .utility)
     private var db: OpaquePointer?
     private var lastSeenRowID: Int64 = -1
+    /// Set when the store opened but its schema wasn't the one we read, which
+    /// no amount of retrying fixes. A store that merely won't open (no Full
+    /// Disk Access yet) is left retryable, so granting it starts the feed.
+    private var storeUnusable = false
 
-    private static let candidates = [
-        "Group Containers/group.com.apple.usernoted/store2",
-        "Group Containers/group.com.apple.usernoted/notifications.db",
-    ]
+    private static let candidates = PetNoticeParsing.storeCandidates
 
     func start(vm: DesktopViewModel) {
         guard toastObserver == nil else { return }
@@ -219,7 +224,6 @@ final class PetNotificationBridge {
             self?.vm?.showNotice(text: text, icon: icon)
         }
         queue.async { [weak self] in
-            self?.openStore()
             self?.readLatest()
         }
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
@@ -271,15 +275,22 @@ final class PetNotificationBridge {
     }
 
     private func readLatest() {
+        // Checked per poll rather than once at start, so flipping the setting
+        // takes effect on the next tick without restarting the buddy.
+        guard UserDefaults.standard.bool(forKey: DefaultsKey.desktopPetNotifications),
+              !storeUnusable
+        else { return }
+        openStore()
         guard let handle = db else { return }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(
             handle, "SELECT rowid, data FROM record ORDER BY rowid DESC LIMIT 6", -1, &statement, nil
         ) == SQLITE_OK, let statement else {
-            // Unknown schema or unreadable store: park the watcher.
+            // Unknown schema or unreadable store: park the watcher for good.
             sqlite3_finalize(statement)
             sqlite3_close_v2(handle)
             db = nil
+            storeUnusable = true
             return
         }
         defer { sqlite3_finalize(statement) }
@@ -369,8 +380,9 @@ final class PetNoticePanel {
         panel = nil
     }
 
-    /// Keeps the banner glued above the buddy, flipped below near the screen
-    /// top, clamped into the visible frame on both axes.
+    /// Keeps the banner glued just above the buddy's head — not the window
+    /// top, which sits ~50 pt higher than the sprite — flipped below near
+    /// the screen top, clamped into the visible frame on both axes.
     func reposition() {
         guard let panel, let petFrame = petWindow?.frame, panel.isVisible else { return }
         let size = panel.frame.size
@@ -378,9 +390,15 @@ final class PetNoticePanel {
             ?? NSScreen.main?.visibleFrame
             ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
         let gap: CGFloat = 6
-        var origin = NSPoint(x: petFrame.midX - size.width / 2, y: petFrame.maxY + gap)
+        // The sprite box is centred in the pet window and its artwork is
+        // normalized to targetFill of that box with feet on the box bottom,
+        // so the head's height is the same for every species.
+        let spriteBox = DesktopPetView.buddySpriteHeight
+        let feetY = petFrame.minY + (petFrame.height - spriteBox) / 2
+        let headY = feetY + spriteBox * CGFloat(PetSpriteMetrics.targetFill)
+        var origin = NSPoint(x: petFrame.midX - size.width / 2, y: headY + gap)
         if origin.y + size.height > screen.maxY {
-            origin.y = petFrame.minY - gap - size.height
+            origin.y = feetY - gap - size.height
         }
         origin.x = min(max(origin.x, screen.minX + 4), screen.maxX - size.width - 4)
         origin.y = min(max(origin.y, screen.minY + 4), screen.maxY - size.height - 4)

@@ -193,6 +193,7 @@ enum DefaultsKey {
     static let killProcessSortAscending = "killProcessSortAscending"
     static let desktopPetEnabled = "desktopPetEnabled"  // buddy walks the screen while the feature is installed
     static let desktopPetBlinks = "desktopPetBlinks"  // eyelid overlay: blinks awake, shut lids asleep
+    static let desktopPetNotifications = "desktopPetNotifications"  // mirror system notifications onto the buddy (needs Full Disk Access)
     static let privacyIndicatorCloakEnabled = "privacyIndicatorCloakEnabled"  // hide the recording/camera/mic menu-bar dots
     static let panelUtilityCleaner = "panelUtilityCleaner"
     static let panelUtilityHomebrew = "panelUtilityHomebrew"
@@ -905,6 +906,9 @@ enum Defaults {
         // uninstalling in the hub is the way to send it home.
         DefaultsKey.desktopPetEnabled: true,
         DefaultsKey.desktopPetBlinks: true,
+        // Off by default: reading the notification store is a privacy-visible
+        // step that needs Full Disk Access, so it waits to be asked for.
+        DefaultsKey.desktopPetNotifications: false,
         // The animation pack is a deliberate download: with it absent the pet
         // runs the exact pack-free motion, so it starts off.
         DefaultsKey.panelUtilityCleaner: true,

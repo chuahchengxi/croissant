@@ -18768,8 +18768,23 @@ struct MetricsTests {
             let fill = PetSpriteMetrics.fillRatio(of: quarter)
             expectClose(fill?.widthFraction ?? 0, 0.5, "padded artwork reports half the width")
             expectClose(fill?.heightFraction ?? 0, 0.5, "padded artwork reports half the height")
+            expectClose(fill?.centerX ?? 0, 0.5, "centred artwork measures a centred box")
+            expectClose(fill?.centerY ?? 0, 0.5, "centred artwork measures a centred box vertically")
+            expectClose(fill?.bottomMargin ?? 0, 0.25, "a quarter-inset box leaves a quarter below")
         } else {
             expect(false, "synthetic padded sprite renders")
+        }
+
+        // Orientation pin: art drawn in the CG top-left quadrant (CG y is
+        // bottom-up, so y 32..64 is the TOP half) must measure as top-down
+        // fractions — centre above the middle, half the canvas empty below.
+        if let corner = synthetic(64, 64, art: CGRect(x: 0, y: 32, width: 32, height: 32)) {
+            let fill = PetSpriteMetrics.fillRatio(of: corner)
+            expectClose(fill?.centerX ?? 0, 0.25, "left-side art measures left of centre")
+            expectClose(fill?.centerY ?? 0, 0.25, "top-half art measures above centre (top-down y)")
+            expectClose(fill?.bottomMargin ?? 0, 0.5, "top-half art leaves half the canvas below")
+        } else {
+            expect(false, "synthetic corner sprite renders")
         }
         if let blank = synthetic(64, 64, art: CGRect.null) {
             expect(PetSpriteMetrics.fillRatio(of: blank) == nil,
@@ -18790,14 +18805,62 @@ struct MetricsTests {
 
         PetSpriteMetrics.reset()
         var paddedFrames: [CGImage] = []
-        if let quarter = synthetic(64, 64, art: CGRect(x: 16, y: 16, width: 32, height: 32)) {
-            paddedFrames = [quarter]
+        if let sliver = synthetic(64, 64, art: CGRect(x: 24, y: 24, width: 16, height: 16)) {
+            paddedFrames = [sliver]
         }
         expect(PetSpriteMetrics.scale(for: 900_002, frames: paddedFrames) == PetSpriteMetrics.maxScale,
-               "a padded sprite inflates only up to the cap")
+               "a heavily padded sprite inflates only up to the cap")
         // Memoized per species: an undecodeable frame list must not undo it.
         expect(PetSpriteMetrics.scale(for: 900_002, frames: []) == PetSpriteMetrics.maxScale,
                "the normalization memoizes once measured")
+
+        // Placement re-centres asymmetric padding: art parked in the CG
+        // top-left quadrant shifts right and down to the canvas centre, and
+        // reports the half-canvas gap under its feet.
+        PetSpriteMetrics.reset()
+        if let corner = synthetic(64, 64, art: CGRect(x: 0, y: 32, width: 32, height: 32)) {
+            let placement = PetSpriteMetrics.placement(for: 900_005, frames: [corner])
+            expectClose(placement.centerDX, 0.25, "left-packed art shifts right to centre")
+            expectClose(placement.centerDY, 0.25, "top-packed art shifts down to centre")
+            expectClose(placement.bottomMargin, 0.5, "the desktop buddy sinks by the bottom gap")
+        } else {
+            expect(false, "synthetic corner sprite renders for placement")
+        }
+
+        // MARK: Pet tap reactions
+
+        // Petting the desktop buddy answers with one short body animation.
+        // Outside its window every channel is exactly at rest — the timeline
+        // can keep evaluating a finished reaction without moving the body.
+        for reaction in PetTapReaction.allCases {
+            for t in [-0.1, PetTapReaction.duration, PetTapReaction.duration + 1] {
+                expect(reaction.offsetY(at: t, height: 76) == 0
+                       && reaction.rotation(at: t, facingLeft: true) == 0
+                       && reaction.scaleY(at: t) == 1 && reaction.scaleX(at: t) == 1,
+                       "a tap reaction is identity outside its window (t=\(t))")
+            }
+        }
+        // The press starts squashed and fattened — soft creature, not a
+        // shrinking bitmap — and springs past rest on the way back.
+        expectClose(PetTapReaction.bounce.scaleY(at: 0), 0.70, "the bounce starts fully squashed")
+        expectClose(PetTapReaction.bounce.scaleX(at: 0), 1.18, "the squash fattens the body")
+        expect(PetTapReaction.bounce.scaleY(at: 0.15) > 1,
+               "the spring overshoots past rest on the way back")
+        // The hop lifts the body and the shimmy tilts it, mirrored with facing.
+        expect(PetTapReaction.hop.offsetY(at: 0.2, height: 76) < -4,
+               "the delight hop actually leaves the ground")
+        let tilt = PetTapReaction.wiggle.rotation(at: 0.05, facingLeft: true)
+        expect(tilt != 0, "the shimmy tilts the body")
+        expectClose(PetTapReaction.wiggle.rotation(at: 0.05, facingLeft: false), -tilt,
+                    "the shimmy mirrors with the buddy's facing")
+        // Consecutive taps never replay the same reaction, whatever the species.
+        for seed in [0, 1, 7, 702] {
+            for pulse in 1...12 {
+                expect(PetTapReaction.pick(pulse: pulse, seed: seed)
+                       != PetTapReaction.pick(pulse: pulse + 1, seed: seed),
+                       "consecutive taps pick different reactions (seed \(seed))")
+            }
+        }
 
         PetSpriteMetrics.reset()
         var sprawlFrames: [CGImage] = []
@@ -18954,6 +19017,17 @@ struct MetricsTests {
         expect(PetNoticeParsing.parse(Data("not a plist".utf8)) == nil,
                "garbage bytes never crash the poller")
         expect(PetNoticeParsing.parse(Data()) == nil, "an empty blob reads as nothing")
+
+        // The store paths are resolved against the home directory. A missing
+        // "Library/" shipped once and the feed simply went quiet forever —
+        // wrong path and denied permission look identical from here.
+        expect(!PetNoticeParsing.storeCandidates.isEmpty, "there is somewhere to look")
+        for candidate in PetNoticeParsing.storeCandidates {
+            expect(candidate.hasPrefix("Library/Group Containers/group.com.apple.usernoted/"),
+                   "store path sits under ~/Library/Group Containers: \(candidate)")
+            expect(!candidate.hasPrefix("/") && !candidate.hasPrefix("~"),
+                   "store path stays relative to the home directory: \(candidate)")
+        }
 
         // MARK: Sleep choreography
 
