@@ -19018,6 +19018,17 @@ struct MetricsTests {
                "garbage bytes never crash the poller")
         expect(PetNoticeParsing.parse(Data()) == nil, "an empty blob reads as nothing")
 
+        // The store paths are resolved against the home directory. A missing
+        // "Library/" shipped once and the feed simply went quiet forever —
+        // wrong path and denied permission look identical from here.
+        expect(!PetNoticeParsing.storeCandidates.isEmpty, "there is somewhere to look")
+        for candidate in PetNoticeParsing.storeCandidates {
+            expect(candidate.hasPrefix("Library/Group Containers/group.com.apple.usernoted/"),
+                   "store path sits under ~/Library/Group Containers: \(candidate)")
+            expect(!candidate.hasPrefix("/") && !candidate.hasPrefix("~"),
+                   "store path stays relative to the home directory: \(candidate)")
+        }
+
         // MARK: Sleep choreography
 
         // The nap is a performance now — breathing waves, dream twitches,

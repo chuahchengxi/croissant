@@ -206,11 +206,12 @@ final class PetNotificationBridge {
     private var queue = DispatchQueue(label: "croissaint.petNotifications", qos: .utility)
     private var db: OpaquePointer?
     private var lastSeenRowID: Int64 = -1
+    /// Set when the store opened but its schema wasn't the one we read, which
+    /// no amount of retrying fixes. A store that merely won't open (no Full
+    /// Disk Access yet) is left retryable, so granting it starts the feed.
+    private var storeUnusable = false
 
-    private static let candidates = [
-        "Group Containers/group.com.apple.usernoted/store2",
-        "Group Containers/group.com.apple.usernoted/notifications.db",
-    ]
+    private static let candidates = PetNoticeParsing.storeCandidates
 
     func start(vm: DesktopViewModel) {
         guard toastObserver == nil else { return }
@@ -223,7 +224,6 @@ final class PetNotificationBridge {
             self?.vm?.showNotice(text: text, icon: icon)
         }
         queue.async { [weak self] in
-            self?.openStore()
             self?.readLatest()
         }
         let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in
@@ -275,15 +275,22 @@ final class PetNotificationBridge {
     }
 
     private func readLatest() {
+        // Checked per poll rather than once at start, so flipping the setting
+        // takes effect on the next tick without restarting the buddy.
+        guard UserDefaults.standard.bool(forKey: DefaultsKey.desktopPetNotifications),
+              !storeUnusable
+        else { return }
+        openStore()
         guard let handle = db else { return }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(
             handle, "SELECT rowid, data FROM record ORDER BY rowid DESC LIMIT 6", -1, &statement, nil
         ) == SQLITE_OK, let statement else {
-            // Unknown schema or unreadable store: park the watcher.
+            // Unknown schema or unreadable store: park the watcher for good.
             sqlite3_finalize(statement)
             sqlite3_close_v2(handle)
             db = nil
+            storeUnusable = true
             return
         }
         defer { sqlite3_finalize(statement) }
