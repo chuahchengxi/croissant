@@ -58,6 +58,7 @@ struct ScreenshotCaptureSettings: View {
                 Text(strings.panelCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                ToolShortcutRows(tool: .screenshot)
                 Toggle(strings.fullScreenShortcutTitle, isOn: $fullScreenShortcutEnabled)
                     .onChange(of: fullScreenShortcutEnabled) { _, _ in
                         ScreenshotService.shared.syncWithPreferences()

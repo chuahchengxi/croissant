@@ -1127,14 +1127,9 @@ final class ClipboardHistoryService: ObservableObject {
             }
             let modifiers = event.modifierFlags.intersection([.command, .option, .shift, .control])
             if event.keyCode == UInt16(kVK_Escape) {
-                // Esc backs out one layer at a time: preview, selection,
-                // then the window.
-                if self.quickPreviewPresented {
-                    self.setQuickPreviewPresented(false)
-                } else if self.quickBatchCount > 0 {
-                    self.clearQuickBatchSelection()
-                } else {
-                    self.hideHistoryWindow()
+                switch ClipboardHistoryEscape.action(batchCount: self.quickBatchCount) {
+                case .clearBatchSelection: self.clearQuickBatchSelection()
+                case .hideWindow: self.hideHistoryWindow()
                 }
                 return nil
             }
