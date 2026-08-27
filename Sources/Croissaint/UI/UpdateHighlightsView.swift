@@ -12,11 +12,8 @@ struct UpdateHighlightsView: View {
     let onFinish: () -> Void
 
     private var s: Strings { l10n.s }
-    private var screenshot: ScreenshotFeatureStrings {
-        FeatureStrings.screenshot(l10n.language)
-    }
-    private var clipboard: ClipboardFeatureStrings {
-        FeatureStrings.clipboard(l10n.language)
+    private var pet: DesktopPetFeatureStrings {
+        FeatureStrings.desktopPet(l10n.language)
     }
 
     private enum Layout {
@@ -36,27 +33,26 @@ struct UpdateHighlightsView: View {
         let action: () -> Void
     }
 
+    /// The features this release's tour draws pages from. Every page is gated
+    /// on its feature still being installed, so the list doubles as the check
+    /// for whether the tour has anything to show at all.
+    static let pagedFeatures: [AppFeature] = [.desktopPet]
+
+    /// A tour with no surviving pages would open an empty window, so the
+    /// caller skips it rather than presenting one.
+    static var hasPages: Bool { pagedFeatures.contains { $0.isAvailable } }
+
     private var highlights: [Highlight] {
         var pages: [Highlight] = []
-        if AppFeature.screenshot.isAvailable {
+        if AppFeature.desktopPet.isAvailable {
             pages.append(Highlight(
-                id: "capture-palette",
-                imageName: "highlights-capture",
-                symbol: "camera.viewfinder",
-                title: screenshot.screenCaptureTitle,
-                caption: s.highlightsCaptionCapturePalette,
+                id: "pet-blink",
+                imageName: "highlights-pet",
+                symbol: "pawprint",
+                title: pet.blinkToggle,
+                caption: pet.blinkCaption,
                 actionLabel: s.highlightsConfigure,
-                action: { openSettings(AppFeature.screenshot.settingsDestination) }))
-        }
-        if AppFeature.clipboardHistory.isAvailable {
-            pages.append(Highlight(
-                id: "clipboard-palette",
-                imageName: "highlights-clipboard",
-                symbol: "doc.on.clipboard",
-                title: s.highlightsTitleClipboardRedesign,
-                caption: s.highlightsCaptionClipboardRedesign,
-                actionLabel: s.highlightsConfigure,
-                action: { openSettings(AppFeature.clipboardHistory.settingsDestination) }))
+                action: { openSettings(AppFeature.desktopPet.settingsDestination) }))
         }
         return pages
     }

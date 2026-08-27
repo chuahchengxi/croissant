@@ -1525,6 +1525,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             appVersion: AppInfo.version,
             lastSeenVersion: UserDefaults.standard.string(forKey: DefaultsKey.updateHighlightsSeenVersion)
         ) else { return false }
+        // Every page is gated on its feature still being installed. With none
+        // left the window would open blank, so fall through to the next intro.
+        guard UpdateHighlightsView.hasPages else { return false }
         showUpdateHighlights()
         return true
     }
