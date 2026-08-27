@@ -15,6 +15,17 @@ enum PetNoticeParsing {
         var bundleID: String?
     }
 
+    /// Where usernoted keeps the store, relative to the home directory,
+    /// newest layout first. macOS has used `db2/db` for several releases; the
+    /// older names stay for earlier systems. Every one of them is behind Full
+    /// Disk Access, so a wrong path here fails exactly like a missing
+    /// permission — silently — which is why the prefix is pinned by a test.
+    static let storeCandidates = [
+        "Library/Group Containers/group.com.apple.usernoted/db2/db",
+        "Library/Group Containers/group.com.apple.usernoted/store2",
+        "Library/Group Containers/group.com.apple.usernoted/notifications.db",
+    ]
+
     /// nil when the blob isn't a readable payload or carries no copy at all.
     static func parse(_ data: Data) -> Payload? {
         guard

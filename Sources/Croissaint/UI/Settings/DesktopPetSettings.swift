@@ -8,6 +8,8 @@ struct DesktopPetSettings: View {
     @ObservedObject private var service = DesktopPetService.shared
     @AppStorage(DefaultsKey.desktopPetEnabled) private var showOnDesktop = true
     @AppStorage(DefaultsKey.desktopPetBlinks) private var blinks = true
+    @AppStorage(DefaultsKey.desktopPetNotifications) private var mirrorsNotifications = false
+    @ObservedObject private var permissions = Permissions.shared
 
     var body: some View {
         Form {
@@ -31,6 +33,18 @@ struct DesktopPetSettings: View {
                 Text(strings.blinkCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle(strings.notificationsToggle, isOn: $mirrorsNotifications)
+                Text(strings.notificationsCaption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                // Only once it's asked for: the permission is what makes the
+                // feed work, and there is no prompt for it.
+                if mirrorsNotifications, !permissions.fullDiskAccess {
+                    FullDiskAccessNote(reason: strings.notificationsFDANote)
+                }
             }
 
             if service.isRunning {
