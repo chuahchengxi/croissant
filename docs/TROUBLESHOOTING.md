@@ -39,6 +39,17 @@ This one powers per app volume and output routing in the mixer. If the mixer say
 
 Finder cut and paste, the uninstaller and Homebrew's Terminal handoff may ask for Automation. If a Finder move or Terminal handoff does nothing after a denial, open System Settings, Privacy and Security, Automation, and allow Croissaint for the app it needs to control.
 
+### Full Disk Access
+
+This one powers the deeper uninstaller and cleaner scans, and the desktop buddy holding up notifications from other apps. Unlike the permissions above, macOS never prompts for it and Croissaint does not notice a grant while running, so it takes two steps: add Croissaint in System Settings, Privacy and Security, Full Disk Access, then quit and reopen the app. The Desktop Pet settings page offers a Grant button and a Relaunch button side by side for exactly this.
+
+If the buddy shows nothing when other apps post notifications, check both halves:
+
+1. Desktop Pet settings, "Show notifications above the buddy" is switched on. It ships off, so a fresh install stays quiet until you ask for it.
+2. Croissaint has Full Disk Access, and you have relaunched since granting it.
+
+Notices from Croissaint itself do not need the permission and always appear, so a buddy that reacts to Croissaint's own messages but not to Mail or Messages is telling you Full Disk Access is the missing half.
+
 ## Resetting permissions
 
 To wipe Croissaint's granted permissions and let macOS ask again from scratch, pick one of these.

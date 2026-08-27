@@ -208,7 +208,7 @@ Permissions get the same treatment. Every one is optional, the app explains each
 | System Audio Recording | Per app volume and output routing | Apps stay on normal system audio |
 | Microphone | Optional voice track in screen recordings | Recordings continue without your voice |
 | Notifications | Keep awake, battery, monitor and update alerts | The app stays silent |
-| Full Disk Access, optional | Deeper cleaner and uninstaller scans | Only reachable places are scanned |
+| Full Disk Access, optional | Deeper cleaner and uninstaller scans, and the desktop buddy showing other apps' notifications | Only reachable places are scanned, and the buddy shows only Croissaint's own notices |
 | Administrator, once, optional | Password free closed lid toggling | A password prompt per toggle |
 
 The shelf and almost every quick toggle need no permission at all. Finder cut and paste, the uninstaller, emptying the Trash and the Homebrew terminal handoff ask macOS for Automation access the first time they talk to Finder or Terminal.

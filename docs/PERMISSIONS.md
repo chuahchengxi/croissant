@@ -12,7 +12,7 @@ You can review or change every grant in System Settings, under Privacy and Secur
 | Microphone | Yes | Your voice in a screen recording, only when you turn it on |
 | Camera | Yes | The camera preview mirror |
 | Notifications | Yes | Keep awake, battery, Monitor and update alerts |
-| Full Disk Access | Yes | A deeper uninstaller scan |
+| Full Disk Access | Yes | A deeper uninstaller scan, and the desktop buddy showing other apps' notifications |
 | Administrator (one time) | Yes | Password free closed lid toggling |
 | Automation | Yes | Finder cut and paste, moving leftovers to the Trash, emptying the Trash and Homebrew Terminal handoff |
 | App Management | Yes | Replacing or removing apps installed through the package manager |
@@ -98,11 +98,11 @@ You can review or change every grant in System Settings, under Privacy and Secur
 
 ## Full Disk Access
 
-**Why it comes up.** The uninstaller hunts down the files an app leaves behind, like caches, preferences and logs. Some of those spots are protected by macOS and only open up with Full Disk Access.
+**Why it comes up.** The uninstaller hunts down the files an app leaves behind, like caches, preferences and logs. Some of those spots are protected by macOS and only open up with Full Disk Access. The same goes for the store macOS keeps your notifications in, which the desktop buddy reads to hold them up on its banner.
 
-**What uses it.** The uninstaller, for a deeper scan.
+**What uses it.** The uninstaller, for a deeper scan. The desktop buddy, to show notifications posted by other apps, and only when you switch that on.
 
-**If you say no.** The uninstaller still works and scans the places it can reach. It just might not surface files tucked away in protected folders.
+**If you say no.** The uninstaller still works and scans the places it can reach. It just might not surface files tucked away in protected folders. The buddy keeps showing Croissaint's own notices and simply stays quiet about other apps.
 
 **Optional.** Yes. There is no pop up for Full Disk Access. You add Croissaint in System Settings, under Privacy and Security, Full Disk Access, and Croissaint opens that pane for you when the feature calls for it.
 
