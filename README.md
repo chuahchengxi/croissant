@@ -165,7 +165,7 @@ Croissaint ships from source, and `--install` puts it in Applications for you:
 ./build.sh --install
 ```
 
-Local builds are signed ad-hoc unless you set up an identity with `Tools/setup-signing.sh`, so the first launch goes through the usual right click, Open.
+Local builds are signed ad-hoc unless you set up an identity with `Tools/setup-signing.sh`. Nothing quarantines a file you built yourself, so it opens straight away — the warnings below only apply to builds you download.
 
 Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per machine:
 
@@ -173,7 +173,15 @@ Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per 
 brew install --cask chuahchengxi/tap/croissaint
 ```
 
-Released builds are ad-hoc signed as well, and Homebrew quarantines whatever it downloads, so the first launch goes through the same right click, Open.
+Released builds are ad-hoc signed as well, and both Homebrew and Safari quarantine whatever they download. That combination makes macOS report the app as **damaged** and offer only *Move to Trash* — it is Gatekeeper refusing an ad-hoc signature, not a corrupt download. Right click then Open does not help: that escape hatch was removed for ad-hoc code in macOS 15, and no *Open Anyway* button appears under System Settings → Privacy & Security either.
+
+Clear the quarantine flag once and it opens normally from then on:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Croissaint.app
+```
+
+This goes away for good once releases are signed with a Developer ID certificate and notarized.
 
 ## Uninstall
 
