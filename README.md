@@ -173,6 +173,8 @@ Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per 
 brew install --cask chuahchengxi/tap/croissaint
 ```
 
+Released builds are ad-hoc signed as well, and Homebrew quarantines whatever it downloads, so the first launch goes through the same right click, Open.
+
 ## Uninstall
 
 To remove Croissaint completely, including its settings and permissions:
