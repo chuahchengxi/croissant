@@ -51,7 +51,28 @@ let subAttrs: [NSAttributedString.Key: Any] = [
     .foregroundColor: NSColor(calibratedWhite: 0.45, alpha: 1),
 ]
 let subSize = subtitle.size(withAttributes: subAttrs)
-subtitle.draw(at: NSPoint(x: (widthPt - subSize.width) / 2, y: 54), withAttributes: subAttrs)
+subtitle.draw(at: NSPoint(x: (widthPt - subSize.width) / 2, y: 78), withAttributes: subAttrs)
+
+// Ad-hoc signed builds trip Gatekeeper, which offers only "Move to Trash" and
+// no way through: right-click Open stopped working for ad-hoc code on macOS 15.
+// This window is the one surface every downloader looks at, so the fix is
+// printed here instead of left to release notes nobody opens. Delete both lines
+// once releases are notarized.
+let warning = "If macOS says Croissaint is damaged, it is not. Run this once in Terminal:"
+let warnAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+    .foregroundColor: NSColor(calibratedWhite: 0.35, alpha: 1),
+]
+let warnSize = warning.size(withAttributes: warnAttrs)
+warning.draw(at: NSPoint(x: (widthPt - warnSize.width) / 2, y: 48), withAttributes: warnAttrs)
+
+let fix = "xattr -dr com.apple.quarantine /Applications/Croissaint.app"
+let fixAttrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+    .foregroundColor: NSColor(calibratedWhite: 0.20, alpha: 1),
+]
+let fixSize = fix.size(withAttributes: fixAttrs)
+fix.draw(at: NSPoint(x: (widthPt - fixSize.width) / 2, y: 26), withAttributes: fixAttrs)
 
 // Arrow between the icon columns (icons sit at x≈150 and x≈450, centered at y≈200
 // from the top → y≈200 from the bottom in this 400-tall canvas).
