@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-08-28
+
+### Added
+- The desktop buddy can now hold up your notifications. When another app posts one, the buddy startles and shows it for a few seconds on a pixel banner above its head, with the posting app's icon beside it. "Show notifications above the buddy" on the Desktop Pet page turns it on; it stays off until you ask for it, and needs Full Disk Access to read notifications from other apps. Localized in all 13 languages.
+- Petting the desktop buddy now gets a reaction. Each tap answers with one short springy move — a squash-and-spring bounce, a happy shimmy, or two little delight hops — and consecutive taps never replay the same one. Tapping a sleeping buddy still wakes it, and one in mid-air stays with the throw physics.
+
+### Fixed
+- Desktop buddy sprites now sit centred, at a consistent size, with their feet on the ground. Species whose artwork filled as little as a third of its canvas no longer render undersized, off-centre or floating above a gap in the buddy chooser, the companion panel or on the desktop, and sleepers tip over on their visible artwork instead of the padded canvas.
+- The buddy's notice banner now hangs just above its head rather than the top of its window, and sizes itself to the text instead of being clipped.
+- Notifications from other apps could never reach the buddy: the notification store was looked up in the wrong place, so the feed stayed silent whatever permissions were granted. The path is corrected and the current macOS layout is tried first.
+- The "damaged app" dialog guidance now gives downloaders a fix that actually works.
+
 ## [0.1.1] - 2026-08-27
 
 ### Added

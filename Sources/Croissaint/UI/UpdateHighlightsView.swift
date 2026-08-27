@@ -46,11 +46,11 @@ struct UpdateHighlightsView: View {
         var pages: [Highlight] = []
         if AppFeature.desktopPet.isAvailable {
             pages.append(Highlight(
-                id: "pet-blink",
+                id: "pet-notifications",
                 imageName: "highlights-pet",
-                symbol: "pawprint",
-                title: pet.blinkToggle,
-                caption: pet.blinkCaption,
+                symbol: "bell.badge",
+                title: pet.notificationsToggle,
+                caption: pet.notificationsCaption,
                 actionLabel: s.highlightsConfigure,
                 action: { openSettings(AppFeature.desktopPet.settingsDestination) }))
         }
