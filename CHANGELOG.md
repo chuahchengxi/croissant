@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.0] - 2026-08-27
+
+### Added
+- The desktop pet's blinking is now a setting. "Blink animation" on the Desktop Pet page turns the eyelid overlay off for anyone who prefers the faces exactly as drawn. On by default, localized in all 13 languages.
+
+### Changed
+- Throwing the desktop buddy now matches the Ball desk toy: a uniform 0.6 restitution on the floor, walls and ceiling, and SpriteKit's default 0.1/s linear damping on both axes in place of the old horizontal-only air drag. The floor skid that lets the buddy end up standing stays.
+- Winged species no longer fall when tossed. The throw glides under heavier damping into a mid-air hover, walls still bounce, and the buddy keeps living at whatever altitude it stopped at, with no dizzy stars on a graceful stop.
+
+### Fixed
+- Faces the art already draws shut no longer get a lid painted over them. Eyes measuring under 3 canvas pixels read as slits or squints and skip the overlay entirely, covering 249 of 1025 species, and a curated list catches the always-asleep faces whose closed-eye arcs measure tall enough to fool the size gate (Snorlax, Munchlax, Komala, Torkoal, Meditite, Baltoy, Musharna). The blink loop and the eyelid overlay route through the same check, so a skipped face costs no task wakeups and no lid views.
+
 ## [0.0.9] - 2026-08-26
 
 ### Added
