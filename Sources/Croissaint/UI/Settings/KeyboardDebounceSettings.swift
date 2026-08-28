@@ -25,9 +25,7 @@ struct KeyboardDebounceSettings: View {
                 Toggle(l10n.s.keyDebounceEnable, isOn: $enabled)
                     .onChange(of: enabled) { _, value in
                         KeyboardDebounceService.shared.syncWithPreferences()
-                        guard value, !permissions.accessibility else { return }
-                        permissions.requestAccessibility()
-                        permissions.openAccessibilitySettings()
+                        if value { permissions.requestAccessibility() }
                     }
                 Text(l10n.s.keyDebounceCaption)
                     .font(.caption)

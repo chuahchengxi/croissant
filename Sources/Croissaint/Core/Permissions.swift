@@ -268,25 +268,33 @@ final class Permissions: ObservableObject {
         return gatedDirs.contains { (try? fm.contentsOfDirectory(atPath: $0)) != nil }
     }
 
-    /// Shows the system Accessibility prompt (once per TCC reset) and floats
-    /// the little guide card for the System Settings round trip.
+    /// One press for the whole trip: the system prompt (which macOS shows
+    /// once per TCC reset), System Settings opened on the right list, and the
+    /// guide card that watches for the grant. The permission is granted to
+    /// the app, not to a feature, so this is a no-op once it is held — the
+    /// tenth feature to need Accessibility must never ask for it again.
     func requestAccessibility() {
+        // Read live, not the published cache: a revoke made while the app
+        // runs has not necessarily been polled yet, and a button that does
+        // nothing is worse than one that asks again.
+        guard !AXIsProcessTrusted() else { return }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
+        let trusted = AXIsProcessTrustedWithOptions(options)
         refreshActivePermissions()
-        if !accessibility {
-            PermissionGuideOverlay.shared.show(for: .accessibility)
-        }
+        guard !trusted else { return }
+        openAccessibilitySettings()
+        PermissionGuideOverlay.shared.show(for: .accessibility)
     }
 
-    /// Shows the system Screen Recording prompt (once per TCC reset) and
-    /// floats the guide card, like the Accessibility path.
+    /// The Screen Recording twin of requestAccessibility(), same one-press
+    /// trip and the same no-op once granted.
     func requestScreenRecording() {
-        CGRequestScreenCaptureAccess()
+        guard !Self.screenRecordingIsGranted() else { return }
+        let granted = CGRequestScreenCaptureAccess()
         refreshActivePermissions()
-        if !screenRecording {
-            PermissionGuideOverlay.shared.show(for: .screenRecording)
-        }
+        guard !granted else { return }
+        openScreenRecordingSettings()
+        PermissionGuideOverlay.shared.show(for: .screenRecording)
     }
 
     func openAccessibilitySettings() {
@@ -312,6 +320,7 @@ final class Permissions: ObservableObject {
     /// before System Settings reads the list. If it still does not appear, the
     /// user can add the app with the list's "+" button.
     func requestFullDiskAccess() {
+        guard !fullDiskAccess else { return }
         DispatchQueue.global(qos: .userInitiated).async {
             let home = NSHomeDirectory()
             let fm = FileManager.default
@@ -341,12 +350,14 @@ final class Permissions: ObservableObject {
     /// Shows the system camera prompt on first use; afterwards the state can
     /// only change in System Settings.
     func requestCamera() {
+        guard camera != .granted else { return }
         AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
             DispatchQueue.main.async { self?.refresh() }
         }
     }
 
     func requestMicrophone(completion: ((Bool) -> Void)? = nil) {
+        guard microphone != .granted else { completion?(true); return }
         AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
             DispatchQueue.main.async {
                 self?.microphone = granted ? .granted : .denied

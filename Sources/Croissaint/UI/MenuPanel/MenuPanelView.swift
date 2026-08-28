@@ -997,7 +997,6 @@ struct UtilitiesSection: View {
 
     private func grantAccessibility() {
         Permissions.shared.requestAccessibility()
-        Permissions.shared.openAccessibilitySettings()
     }
 }
 
@@ -1806,7 +1805,6 @@ struct QuickControlsSection: View {
 
     private func grantAccessibility() {
         Permissions.shared.requestAccessibility()
-        Permissions.shared.openAccessibilitySettings()
     }
 
     private func grantScreenRecording() {
@@ -2604,7 +2602,6 @@ struct KeepAwakeCard: View {
 
     private func grantAccessibility() {
         Permissions.shared.requestAccessibility()
-        Permissions.shared.openAccessibilitySettings()
     }
 
     private func optionRow(title: String,

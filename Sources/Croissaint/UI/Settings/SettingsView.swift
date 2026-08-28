@@ -1533,6 +1533,15 @@ struct PermissionRow: View {
         }
     }
 
+    /// Accessibility and Screen Recording send the person to the right pane
+    /// themselves; the microphone can only be prompted while undecided.
+    private var canRequest: Bool {
+        switch kind {
+        case .accessibility, .screenRecording: return true
+        case .microphone: return permissions.microphone == .undetermined
+        }
+    }
+
     private var monitorsActivePermission: Bool {
         switch kind {
         case .accessibility, .screenRecording: return true
@@ -1549,41 +1558,32 @@ struct PermissionRow: View {
         }
     }
 
+    /// One line, one action: the request already opens System Settings and
+    /// floats the guide card, so a second button only repeated the trip.
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .foregroundStyle(granted ? .green : .orange)
-                Text(name)
-                Spacer()
-                Text(granted ? l10n.s.permissionGranted : l10n.s.permissionMissing)
+        HStack(spacing: 8) {
+            Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundStyle(granted ? .green : .orange)
+            Text(name)
+            Spacer(minLength: 8)
+            if granted {
+                Text(l10n.s.permissionGranted)
                     .font(.caption)
-                    .foregroundStyle(granted ? .green : .orange)
-            }
-            if !granted {
-                HStack(spacing: 8) {
-                    Button(l10n.s.permissionRequest) {
-                        switch kind {
-                        case .accessibility:
-                            permissions.requestAccessibility()
-                        case .screenRecording:
-                            permissions.requestScreenRecording()
-                        case .microphone:
-                            permissions.requestMicrophone()
-                        }
-                    }
-                    Button(l10n.s.permissionOpenSettings) {
-                        switch kind {
-                        case .accessibility:
-                            permissions.openAccessibilitySettings()
-                        case .screenRecording:
-                            permissions.openScreenRecordingSettings()
-                        case .microphone:
-                            permissions.openMicrophoneSettings()
-                        }
+                    .foregroundStyle(.green)
+            } else {
+                Button(canRequest ? l10n.s.permissionRequest : l10n.s.permissionOpenSettings) {
+                    switch kind {
+                    case .accessibility: permissions.requestAccessibility()
+                    case .screenRecording: permissions.requestScreenRecording()
+                    case .microphone:
+                        // A denial is final until System Settings changes it;
+                        // asking again would prompt nobody.
+                        canRequest ? permissions.requestMicrophone()
+                                   : permissions.openMicrophoneSettings()
                     }
                 }
                 .controlSize(.small)
+                .fixedSize()
             }
         }
         .onAppear {

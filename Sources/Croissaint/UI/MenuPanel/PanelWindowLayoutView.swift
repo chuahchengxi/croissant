@@ -174,7 +174,6 @@ struct PanelWindowLayoutView: View {
             if !permissions.accessibility {
                 Button {
                     Permissions.shared.requestAccessibility()
-                    Permissions.shared.openAccessibilitySettings()
                 } label: {
                     Label(text.missingPermission, systemImage: "hand.raised.fill")
                         .font(.system(size: 10, weight: .semibold))
