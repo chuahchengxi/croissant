@@ -1877,7 +1877,6 @@ struct UtilityActionButton: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.mini)
-            .padding(.leading, 31)
         }
     }
 
