@@ -132,8 +132,10 @@ final class WildSpawnController {
     }
 
     private func spawn() {
-        // No encounters until a buddy has been chosen.
-        guard let pet, pet.snapshot.species != nil else {
+        // No encounters until a buddy has been chosen, and none at all while
+        // it is fainted — nothing wild turns up for a trainer whose buddy is
+        // lying down.
+        guard let pet, pet.snapshot.species != nil, !pet.isFainted else {
             scheduleNext()
             return
         }

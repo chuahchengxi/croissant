@@ -584,11 +584,15 @@ struct PetPanel: View {
                 .frame(height: 122)
             moodLine
             stats
-            FetchAppsView(onFetched: { name in
-                showToast("Fetched \(name)!")
-                NotificationCenter.default.post(name: .pokePalCelebrate, object: nil)
-            })
-            actions
+            if pet.isFainted {
+                reviveCard
+            } else {
+                FetchAppsView(onFetched: { name in
+                    showToast("Fetched \(name)!")
+                    NotificationCenter.default.post(name: .pokePalCelebrate, object: nil)
+                })
+                actions
+            }
         }
     }
 
@@ -807,6 +811,41 @@ struct PetPanel: View {
         }
     }
 
+    /// Replaces the care buttons while the buddy is down. One way back up:
+    /// a berry if the bag has one, otherwise coins.
+    private var reviveCard: some View {
+        VStack(spacing: 8) {
+            Text("\(pet.name) fainted from neglect.")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.red)
+            Text("It lost a quarter of this level. Items, coins and catches are safe.")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            ActionButton(
+                title: hasBerry ? "Revive · 1 Oran Berry" : "Revive · \(PetLevelCurve.reviveCoins) coins",
+                icon: "cross.case.fill",
+                tint: .red
+            ) {
+                switch pet.revive() {
+                case .revived:
+                    burst(count: 4)
+                    showToast("\(pet.name) is back on its feet!")
+                case .noPayment:
+                    showToast("Need a berry or \(PetLevelCurve.reviveCoins) coins!")
+                case .notFainted:
+                    break
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.red.opacity(0.1)))
+    }
+
+    private var hasBerry: Bool { pet.count(of: .berry) > 0 }
+
     // MARK: Footer
 
     private var footer: some View {
@@ -897,6 +936,8 @@ struct PetPanel: View {
             showToast("\(pet.name) is full!")
         case .noBerries:
             showToast("No berries! Buy some in the Bag tab.")
+        case .fainted:
+            showToast("\(pet.name) has fainted — revive it first.")
         }
     }
 
@@ -921,6 +962,7 @@ struct PetPanel: View {
         case .sad: return "face.frowning"
         case .critical: return "exclamationmark.triangle.fill"
         case .sleeping: return "zzz"
+        case .fainted: return "cross.case.fill"
         }
     }
 
@@ -930,6 +972,7 @@ struct PetPanel: View {
         case .okay: return .orange
         case .sad, .critical: return .red
         case .sleeping: return .indigo
+        case .fainted: return .red
         }
     }
 }

@@ -14,7 +14,7 @@ extension Notification.Name {
 }
 
 enum PetMood {
-    case great, okay, sad, critical, sleeping
+    case great, okay, sad, critical, sleeping, fainted
 
     var text: String {
         switch self {
@@ -28,6 +28,8 @@ enum PetMood {
             return ["needs help NOW!", "isn't doing so well!", "misses you dearly!"].randomElement()!
         case .sleeping:
             return ["is fast asleep. Zzz...", "is dreaming of berries...", "is recharging energy..."].randomElement()!
+        case .fainted:
+            return ["has fainted...", "is out cold...", "collapsed from neglect..."].randomElement()!
         }
     }
 }
@@ -63,6 +65,14 @@ struct PetSnapshot: Codable {
     var frozenStage: Int?
     /// When the current nap ends (see `PetNapSchedule`); nil while awake.
     var wakeAt: Date?
+    /// When hunger or happiness first bottomed out; nil while both are above
+    /// zero. `PetLevelCurve.faintDelay` is counted from here.
+    var emptySince: Date?
+    /// Set the moment the buddy faints, cleared when it is revived.
+    var faintedAt: Date?
+    /// Which XP scale `xp` is written on. nil means the old flat
+    /// 100-per-level ladder and is converted once on load.
+    var curveVersion: Int?
 }
 
 final class PetState: ObservableObject {
@@ -118,6 +128,19 @@ final class PetState: ObservableObject {
             ]
         }
 
+        // Saves written before the quadratic curve measured XP on a flat
+        // 100-a-level ladder, so reading them straight would drop a fully
+        // evolved buddy back to Lv 4 and un-evolve it. Convert once: keep the
+        // level and the fraction through it, re-expressed on the new ladder.
+        if snapshot.curveVersion == nil {
+            let oldLevel = min(PetLevelCurve.maxLevel, Int(snapshot.xp / 100) + 1)
+            let oldProgress = snapshot.xp.truncatingRemainder(dividingBy: 100) / 100
+            snapshot.xp = PetLevelCurve.totalXP(toReach: oldLevel)
+                + PetLevelCurve.levelSpan(at: oldLevel) * oldProgress
+            snapshot.curveVersion = 1
+            save()
+        }
+
         applyOfflineDecay()
     }
 
@@ -165,12 +188,19 @@ final class PetState: ObservableObject {
         }
     }
 
-    var level: Int { min(99, Int(snapshot.xp / 100) + 1) }
-    var levelProgress: Double { (snapshot.xp.truncatingRemainder(dividingBy: 100)) / 100 }
+    var level: Int { PetLevelCurve.level(for: snapshot.xp) }
+    var levelProgress: Double { PetLevelCurve.progress(for: snapshot.xp) }
+
+    /// True while the buddy is down and needs reviving. Nothing but `revive()`
+    /// gets it back up: care, naps and encounters are all off the table.
+    var isFainted: Bool { snapshot.faintedAt != nil }
 
     var stage: Int {
         guard let s = species else { return 0 }
-        let natural = min(level >= 14 ? 2 : (level >= 6 ? 1 : 0), s.evoIDs.count - 1)
+        let stageByLevel = level >= PetLevelCurve.finalStageLevel
+            ? 2
+            : (level >= PetLevelCurve.secondStageLevel ? 1 : 0)
+        let natural = min(stageByLevel, s.evoIDs.count - 1)
         // An Ever Stone freezes the buddy at the stage it was when picked up;
         // it can never fall behind the level-based stage, only hold it back.
         if evolutionBlocked, let frozen = snapshot.frozenStage {
@@ -191,7 +221,7 @@ final class PetState: ObservableObject {
     var nextEvolutionLevel: Int? {
         guard !evolutionBlocked else { return nil }
         guard let s = species, stage < s.evoIDs.count - 1 else { return nil }
-        return stage == 0 ? 6 : 14
+        return stage == 0 ? PetLevelCurve.secondStageLevel : PetLevelCurve.finalStageLevel
     }
 
     /// Name of the stage the buddy is growing into, nil at the final stage.
@@ -201,6 +231,7 @@ final class PetState: ObservableObject {
     }
 
     var mood: PetMood {
+        if isFainted { return .fainted }
         if snapshot.sleeping { return .sleeping }
         if snapshot.hunger <= 0 || snapshot.energy <= 0 || snapshot.happiness <= 0 { return .critical }
         let avg = (snapshot.hunger + snapshot.happiness + snapshot.energy) / 3
@@ -234,16 +265,20 @@ final class PetState: ObservableObject {
         objectWillChange.send()
     }
 
-    enum FeedOutcome { case ate, full, noBerries }
+    enum FeedOutcome { case ate, full, noBerries, fainted }
 
     func feed() -> FeedOutcome {
         guard snapshot.species != nil else { return .noBerries }
+        guard !isFainted else { return .fainted }
         if snapshot.sleeping { snapshot.sleeping = false }
         guard snapshot.hunger < 99 else { return .full }
         guard consume(.berry) else { return .noBerries }
+        // XP is paid for the hunger the berry actually filled, not for the
+        // press: a nearly full buddy eats for almost nothing, so a day's
+        // feeding XP is capped by the day's hunger decay.
+        snapshot.xp += PetLevelCurve.careXP(restored: min(26, 100 - snapshot.hunger))
         snapshot.hunger += 26
         snapshot.happiness += 4
-        snapshot.xp += 5
         maybeFindItem()
         normalizeAndSave()
         return .ate
@@ -251,13 +286,13 @@ final class PetState: ObservableObject {
 
     @discardableResult
     func play() -> Bool {
-        guard snapshot.species != nil else { return false }
+        guard snapshot.species != nil, !isFainted else { return false }
         if snapshot.sleeping { snapshot.sleeping = false }
         guard snapshot.energy >= 15 else { return false }
+        snapshot.xp += PetLevelCurve.careXP(restored: min(22, 100 - snapshot.happiness))
         snapshot.happiness += 22
         snapshot.energy -= 14
         snapshot.hunger -= 6
-        snapshot.xp += 5
         maybeFindItem()
         normalizeAndSave()
         return true
@@ -265,16 +300,20 @@ final class PetState: ObservableObject {
 
     @discardableResult
     func pet() -> Bool {
-        guard snapshot.species != nil, !snapshot.sleeping else { return false }
+        guard snapshot.species != nil, !snapshot.sleeping, !isFainted else { return false }
+        // Petting shares one happiness pool with Play, so the two cannot be
+        // stacked into free XP — and a maxed-out buddy pays nothing at all.
+        snapshot.xp += PetLevelCurve.careXP(restored: min(2.5, 100 - snapshot.happiness))
         snapshot.happiness += 2.5
-        snapshot.xp += 1
         maybeFindItem()
         normalizeAndSave()
         return true
     }
 
     func toggleSleep() {
-        guard snapshot.species != nil else { return }
+        // A fainted buddy is not napping: nothing wakes it but a revive, and
+        // the desktop tap routes through here too.
+        guard snapshot.species != nil, !isFainted else { return }
         snapshot.sleeping.toggle()
         // A pressed sleep is a timed nap: the buddy dozes off and wakes up
         // on its own after a random stretch (or sooner if tapped again).
@@ -354,7 +393,7 @@ final class PetState: ObservableObject {
     /// Bonus when the buddy successfully fetches an app for you.
     @discardableResult
     func rewardFetch() -> Bool {
-        guard snapshot.species != nil else { return false }
+        guard snapshot.species != nil, !isFainted else { return false }
         if snapshot.sleeping { snapshot.sleeping = false }
         snapshot.happiness += 2
         snapshot.xp += 3
@@ -384,12 +423,14 @@ final class PetState: ObservableObject {
     /// species is remembered so it becomes a selectable buddy.
     @discardableResult
     func catchReward(speciesID: Int? = nil) -> Bool {
-        guard snapshot.species != nil else { return false }
+        guard snapshot.species != nil, !isFainted else { return false }
         // Deliberately no wake here: the throw panel is its own little
         // window, and a buddy that finally nods off shouldn't be jolted
         // awake because the player caught something over on the side.
         snapshot.happiness += 8
-        snapshot.xp += 12
+        // A catch pays by how hard it was to land, so a legendary stakeout is
+        // worth a stack of Caterpies.
+        snapshot.xp += speciesID.map { PetCatchTier.tier(for: $0).catchXP } ?? 12
         snapshot.caughtCount = (snapshot.caughtCount ?? 0) + 1
         if let speciesID {
             var caught = snapshot.caughtSpecies ?? []
@@ -462,6 +503,64 @@ final class PetState: ObservableObject {
         return true
     }
 
+    // MARK: - Fainting
+
+    /// Out of energy the buddy drops where it stands. Exhaustion is a nap,
+    /// never a faint — a player who forgets to press Sleep shouldn't lose a
+    /// level for it, so only hunger and happiness feed the faint clock.
+    private func collapseIfExhausted() {
+        guard !isFainted, !snapshot.sleeping, snapshot.energy <= 0 else { return }
+        snapshot.sleeping = true
+        snapshot.wakeAt = nil   // sleeps until rested, not on a nap timer
+    }
+
+    /// Hunger or happiness held at zero for `PetLevelCurve.faintDelay` puts
+    /// the buddy down: it lies where it is, refuses every kind of care, and
+    /// loses a quarter of its current level. Items, coins, dex and catches
+    /// all survive — only the climb is set back.
+    /// The clock only runs while the app does: a buddy left starving over a
+    /// weekend with the mac off comes back on zero stats but on a fresh six
+    /// hours, so time away can never kill it before the player can feed it.
+    private func faintIfNeglected() {
+        guard !isFainted, let since = snapshot.emptySince,
+              Date().timeIntervalSince(since) >= PetLevelCurve.faintDelay else { return }
+
+        let before = level
+        snapshot.faintedAt = Date()
+        // The whole desktop choreography already keys off `sleeping`, so the
+        // sprite lies down for free; `toggleSleep` refuses to wake it.
+        snapshot.sleeping = true
+        snapshot.wakeAt = nil
+        snapshot.xp = PetLevelCurve.xpAfterFaint(snapshot.xp)
+        save()
+        objectWillChange.send()
+
+        let drop = level < before ? " Dropped to Lv \(level)." : ""
+        NotificationCenter.default.post(
+            name: .pokePalToast, object: nil,
+            userInfo: ["message": "\(name) fainted!\(drop) Revive it in the Buddy tab."]
+        )
+    }
+
+    enum ReviveOutcome { case revived, noPayment, notFainted }
+
+    /// Brings a fainted buddy back on an Oran Berry, or on
+    /// `PetLevelCurve.reviveCoins` when the bag is empty. It wakes up at a
+    /// third of everything: alive, and still needing a real meal.
+    @discardableResult
+    func revive() -> ReviveOutcome {
+        guard isFainted else { return .notFainted }
+        guard consume(.berry) || spendCoins(PetLevelCurve.reviveCoins) else { return .noPayment }
+        snapshot.faintedAt = nil
+        snapshot.sleeping = false
+        snapshot.wakeAt = nil
+        snapshot.hunger = max(snapshot.hunger, 35)
+        snapshot.happiness = max(snapshot.happiness, 35)
+        snapshot.energy = max(snapshot.energy, 35)
+        normalizeAndSave()   // clears emptySince now that the stats are back up
+        return .revived
+    }
+
     // MARK: - Desktop companion
 
     var desktopVisible: Bool { snapshot.desktopVisible ?? true }
@@ -493,24 +592,30 @@ final class PetState: ObservableObject {
         snapshot.lastTick = now
         let beforeLevel = level
         apply(dt: dt)
-        snapshot.xp += dt / 60
+        // Time alone no longer levels anything: the drip only runs while the
+        // buddy is genuinely thriving, which takes feeding and playing.
+        if mood == .great { snapshot.xp += dt * PetLevelCurve.bondXPPerSecond }
         if level > beforeLevel {
-            let reward = 25 * (level - beforeLevel)
+            let reward = ((beforeLevel + 1)...level).reduce(0) { $0 + PetLevelCurve.levelUpCoins(for: $1) }
             addCoins(reward)
             NotificationCenter.default.post(
                 name: .pokePalToast, object: nil,
                 userInfo: ["message": "Level up! +\(reward) coins"]
             )
         }
-        if PetNapSchedule.shouldWake(sleeping: snapshot.sleeping, wakeAt: snapshot.wakeAt, now: Date()) {
-            snapshot.sleeping = false
-            snapshot.wakeAt = nil
+        if !isFainted {
+            if PetNapSchedule.shouldWake(sleeping: snapshot.sleeping, wakeAt: snapshot.wakeAt, now: Date()) {
+                snapshot.sleeping = false
+                snapshot.wakeAt = nil
+            }
+            if snapshot.sleeping && snapshot.energy >= 100 {
+                snapshot.sleeping = false
+                snapshot.wakeAt = nil
+            }
         }
-        if snapshot.sleeping && snapshot.energy >= 100 {
-            snapshot.sleeping = false
-            snapshot.wakeAt = nil
-        }
+        collapseIfExhausted()
         normalizeAndSave()
+        faintIfNeglected()
     }
 
     private func applyOfflineDecay() {
@@ -520,7 +625,9 @@ final class PetState: ObservableObject {
         guard elapsed > 1 else { return }
         apply(dt: min(elapsed, 86400))
         snapshot.lastTick = now
+        collapseIfExhausted()
         normalizeAndSave()
+        faintIfNeglected()
     }
 
     /// Rates per second of wall time.
@@ -542,6 +649,14 @@ final class PetState: ObservableObject {
         snapshot.happiness = clamp(snapshot.happiness)
         snapshot.energy = clamp(snapshot.energy)
         snapshot.xp = max(0, snapshot.xp)
+        // Every mutation lands here, so this is the one place that always sees
+        // the final stats: rock bottom starts the faint clock, any care at all
+        // clears it.
+        if snapshot.hunger <= 0 || snapshot.happiness <= 0 {
+            if snapshot.emptySince == nil { snapshot.emptySince = Date() }
+        } else {
+            snapshot.emptySince = nil
+        }
         save()
         objectWillChange.send()
     }
