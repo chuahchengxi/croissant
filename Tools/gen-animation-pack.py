@@ -1242,6 +1242,38 @@ EYE_OVERRIDES.update({
 })
 # END hand-corrected eyelids
 
+# BEGIN blink QA drops (2026-08-28)
+# Every species whose lids were re-checked one at a time against its own
+# sprite (Tools/qa-animation-pack.py, lid rects drawn over the artwork) and
+# found NOT to land on the eyes: on a beak, an ear, a fin, a crest, a wing or
+# just the flank. Dartrix (#723) is the shape of the whole class — its eyes
+# are slim slits the dark-ink detector cannot see, so both lids parked on its
+# beak and it blinked with two slabs across its face.
+#
+# Dropping the pair costs the blink as well as the nap, which is the trade the
+# file has always made: a buddy that never blinks beats one that paints a lid
+# on its beak every four seconds. Written last so it wins over the measured,
+# hand-measured and hand-corrected blocks above.
+EYE_OVERRIDES.update({
+    26: None, 55: None, 70: None, 87: None, 113: None, 118: None, 119: None, 122: None, 129: None, 130: None,
+    139: None, 142: None, 150: None, 151: None, 157: None, 161: None, 162: None, 171: None, 172: None, 173: None,
+    174: None, 175: None, 176: None, 179: None, 180: None, 181: None, 184: None, 186: None, 188: None, 197: None,
+    198: None, 199: None, 204: None, 206: None, 217: None, 223: None, 227: None, 228: None, 231: None, 234: None,
+    235: None, 241: None, 243: None, 245: None, 246: None, 251: None, 261: None, 264: None, 269: None, 273: None,
+    276: None, 286: None, 300: None, 314: None, 322: None, 329: None, 339: None, 346: None, 347: None, 350: None,
+    351: None, 354: None, 358: None, 362: None, 367: None, 374: None, 380: None, 384: None, 393: None, 398: None,
+    399: None, 402: None, 403: None, 410: None, 413: None, 417: None, 420: None, 427: None, 433: None, 441: None,
+    447: None, 448: None, 449: None, 456: None, 460: None, 470: None, 475: None, 480: None, 488: None, 495: None,
+    500: None, 501: None, 504: None, 519: None, 520: None, 521: None, 584: None, 589: None, 590: None, 594: None,
+    597: None, 607: None, 612: None, 621: None, 624: None, 628: None, 635: None, 638: None, 653: None, 657: None,
+    661: None, 664: None, 665: None, 670: None, 674: None, 679: None, 680: None, 694: None, 695: None, 698: None,
+    704: None, 705: None, 706: None, 707: None, 723: None, 725: None, 731: None, 749: None, 750: None, 755: None,
+    764: None, 765: None, 766: None, 774: None, 789: None, 845: None, 846: None, 875: None, 884: None, 891: None,
+    899: None, 901: None, 906: None, 916: None, 919: None, 920: None, 926: None, 930: None, 932: None, 934: None,
+    943: None, 951: None, 956: None, 958: None, 962: None, 965: None, 967: None, 972: None, 986: None,
+})
+# END blink QA drops
+
 MAX_BBOX_SIDE = 250          # coordinates are u8, bbox-relative; leave headroom
 HEAD_ZONE = 0.62             # fraction of the bbox height eyes may sit in
 DARK_LUMA = 97               # max(r,g,b) below this counts as outline/pupil dark

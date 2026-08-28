@@ -18493,16 +18493,20 @@ struct MetricsTests {
                        "no lid is painted outline-black or shine-white (bad: \(goggleLids.map(\.dexID).prefix(8)))")
 
                 // 3. The hand-measured opening pass is pinned: dex 1-100 all
-                //    carry lids except the three genuinely eyeless designs,
-                //    and the classic ¾-pose starters keep their one-eye
-                //    encoding through any regeneration.
-                let handAuthored: Set<Int> = Set(1...100).subtracting([41, 51, 63])
+                //    carry lids except the genuinely eyeless designs and the
+                //    four the blink QA pass dropped, and the classic ¾-pose
+                //    starters keep their one-eye encoding through any
+                //    regeneration.
+                let lidFreeUnder100 = [41, 51, 63, 26, 55, 70, 87]
+                let handAuthored: Set<Int> = Set(1...100).subtracting(lidFreeUnder100)
                 let missingHand = handAuthored.filter { table[$0]?.hasEyes != true }
                 expect(missingHand.isEmpty,
                        "every hand-measured dex 1-100 species keeps its lids (missing: \(missingHand.sorted()))")
-                let eyelessHand = [41, 51, 63].filter { table[$0]?.hasEyes == true }
+                let eyelessHand = lidFreeUnder100.filter { table[$0]?.hasEyes == true }
                 expect(eyelessHand.isEmpty,
-                       "the eyeless designs (Zubat, Dugtrio, Psyduck) stay lid-free")
+                       "the eyeless designs (Zubat, Dugtrio, Psyduck) and the four whose "
+                       + "lids sat off the eye (Raichu's ear, Golduck's brow, Weepinbell's "
+                       + "leaf, Dewgong's muzzle) stay lid-free")
                 for id in [9, 6, 5, 10] where table[id]?.hasEyes == true {
                     expect(table[id]?.leftEye == table[id]?.rightEye,
                            "dex \(id) keeps its ¾-pose single-eye encoding")
@@ -18510,25 +18514,20 @@ struct MetricsTests {
                 expect(table[25]?.leftEye != table[25]?.rightEye,
                        "a front-facing species like Pikachu keeps two distinct lids")
 
-                // 4. The hand-corrected species keep their grid-measured
-                //    rects: each was read off a pixel-grid render after the
-                //    measurement pass landed on a mouth, crest, tail fin or
-                //    wing. If one of these drifts, the lid drifts with it.
+                // 4. The hand-corrected species that survived the blink QA
+                //    pass keep their grid-measured rects: each was read off a
+                //    pixel-grid render after the measurement pass landed on a
+                //    mouth, crest, tail fin or wing. If one of these drifts,
+                //    the lid drifts with it. (The other eight hand-corrections
+                //    were still off the eye on review and are pinned lid-free
+                //    in the drop block instead.)
                 let handFixes: [Int: (
                     (Double, Double, Double, Double), (Double, Double, Double, Double)
                 )] = [
-                    223: ((17, 9, 8, 7), (17, 9, 8, 7)),    // Remoraid
-                    227: ((7, 21, 6, 6), (7, 21, 6, 6)),    // Skarmory
-                    228: ((7, 7, 3, 3), (12, 6, 3, 3)),     // Houndoom (right lid was on the skull horn)
-                    264: ((9, 18, 6, 6), (9, 18, 6, 6)),    // Linoone
                     291: ((8, 23, 6, 6), (20, 23, 6, 6)),   // Ninjask
                     357: ((18, 7, 6, 6), (18, 7, 6, 6)),    // Tropius
                     372: ((3, 19, 5, 5), (11, 20, 5, 5)),   // Shelgon (was a slab on the shell)
-                    448: ((16, 11, 6, 6), (16, 11, 6, 6)),  // Lucario (rescue read chest spikes)
                     487: ((35, 17, 8, 7), (47, 16, 8, 7)),  // Giratina
-                    624: ((22, 14, 5, 5), (22, 14, 5, 5)),  // Pawniard
-                    661: ((36, 37, 7, 7), (36, 37, 7, 7)),  // Fletchling
-                    695: ((50, 19, 8, 7), (50, 19, 8, 7)),  // Heliolisk
                 ]
                 for (id, rects) in handFixes {
                     guard let motion = table[id], motion.hasEyes,
@@ -18549,20 +18548,35 @@ struct MetricsTests {
                 expect(table[854]?.hasEyes == false,
                        "Sinistea's cup swirl never gets painted as an eye")
 
+                // 4b. The blink QA drops: species whose measured lids landed
+                //     anywhere but the eye. Dartrix is the named case — its
+                //     eyes are slim slits the dark-ink detector cannot see, so
+                //     both lids parked on its beak and every blink stamped two
+                //     slabs across its face.
+                for (id, where_) in [
+                    (723, "Dartrix's slit eyes never blink through its beak"),
+                    (197, "Umbreon's lids stay off its ears"),
+                    (157, "Typhlosion's lid stops swallowing its whole head"),
+                    (129, "Magikarp's lid stays off its fin"),
+                    (403, "Shinx's lids stay off its ears"),
+                ] {
+                    expect(table[id]?.hasEyes == false, where_)
+                }
+
                 // 5. The individual measurement pass covers the whole dex:
                 //    every species either carries measured lids or is pinned
                 //    eyeless, so a pack rebuild never silently re-rolls the
                 //    fuzzy detector over a species someone already vetted.
-                //    777 = 683 tight-measured + 94 bright-eye rescues (the
-                //    yellow/red/cyan irises the detector is blind to), each
-                //    rescue vetted on a sleep contact sheet.
-                expect(lidded.count == 777,
+                //    618 = the 777 measured lids minus the 159 the blink QA
+                //    pass dropped, each one checked against its own sprite
+                //    with the lid rect drawn over the artwork.
+                expect(lidded.count == 618,
                        "the measured lid roster stays exactly as vetted (\(lidded.count))")
-                expect(table.values.count - lidded.count == 248,
+                expect(table.values.count - lidded.count == 407,
                        "the eyeless roster stays exactly as vetted")
                 let rescues: [Int: ((Double, Double, Double, Double), (Double, Double, Double, Double))] = [
-                    151: ((10, 21, 12, 11), (40, 24, 6, 5)),   // Mew
-                    495: ((5, 9, 7, 8), (13, 8, 5, 9)),        // Snivy
+                    574: ((5, 10, 10, 7), (24, 13, 6, 6)),     // Gothita
+                    636: ((4, 19, 10, 9), (22, 20, 16, 13)),   // Larvesta
                     700: ((36, 40, 11, 12), (48, 39, 8, 8)),   // Sylveon
                 ]
                 for (id, rects) in rescues {
