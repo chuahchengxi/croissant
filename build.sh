@@ -373,6 +373,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetItemKind.swift \
         Sources/Croissaint/Services/DesktopPet/PetNapSchedule.swift \
         Sources/Croissaint/Services/DesktopPet/PetCatchDifficulty.swift \
+        Sources/Croissaint/Services/DesktopPet/PetLevelCurve.swift \
         Tests/MetricsTests.swift \
         -o build/metrics-tests
     # `set -e` would end the script on a failing run before the sweep below.

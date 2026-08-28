@@ -18747,6 +18747,63 @@ struct MetricsTests {
         expect(PetCatchTier.tier(for: 999_999) == .tough,
                "unknown ids default to the average tier (45)")
 
+        // MARK: Level curve
+
+        // The ladder is quadratic and every rung is longer than the one below
+        // it, which is the whole point of the rework: the old flat 100 XP a
+        // level was cleared by the idle drip alone.
+        expect(PetLevelCurve.totalXP(toReach: 1) == 0, "a fresh buddy starts at zero")
+        expect(PetLevelCurve.totalXP(toReach: 2) == 110, "Lv 2 costs 110 XP")
+        expect(PetLevelCurve.totalXP(toReach: 12) == 6_710, "stage 2 (Lv 12) costs 6,710 XP")
+        expect(PetLevelCurve.totalXP(toReach: 30) == 43_790, "the final form (Lv 30) costs 43,790 XP")
+        var lastSpan = 0.0
+        var strictlyGrowing = true
+        for lv in 1..<PetLevelCurve.maxLevel {
+            let span = PetLevelCurve.totalXP(toReach: lv + 1) - PetLevelCurve.totalXP(toReach: lv)
+            if span <= lastSpan { strictlyGrowing = false }
+            lastSpan = span
+        }
+        expect(strictlyGrowing, "every level costs strictly more than the one before it")
+
+        // level(for:) is the closed-form inverse, so it must land exactly on
+        // each threshold — a hair under and the badge reads a level behind.
+        var inverseHolds = true
+        for lv in 1...PetLevelCurve.maxLevel {
+            let at = PetLevelCurve.totalXP(toReach: lv)
+            if PetLevelCurve.level(for: at) != lv { inverseHolds = false }
+            if lv > 1, PetLevelCurve.level(for: at - 0.001) != lv - 1 { inverseHolds = false }
+        }
+        expect(inverseHolds, "level(for:) inverts totalXP exactly on every threshold")
+        expect(PetLevelCurve.level(for: -5) == 1, "negative XP still reads as Lv 1")
+        expect(PetLevelCurve.level(for: 1e12) == PetLevelCurve.maxLevel, "the ladder caps at 99")
+        expectClose(PetLevelCurve.progress(for: 110), 0, "a fresh level starts empty")
+        expectClose(PetLevelCurve.progress(for: 110 + 105), 0.5, "half a rung reads as half full")
+        expect(PetLevelCurve.progress(for: 1e12) == 1, "a maxed buddy shows a full bar")
+
+        // Care pays for what it restored, never for the press itself.
+        expect(PetLevelCurve.careXP(restored: 26) == 13, "a full berry is worth 13 XP")
+        expect(PetLevelCurve.careXP(restored: 0) == 0, "feeding a full buddy earns nothing")
+        expect(PetLevelCurve.careXP(restored: -4) == 0, "a negative restore can't mint XP")
+
+        // Fainting costs a quarter of the current rung and can drop a level,
+        // but never digs below zero.
+        expect(PetLevelCurve.xpAfterFaint(0) == 0, "a Lv 1 buddy can't fall below zero")
+        expect(PetLevelCurve.xpAfterFaint(110) < 110
+               && PetLevelCurve.level(for: PetLevelCurve.xpAfterFaint(110)) == 1,
+               "fainting just after a level up drops the level back")
+        let deepXP = PetLevelCurve.totalXP(toReach: 20) + PetLevelCurve.levelSpan(at: 20) * 0.9
+        expect(PetLevelCurve.level(for: PetLevelCurve.xpAfterFaint(deepXP)) == 20,
+               "fainting mid-level keeps the level, only the progress")
+        expect(PetLevelCurve.xpAfterFaint(PetLevelCurve.totalXP(toReach: 99))
+               < PetLevelCurve.totalXP(toReach: 99),
+               "even a maxed buddy pays the faint penalty")
+
+        // A catch is worth more the harder it was to land.
+        expect(PetCatchTier.legendary.catchXP > PetCatchTier.tough.catchXP
+               && PetCatchTier.tough.catchXP > PetCatchTier.wary.catchXP
+               && PetCatchTier.wary.catchXP > PetCatchTier.common.catchXP,
+               "catch XP rises with the tier")
+
         // MARK: Pet sprite size normalization
 
         // PokeAPI mixes tight animated canvases with heavily padded static

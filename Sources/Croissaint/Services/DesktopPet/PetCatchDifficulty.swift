@@ -59,6 +59,17 @@ enum PetCatchTier {
         }
     }
 
+    /// XP a catch of this tier is worth. Landing a legendary is most of a
+    /// day's care XP; a Caterpie is a nice extra and no more.
+    var catchXP: Double {
+        switch self {
+        case .common: return 8
+        case .wary: return 14
+        case .tough: return 25
+        case .legendary: return 60
+        }
+    }
+
     var transferCoins: Int {
         switch self {
         case .common: return 10
