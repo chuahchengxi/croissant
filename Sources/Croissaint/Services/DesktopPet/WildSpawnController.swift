@@ -36,6 +36,7 @@ final class WildSpawnController {
     private var spawnTimer: Timer?
     private var lifeTimer: Timer?
     private var despawnDeadline = Date.distantPast
+    private var escapeMonitor: Any?
     private var misses = 0
 
     /// Number of failed throws for the current encounter (3rd throw always succeeds).
@@ -142,6 +143,7 @@ final class WildSpawnController {
         setupPanelIfNeeded()
         positionPanel()
         panel?.makeKeyAndOrderFront(nil)
+        startMonitoringEscape()
 
         despawnDeadline = Date().addingTimeInterval(20)
         lifeTimer?.invalidate()
@@ -169,11 +171,38 @@ final class WildSpawnController {
         scheduleNext()
     }
 
+    /// The player's own way out: the same exit as a timeout, so walking away
+    /// costs no ball and the next encounter is scheduled as usual. Ignored
+    /// while a ball is in the air — that throw has already been paid for.
+    func runAway() {
+        guard !interactionLock else { return }
+        flee()
+    }
+
     private func hide() {
         interactionLock = false
+        stopMonitoringEscape()
         panel?.orderOut(nil)
         lifeTimer?.invalidate()
         lifeTimer = nil
+    }
+
+    /// Escape leaves the encounter, but only while the encounter panel itself
+    /// holds key focus: Esc in the settings window or the menu panel has to
+    /// keep meaning what it means there.
+    private func startMonitoringEscape() {
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.keyCode == 53, self.panel?.isKeyWindow == true else { return event }
+            self.runAway()
+            return nil
+        }
+    }
+
+    private func stopMonitoringEscape() {
+        guard let escapeMonitor else { return }
+        NSEvent.removeMonitor(escapeMonitor)
+        self.escapeMonitor = nil
     }
 
     private func setupPanelIfNeeded() {
@@ -295,8 +324,19 @@ struct WildPokemonView: View {
             // the whole visit; Gotcha! pops over the caught ball instead
             // (see the overlay below). Pet-world copy is all one pixel font
             // at one size, the same renderer as the notification banner.
-            PixelTextView(text: "WILD!")
-                .frame(height: 38)
+            ZStack {
+                PixelTextView(text: "WILD!")
+                // Leaving is offered only between throws: mid-flight the ball
+                // is already spent and the wobble still owes an answer.
+                if phase == .ready {
+                    HStack {
+                        Spacer()
+                        runButton
+                    }
+                    .padding(.trailing, 14)
+                }
+            }
+            .frame(height: 38)
 
             encounterArea
                 .frame(height: 210)
@@ -367,6 +407,21 @@ struct WildPokemonView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .animation(.easeInOut(duration: 0.18), value: gotcha)
+    }
+
+    /// Ends the encounter without throwing anything.
+    private var runButton: some View {
+        Button { controller.runAway() } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Color.black.opacity(0.55))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Color.white.opacity(0.8)))
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.3), lineWidth: 1.2))
+        }
+        .buttonStyle(PressableStyle())
+        .help("Run away")
+        .accessibilityLabel("Run away")
     }
 
     private var ballSelector: some View {
