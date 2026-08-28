@@ -508,15 +508,17 @@ private struct PermissionPortalRow: View {
                 if status == .granted, activeFeatures.isEmpty {
                     unusedCard
                 }
-                HStack(spacing: 8) {
-                    if status != .granted, hasRequestFlow {
-                        Button(hub.requestButton) { request() }
-                    }
-                    Button(hub.openSystemSettings) { openSystemSettings() }
-                }
-                .controlSize(.small)
-                .padding(.top, 2)
             }
+            Spacer(minLength: 8)
+            // One button on the row's own line, so every row's action lines
+            // up at the same edge instead of being indented under wrapping
+            // text. Granting already opens System Settings, so the pane only
+            // needs its own button where there is nothing to request.
+            Button(canRequest ? hub.requestButton : hub.openSystemSettings) {
+                if canRequest { request() } else { openSystemSettings() }
+            }
+            .controlSize(.small)
+            .fixedSize()
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .combine)
@@ -571,6 +573,10 @@ private struct PermissionPortalRow: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color.primary.opacity(0.05))
             )
+    }
+
+    private var canRequest: Bool {
+        status != .granted && hasRequestFlow
     }
 
     private var hasRequestFlow: Bool {

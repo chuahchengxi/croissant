@@ -35,9 +35,7 @@ struct SuperKeySettings: View {
                 Toggle(text.enableToggle, isOn: $enabled)
                     .onChange(of: enabled) { _, value in
                         SuperKeyService.shared.syncWithPreferences()
-                        guard value, !permissions.accessibility else { return }
-                        permissions.requestAccessibility()
-                        permissions.openAccessibilitySettings()
+                        if value { permissions.requestAccessibility() }
                     }
                 Picker(text.sourceKey, selection: sourceBinding) {
                     ForEach(SuperKeySource.allCases) { source in
