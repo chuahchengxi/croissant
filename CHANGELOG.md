@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-08-28
+
+### Added
+- Wild encounters can now be walked away from. A round Run away button in the encounter's header and the Escape key both leave the same way the 20-second timeout does — no ball spent and no miss recorded — and neither is offered while a ball is still in the air.
+- A neglected buddy can now faint. Hunger or happiness held at rock bottom for six hours puts it down: it lies where it is, refuses food, play and fetching, and wild pokemon stop turning up. It loses a quarter of the level it was standing on, but items, coins, dex and catches all survive; an Oran Berry brings it back, or 50 coins when the bag is empty. Running out of energy only sends the buddy to sleep, and the six hours only tick while the app is running, so time away from your mac can never cost you a buddy.
+
+### Changed
+- The buddy's levelling is something you earn now. Levels used to cost a flat 100 XP on top of a drip of 60 XP an hour for simply leaving the app open, so a buddy reached its final form in about a day without being touched. Every level now costs more than the last, the second stage arrives at Lv 12 and the final form at Lv 30, and the idle drip drops to 12 XP an hour that only runs while the buddy is genuinely thriving. Feeding and petting pay for the hunger and happiness they actually restore rather than for the button press, and a catch is worth more the harder it was to land. Buddies raised on the old scale keep the level they had.
+- Both permission lists now show one action per row, at the row's trailing edge: Grant where there is something to request, Open System Settings otherwise. Feature pages and onboarding collapse their permission cards to a single line, and a denied microphone — which macOS will not prompt for a second time — opens its pane instead of offering a dead Request button.
+
+### Fixed
+- Turning on a feature no longer asks for a permission you have already granted, and no longer sends you back to a System Settings pane you have already dealt with. Accessibility, Screen Recording, camera, microphone and Full Disk Access are all checked live before prompting, so a permission revoked while the app runs still asks, and a granted one never asks twice.
+
 ## [0.1.2] - 2026-08-28
 
 ### Added
