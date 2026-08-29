@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-08-29
+
+### Fixed
+- Utility cards in the menu panel that show two buttons now line them up on one left edge. A Screenshot row waiting on Screen Recording put "Grant access" against the card's edge and indented "Recent captures" past it, so two equal actions read as a parent and its child; the Screen Recorder row had the same pair and the same problem.
+
 ## [0.1.3] - 2026-08-28
 
 ### Added
