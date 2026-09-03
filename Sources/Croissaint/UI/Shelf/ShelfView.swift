@@ -120,11 +120,12 @@ struct ShelfView: View {
 
     /// The trailing chips. On macOS 26 they live in one shared glass space so
     /// pin and close read as droplets of the same material, merging as the
-    /// pointer crosses them; older systems draw the same two chips separately.
+    /// pointer crosses them; with Liquid Glass off, or on older systems, the
+    /// same two chips are drawn separately.
     @ViewBuilder
     private var headerControls: some View {
         #if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), LiquidGlassSupport.isEnabled() {
             GlassEffectContainer(spacing: 6) { chips }
         } else {
             chips

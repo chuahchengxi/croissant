@@ -53,12 +53,14 @@ struct SpringPressButtonStyle: ButtonStyle {
 /// One small icon chip used across the floating panels (shelf pin/close,
 /// trash, HUD dismiss buttons).
 ///
-/// On macOS 26 the chip is real interactive Liquid Glass; when the call site
-/// provides a namespace and id (`glassID`/`in:`), neighbouring chips inside a
-/// shared `GlassEffectContainer` melt into each other as the pointer crosses
-/// them, the signature liquid behavior. On older systems the chip draws the
-/// same circles those panels shipped with, so nothing changes visually except
-/// the added hover lift and springy press.
+/// With Liquid Glass switched on under macOS 26 the chip is real interactive
+/// glass; when the call site provides a namespace and id (`glassID`/`in:`),
+/// neighbouring chips inside a shared `GlassEffectContainer` melt into each
+/// other as the pointer crosses them, the signature liquid behavior. With the
+/// switch off, on older systems, or under Reduce Transparency, the chip draws
+/// the same circles those panels shipped with — this reads the app's own
+/// preference like every other glass surface, which it used to skip, leaving
+/// glass chips on panels the user had asked to keep flat.
 struct GlassIconButton: View {
     enum ChipShape {
         case circle
@@ -82,11 +84,13 @@ struct GlassIconButton: View {
     var action: () -> Void
 
     @State private var hovered = false
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(DefaultsKey.liquidGlassEnabled) private var liquidGlassEnabled = false
 
     var body: some View {
         Group {
             #if compiler(>=6.2)
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, *), liquidGlassEnabled, !reduceTransparency {
                 glassChip
             } else {
                 legacyChip
@@ -199,13 +203,14 @@ struct GlassIconButton: View {
 
 extension View {
     /// The backdrop for small floating content (confirmation HUDs, the
-    /// brightness OSD): genuine Liquid Glass on macOS 26, the `.regularMaterial`
-    /// those surfaces shipped with on older systems. Same silhouette either
-    /// way, so callers pass their shape and nothing else changes.
+    /// brightness OSD): genuine Liquid Glass where macOS 26 offers it and the
+    /// user has it switched on, the `.regularMaterial` those surfaces shipped
+    /// with otherwise. Same silhouette either way, so callers pass their shape
+    /// and nothing else changes.
     @ViewBuilder
     func hudGlassBackground<S: Shape>(in shape: S) -> some View {
         #if compiler(>=6.2)
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), LiquidGlassSupport.isEnabled() {
             self.glassEffect(.regular, in: shape)
         } else {
             self.background(.regularMaterial, in: shape)
