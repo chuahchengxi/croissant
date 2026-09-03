@@ -1540,13 +1540,7 @@ final class AppSwitcher: ObservableObject {
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered,
                             defer: false)
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        panel.configureAsOverlay(level: .statusBar, transient: true)
         panel.contentViewController = NSHostingController(rootView: SwitcherView().environmentObject(self))
         self.panel = panel
         return panel

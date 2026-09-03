@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct SuperKeyStrings {
+struct SuperKeyStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let enableToggle: String
@@ -37,21 +37,7 @@ struct SuperKeyStrings {
 
 extension FeatureStrings {
     static func superKey(_ language: AppLanguage) -> SuperKeyStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

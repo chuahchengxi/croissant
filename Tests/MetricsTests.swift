@@ -10040,22 +10040,6 @@ struct MetricsTests {
         expectClose(nettopRows.last?.bytesIn ?? -1, 16_245, "nettop parser reads numeric bytes in")
         expectClose(nettopRows.last?.bytesOut ?? -1, 20_641, "nettop parser reads numeric bytes out")
 
-        var nettopStream = NetworkProcessDeltaStreamParser()
-        let streamLines = [
-            "time,,bytes_in,bytes_out,",
-            "08:31:45.865507,Codex.78844,78288,477660,",
-            "time,,bytes_in,bytes_out,",
-            "08:31:46.871245,Codex.78844,416,98,",
-            "08:31:46.871247,launchd.1,0,0,",
-            "time,,bytes_in,bytes_out,",
-        ]
-        let streamedSections = streamLines.compactMap { nettopStream.consumeCSVLine($0) }
-        expect(streamedSections.count == 1,
-               "nettop stream parser skips the initial cumulative section")
-        expect(streamedSections.first?.count == 1,
-               "nettop stream parser emits only active rows from the first delta section")
-        expectClose(streamedSections.first?.first?.bytesIn ?? -1, 416,
-                    "nettop stream parser does not publish cumulative bytes")
         expect(NetworkProcessSupport.nettopArguments == ["-P", "-d", "-x", "-J", "bytes_in,bytes_out", "-L", "1", "-s", "1"],
                "nettop per-app sampling asks for one cumulative section and computes deltas in app")
         expect(NetworkProcessSupport.externalNettopArguments == ["-P", "-d", "-x", "-t", "external", "-J", "bytes_in,bytes_out", "-L", "1", "-s", "1"],

@@ -246,7 +246,7 @@ private struct PurposeStep: View {
             LazyVStack(spacing: 14) {
                 ForEach(FeatureGroup.allCases, id: \.self) { group in
                     VStack(alignment: .leading, spacing: 7) {
-                        Text(groupTitle(group))
+                        Text(CommandBarCatalog.groupTitle(group, hub: hub))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         ForEach(AppFeature.features(in: group), id: \.self) { feature in
@@ -394,17 +394,6 @@ private struct PurposeStep: View {
         return HStack(spacing: 0) { card }.help(blocked ?? "")
     }
 
-    private func groupTitle(_ group: FeatureGroup) -> String {
-        switch group {
-        case .windowsDock: return hub.groupWindowsDock
-        case .mouseKeyboard: return hub.groupMouseKeyboard
-        case .clipboardFiles: return hub.groupClipboardFiles
-        case .sound: return hub.groupSound
-        case .energyDisplay: return hub.groupEnergyDisplay
-        case .tools: return hub.groupTools
-        case .monitor: return hub.groupMonitor
-        }
-    }
 }
 
 private struct SelectedPermissionsStep: View {

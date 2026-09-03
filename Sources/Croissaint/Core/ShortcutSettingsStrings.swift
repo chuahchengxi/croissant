@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct ShortcutSettingsStrings {
+struct ShortcutSettingsStrings: LanguageVariants {
     let active: String
     let inactive: String
     let superKeyAlternativeFormat: String
@@ -11,21 +11,7 @@ struct ShortcutSettingsStrings {
 
 extension FeatureStrings {
     static func shortcuts(_ language: AppLanguage) -> ShortcutSettingsStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

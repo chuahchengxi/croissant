@@ -1492,19 +1492,11 @@ enum Defaults {
     }
 
     static func sanitizedKeepAwakeIconTint(_ rawValue: String?) -> KeepAwakeIconTint {
-        guard let rawValue,
-              let tint = KeepAwakeIconTint(rawValue: rawValue) else {
-            return .orange
-        }
-        return tint
+        KeepAwakeIconTint(rawValue: rawValue ?? "") ?? .orange
     }
 
     static func sanitizedKeepAwakeActiveIcon(_ rawValue: String?) -> KeepAwakeActiveIcon {
-        guard let rawValue,
-              let icon = KeepAwakeActiveIcon(rawValue: rawValue) else {
-            return .croissaint
-        }
-        return icon
+        KeepAwakeActiveIcon(rawValue: rawValue ?? "") ?? .croissaint
     }
 
     static func sanitizedMonitorInterval(_ seconds: Int) -> Int {

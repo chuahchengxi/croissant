@@ -7,7 +7,7 @@ import Foundation
 /// FeatureStrings structs: memberwise init in declaration order, one static
 /// per language, all in this file. The buddy's in-panel game text stays
 /// English on purpose — it is flavor content, not chrome.
-struct DesktopPetFeatureStrings {
+struct DesktopPetFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let showOnDesktopToggle: String
@@ -24,21 +24,7 @@ struct DesktopPetFeatureStrings {
 
 extension FeatureStrings {
     static func desktopPet(_ language: AppLanguage) -> DesktopPetFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

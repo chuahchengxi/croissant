@@ -11,8 +11,7 @@ final class PreciseVolumeRollerService: ObservableObject {
 
     @Published private(set) var tapFailed = false
 
-    private var tap: CFMachPort?
-    private var source: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var gate = PreciseVolumeRollerGate()
 
     private init() {}
@@ -33,12 +32,7 @@ final class PreciseVolumeRollerService: ObservableObject {
     }
 
     private func removeTap() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let source {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        tap = nil
-        source = nil
+        eventTap.stop()
         gate.reset()
     }
 
@@ -48,10 +42,8 @@ final class PreciseVolumeRollerService: ObservableObject {
             tapFailed = false
             return
         }
-        if let tap, !CGEvent.tapIsEnabled(tap: tap) {
-            CGEvent.tapEnable(tap: tap, enable: true)
-        }
-        guard tap == nil else { return }
+        if eventTap.isRunning, !eventTap.isEnabled { eventTap.reArm() }
+        guard !eventTap.isRunning else { return }
 
         let systemDefined = CGEventType(rawValue: CleaningSystemKeyEvent.systemDefinedEventTypeRawValue)!
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
@@ -61,10 +53,8 @@ final class PreciseVolumeRollerService: ObservableObject {
                 .takeUnretainedValue()
             return service.handle(type: type, event: event)
         }
-        guard let created = CGEvent.tapCreate(
+        guard eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << systemDefined.rawValue),
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -72,21 +62,12 @@ final class PreciseVolumeRollerService: ObservableObject {
             tapFailed = true
             return
         }
-
-        tap = created
-        source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
-        if let source {
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        CGEvent.tapEnable(tap: created, enable: true)
         tapFailed = false
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if AXIsProcessTrusted(), let tap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-            }
+            if AXIsProcessTrusted() { eventTap.reArm() }
             return Unmanaged.passUnretained(event)
         }
         guard type.rawValue == CleaningSystemKeyEvent.systemDefinedEventTypeRawValue,

@@ -565,12 +565,6 @@ final class PetState: ObservableObject {
 
     var desktopVisible: Bool { snapshot.desktopVisible ?? true }
 
-    func setDesktopVisible(_ visible: Bool) {
-        snapshot.desktopVisible = visible
-        save()
-        objectWillChange.send()
-    }
-
     func desktopPos() -> NSPoint? {
         guard let x = snapshot.posX, let y = snapshot.posY else { return nil }
         return NSPoint(x: x, y: y)

@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct KeepAwakeAutomationStrings {
+struct KeepAwakeAutomationStrings: LanguageVariants {
     let automationSection: String
     let automationCaption: String
     let automationOff: String
@@ -20,46 +20,18 @@ struct KeepAwakeAutomationStrings {
     }
 }
 
-struct KeepAwakeDisplaySleepStrings {
+struct KeepAwakeDisplaySleepStrings: LanguageVariants {
     let allowDisplaySleep: String
     let allowDisplaySleepCaption: String
 }
 
 extension FeatureStrings {
     static func keepAwakeAutomation(_ language: AppLanguage) -> KeepAwakeAutomationStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func keepAwakeDisplaySleep(_ language: AppLanguage) -> KeepAwakeDisplaySleepStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

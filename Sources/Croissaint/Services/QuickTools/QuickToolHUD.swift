@@ -229,14 +229,8 @@ enum QuickToolHUD {
     }
 
     private static func configure(_ panel: NSPanel) {
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.configureAsOverlay(level: .statusBar, transient: true)
         panel.ignoresMouseEvents = true
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
     }
 }
 

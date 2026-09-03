@@ -6,7 +6,7 @@ import Foundation
 /// Strings for the Features hub and its permissions portal. Same contract as
 /// the other FeatureStrings structs: memberwise init with labeled arguments
 /// in declaration order, one static per language, all in this file.
-struct FeatureHubStrings {
+struct FeatureHubStrings: LanguageVariants {
     // Page chrome
     let pageTitle: String
     let intro: String
@@ -124,21 +124,7 @@ struct FeatureHubStrings {
 
 extension FeatureStrings {
     static func hub(_ language: AppLanguage) -> FeatureHubStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

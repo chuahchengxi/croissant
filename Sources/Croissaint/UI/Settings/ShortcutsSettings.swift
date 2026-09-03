@@ -39,7 +39,7 @@ struct ShortcutsSettings: View {
             }
 
             ForEach(visibleGroups, id: \.self) { group in
-                Section(groupTitle(group)) {
+                Section(CommandBarCatalog.groupTitle(group, hub: hub)) {
                     ForEach(featuresWithShortcuts(in: group), id: \.self) { feature in
                         if feature == .screenshot {
                             captureGroupRows
@@ -195,17 +195,6 @@ struct ShortcutsSettings: View {
         }
     }
 
-    private func groupTitle(_ group: FeatureGroup) -> String {
-        switch group {
-        case .windowsDock: return hub.groupWindowsDock
-        case .mouseKeyboard: return hub.groupMouseKeyboard
-        case .clipboardFiles: return hub.groupClipboardFiles
-        case .sound: return hub.groupSound
-        case .energyDisplay: return hub.groupEnergyDisplay
-        case .tools: return hub.groupTools
-        case .monitor: return hub.groupMonitor
-        }
-    }
 }
 
 private struct CentralWindowLayoutShortcutRow: View {

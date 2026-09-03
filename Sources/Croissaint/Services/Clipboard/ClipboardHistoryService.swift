@@ -57,9 +57,7 @@ final class ClipboardHistoryService: ObservableObject {
     private var captureGeneration = 0
     private var panel: NSPanel?
     private var keyMonitor: Any?
-    private var localClickMonitor: Any?
-    private var outsideClickMonitor: Any?
-    private var activationObserver: NSObjectProtocol?
+    private let dismissMonitors = PanelDismissMonitors()
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
     private var registeredShortcut: GlobalShortcut?
@@ -1191,7 +1189,7 @@ final class ClipboardHistoryService: ObservableObject {
                 return nil
             }
             if modifiers == [.command],
-               let index = Self.digitIndex(for: event.keyCode) {
+               let index = PanelKeys.digitIndex(for: event.keyCode) {
                 self.copyQuickEntry(at: index)
                 return nil
             }
@@ -1200,52 +1198,13 @@ final class ClipboardHistoryService: ObservableObject {
     }
 
     private func installDismissMonitors(for panel: NSPanel) {
-        removeDismissMonitors()
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hideHistoryWindow()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hideHistoryWindow()
-            }
-        }
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            self.hideHistoryWindow()
-        }
+        dismissMonitors.removeAll()
+        dismissMonitors.install(for: panel,
+                                onOutsideClick: { [weak self] in self?.hideHistoryWindow() },
+                                onOtherAppActivated: { [weak self] in self?.hideHistoryWindow() })
     }
 
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
-    }
-
-    private func removeDismissMonitors() {
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
-    }
+    private func removeDismissMonitors() { dismissMonitors.removeAll() }
 
     private func removeKeyMonitor() {
         if let keyMonitor {
@@ -1276,21 +1235,6 @@ final class ClipboardHistoryService: ObservableObject {
     private func pruneQuickBatchSelection() {
         let validIDs = Set(entries.map(\.id))
         quickBatchEntryIDs = Set(quickBatchEntryIDs.filter { validIDs.contains($0) })
-    }
-
-    private static func digitIndex(for keyCode: UInt16) -> Int? {
-        switch Int(keyCode) {
-        case kVK_ANSI_1: return 0
-        case kVK_ANSI_2: return 1
-        case kVK_ANSI_3: return 2
-        case kVK_ANSI_4: return 3
-        case kVK_ANSI_5: return 4
-        case kVK_ANSI_6: return 5
-        case kVK_ANSI_7: return 6
-        case kVK_ANSI_8: return 7
-        case kVK_ANSI_9: return 8
-        default: return nil
-        }
     }
 
     private func clampedQuickSelectionIndex(for count: Int) -> Int {

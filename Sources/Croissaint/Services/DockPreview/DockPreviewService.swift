@@ -7,6 +7,37 @@ import Combine
 import CoreGraphics
 import SwiftUI
 
+/// Panel placement shared by the hover panel and the pinned panels, which are
+/// two classes in this file and each carried a byte-for-byte copy of both.
+private enum DockPreviewPanelFrames {
+    /// The visible frame of the screen a rect sits on, falling back to the
+    /// screen under the pointer when it straddles none of them.
+    static func visibleFrameForScreen(containing rect: CGRect) -> CGRect {
+        let point = CGPoint(x: rect.midX, y: rect.midY)
+        return (NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.withMouse)?.visibleFrame
+            ?? NSScreen.pointerVisibleFrame
+    }
+
+    /// Keeps a panel's frame on screen, `edgePadding` in from every edge.
+    static func clamped(_ frame: CGRect) -> CGRect {
+        let visibleFrame = visibleFrameForScreen(containing: frame)
+        let padding = DockPreviewSupport.edgePadding
+        let minX = visibleFrame.minX + padding
+        let maxX = visibleFrame.maxX - frame.width - padding
+        let minY = visibleFrame.minY + padding
+        let maxY = visibleFrame.maxY - frame.height - padding
+
+        func clamped(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
+            min(max(value, lower), max(lower, upper))
+        }
+
+        return CGRect(x: clamped(frame.minX, lower: minX, upper: maxX),
+                      y: clamped(frame.minY, lower: minY, upper: maxY),
+                      width: frame.width,
+                      height: frame.height)
+    }
+}
+
 final class DockPreviewService: ObservableObject {
     static let shared = DockPreviewService()
 
@@ -25,8 +56,7 @@ final class DockPreviewService: ObservableObject {
     @Published private(set) var orientation: DockPreviewOrientation = .bottom
     private var isDraggingWindow = false
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var settingsTimer: Timer?
     private var pendingHover: PendingHover?
     private var pendingHide: DispatchWorkItem?
@@ -276,7 +306,7 @@ final class DockPreviewService: ObservableObject {
     // MARK: - Event tap
 
     private func startTap() {
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             isRunning = true
             return
         }
@@ -286,7 +316,7 @@ final class DockPreviewService: ObservableObject {
             | CGEventMask(1 << CGEventType.rightMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.otherMouseDown.rawValue)
 
-        guard let tap = CGEvent.tapCreate(
+        guard eventTap.start(
             tap: .cgSessionEventTap,
             place: .tailAppendEventTap,
             options: .listenOnly,
@@ -302,30 +332,17 @@ final class DockPreviewService: ObservableObject {
             blockedReason = .missingAccessibility
             return
         }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         isRunning = true
     }
 
     private func stopTap() {
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         cancelPendingHover()
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
 
@@ -785,7 +802,7 @@ final class DockPreviewService: ObservableObject {
 
     private func showPanel(for hit: DockHit, itemCount: Int) {
         let panel = ensurePanel()
-        let screenVisibleFrame = visibleFrameForScreen(containing: hit.iconFrame)
+        let screenVisibleFrame = DockPreviewPanelFrames.visibleFrameForScreen(containing: hit.iconFrame)
         let size = DockPreviewSupport.panelSize(itemCount: itemCount,
                                                 screenVisibleFrame: screenVisibleFrame,
                                                 isPinned: false,
@@ -818,7 +835,7 @@ final class DockPreviewService: ObservableObject {
               let preferences = activeDockPreferences
         else { return }
 
-        let screenVisibleFrame = visibleFrameForScreen(containing: iconFrame)
+        let screenVisibleFrame = DockPreviewPanelFrames.visibleFrameForScreen(containing: iconFrame)
         let size = DockPreviewSupport.panelSize(itemCount: windows.count,
                                                 screenVisibleFrame: screenVisibleFrame,
                                                 isPinned: false,
@@ -839,24 +856,6 @@ final class DockPreviewService: ObservableObject {
         panel.contentViewController?.view.layoutSubtreeIfNeeded()
     }
 
-    private func clampedPanelFrame(_ frame: CGRect) -> CGRect {
-        let visibleFrame = visibleFrameForScreen(containing: frame)
-        let padding = DockPreviewSupport.edgePadding
-        let minX = visibleFrame.minX + padding
-        let maxX = visibleFrame.maxX - frame.width - padding
-        let minY = visibleFrame.minY + padding
-        let maxY = visibleFrame.maxY - frame.height - padding
-
-        func clamped(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
-            min(max(value, lower), max(lower, upper))
-        }
-
-        return CGRect(x: clamped(frame.minX, lower: minX, upper: maxX),
-                      y: clamped(frame.minY, lower: minY, upper: maxY),
-                      width: frame.width,
-                      height: frame.height)
-    }
-
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
 
@@ -864,15 +863,9 @@ final class DockPreviewService: ObservableObject {
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered,
                             defer: false)
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.configureAsOverlay(level: .statusBar, transient: true)
         panel.isMovable = true
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
         panel.acceptsMouseMovedEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.contentViewController = NSHostingController(rootView: DockPreviewPanelView(service: self))
         self.panel = panel
         return panel
@@ -891,7 +884,7 @@ final class DockPreviewService: ObservableObject {
         )
         let panel = makePinnedPanel(for: pinned)
         pinned.panel = panel
-        let frame = clampedPanelFrame(sourceFrame)
+        let frame = DockPreviewPanelFrames.clamped(sourceFrame)
 
         pinnedPanels[pinned.id] = pinned
         pinnedPanelWindows[pinned.id] = panel
@@ -931,12 +924,6 @@ final class DockPreviewService: ObservableObject {
         for id in Array(pinnedPanelWindows.keys) {
             closePinnedPanel(id)
         }
-    }
-
-    private func visibleFrameForScreen(containing rect: CGRect) -> CGRect {
-        let point = rect.center
-        return (NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.withMouse)?.visibleFrame
-            ?? NSScreen.pointerVisibleFrame
     }
 
     // MARK: - Dock hit testing
@@ -1473,35 +1460,12 @@ final class DockPreviewPinnedPanel: ObservableObject, Identifiable {
     private func resizePanel() {
         guard let panel else { return }
         let size = DockPreviewSupport.panelSize(itemCount: windows.count,
-                                                screenVisibleFrame: visibleFrameForScreen(containing: panel.frame),
+                                                screenVisibleFrame: DockPreviewPanelFrames.visibleFrameForScreen(containing: panel.frame),
                                                 isPinned: true)
         var frame = panel.frame
         frame.size = size
-        panel.setFrame(clampedPanelFrame(frame), display: true, animate: true)
+        panel.setFrame(DockPreviewPanelFrames.clamped(frame), display: true, animate: true)
         panel.contentViewController?.view.layoutSubtreeIfNeeded()
     }
 
-    private func clampedPanelFrame(_ frame: CGRect) -> CGRect {
-        let visibleFrame = visibleFrameForScreen(containing: frame)
-        let padding = DockPreviewSupport.edgePadding
-        let minX = visibleFrame.minX + padding
-        let maxX = visibleFrame.maxX - frame.width - padding
-        let minY = visibleFrame.minY + padding
-        let maxY = visibleFrame.maxY - frame.height - padding
-
-        func clamped(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
-            min(max(value, lower), max(lower, upper))
-        }
-
-        return CGRect(x: clamped(frame.minX, lower: minX, upper: maxX),
-                      y: clamped(frame.minY, lower: minY, upper: maxY),
-                      width: frame.width,
-                      height: frame.height)
-    }
-
-    private func visibleFrameForScreen(containing rect: CGRect) -> CGRect {
-        let point = rect.center
-        return (NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.withMouse)?.visibleFrame
-            ?? NSScreen.pointerVisibleFrame
-    }
 }

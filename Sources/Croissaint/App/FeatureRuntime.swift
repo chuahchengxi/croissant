@@ -34,11 +34,13 @@ final class FeatureRuntime: ObservableObject {
 
     /// Relaunches the app in place: a detached `open` fires after the process
     /// exits, so the fresh instance starts without the uninstalled features.
+    /// Opening the bundle by path rather than by id survives a stale
+    /// LaunchServices record, which a just-replaced bundle can still have.
     func relaunchApp() {
-        guard let bundleID = Bundle.main.bundleIdentifier else { return }
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 0.6; /usr/bin/open -b '\(bundleID)'"]
+        task.arguments = ["-c", "sleep 0.6; /usr/bin/open \"$1\"",
+                          "croissaint-relaunch", Bundle.main.bundlePath]
         try? task.run()
         NSApp.terminate(nil)
     }

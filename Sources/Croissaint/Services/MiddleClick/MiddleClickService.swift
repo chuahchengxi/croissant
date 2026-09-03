@@ -23,8 +23,7 @@ final class MiddleClickService: ObservableObject {
     /// contact, so the middle click stands down and Settings shows why.
     @Published private(set) var systemDragGestureConflict = false
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     /// Retains the MTDeviceRefs while listening; the framework hands out
     /// CF objects owned by this array.
     private var deviceList: CFArray?
@@ -130,13 +129,11 @@ final class MiddleClickService: ObservableObject {
     // MARK: - Lifecycle
 
     private func start() {
-        guard tap == nil else { return }
+        guard !eventTap.isRunning else { return }
         guard Multitouch.available else { return }
 
-        guard let tap = CGEvent.tapCreate(
+        guard eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
                 | CGEventMask(1 << CGEventType.leftMouseUp.rawValue)
                 | CGEventMask(1 << CGEventType.leftMouseDragged.rawValue)
@@ -151,12 +148,6 @@ final class MiddleClickService: ObservableObject {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else { return }
 
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-
         startMultitouch()
         installObservers()
         isRunning = true
@@ -166,14 +157,7 @@ final class MiddleClickService: ObservableObject {
         // Close a transformed press while this process and its event tap are
         // still alive, before tearing down either source.
         releaseHeldMiddleButton()
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         stopMultitouch()
         removeObservers()
         lastTransformEnd = nil
@@ -189,7 +173,7 @@ final class MiddleClickService: ObservableObject {
     /// Trackpads come and go across sleep and Bluetooth: drop every contact
     /// registration and rebuild from the current device list.
     private func restartMultitouch() {
-        guard tap != nil else { return }
+        guard eventTap.isRunning else { return }
         stopMultitouch()
         startMultitouch()
     }
@@ -374,7 +358,7 @@ final class MiddleClickService: ObservableObject {
     /// click right behind the tap is not transformed into a second one.
     private func postMiddleTap() {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.tap != nil else { return }
+            guard let self, self.eventTap.isRunning else { return }
             let position = CGEvent(source: nil)?.location ?? .zero
             // Nothing is synthesized over an app on the exception list.
             guard !MouseAppExceptions.shared.excludesPointerTarget(.middleClick, at: position) else { return }
@@ -400,7 +384,7 @@ final class MiddleClickService: ObservableObject {
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             releaseHeldMiddleButton()
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
 

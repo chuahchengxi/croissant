@@ -128,6 +128,7 @@ enum DockPreviewSupport {
     /// flicker the session between "inside" and "leaving".
     static let panelStayMargin: CGFloat = 6
     static let edgePadding: CGFloat = 8
+
     static let panelGap: CGFloat = 6
     static let autohidePanelGap: CGFloat = 0
     /// Forgiveness around the icon, panel and bridge so a slightly off-path
@@ -202,14 +203,6 @@ enum DockPreviewSupport {
         let padding = 10 * scale
         return CGSize(width: thumbnail.width + padding * 2,
                       height: thumbnail.height + padding * 2 + 7 * scale + cardTitleHeight)
-    }
-
-    /// The picture's inset inside the thumbnail well. It scales with the well,
-    /// so the 16:10 the well is cut to survives every preview size.
-    static func cardPictureSize(scale: CGFloat) -> CGSize {
-        let thumbnail = cardThumbnailSize(scale: scale)
-        let inset = 5 * scale
-        return CGSize(width: thumbnail.width - inset * 2, height: thumbnail.height - inset * 2)
     }
 
     static var cardThumbnailInset: CGFloat { 5 * PreviewSizing.scale }

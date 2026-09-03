@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct MouseButtonFeatureStrings {
+struct MouseButtonFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let enableLabel: String
@@ -31,21 +31,7 @@ struct MouseButtonFeatureStrings {
 
 extension FeatureStrings {
     static func mouseButtons(_ language: AppLanguage) -> MouseButtonFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

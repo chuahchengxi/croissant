@@ -36,8 +36,7 @@ final class DockClickService {
         let priorRecord: ActionRecord?
     }
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var dockPIDCache: pid_t?
     private var pendingClick: PendingClick?
     /// Last handled click per app: follow-up clicks toggle from this record
@@ -81,11 +80,9 @@ final class DockClickService {
     func suspend() { stop() }
 
     private func start() {
-        guard tap == nil else { return }
-        guard let tap = CGEvent.tapCreate(
+        guard !eventTap.isRunning else { return }
+        eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
                 | CGEventMask(1 << CGEventType.leftMouseDragged.rawValue)
                 | CGEventMask(1 << CGEventType.leftMouseUp.rawValue),
@@ -95,24 +92,11 @@ final class DockClickService {
                 return service.handle(type: type, event: event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        )
     }
 
     private func stop() {
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         for (_, sweep) in pendingSweeps { sweep.cancel() }
         pendingSweeps = [:]
         lastAction = [:]
@@ -122,7 +106,7 @@ final class DockClickService {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         // The replayed down of a press that became a drag: the Dock must

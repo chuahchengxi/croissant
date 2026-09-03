@@ -24,11 +24,7 @@ enum ScratchpadRetention: String, CaseIterable {
 
     /// Corrupt or unknown stored values fall back to keeping the text.
     static func sanitized(_ rawValue: String?) -> ScratchpadRetention {
-        guard let rawValue,
-              let retention = ScratchpadRetention(rawValue: rawValue) else {
-            return .never
-        }
-        return retention
+        ScratchpadRetention(rawValue: rawValue ?? "") ?? .never
     }
 }
 

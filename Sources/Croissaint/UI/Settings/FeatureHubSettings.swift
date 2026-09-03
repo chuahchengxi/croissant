@@ -159,7 +159,7 @@ struct FeatureHubSettings: View {
                         .foregroundStyle(.secondary)
                 }
             } header: {
-                Text(groupTitle(group))
+                Text(CommandBarCatalog.groupTitle(group, hub: hub))
             }
         }
         Section {
@@ -169,17 +169,6 @@ struct FeatureHubSettings: View {
         }
     }
 
-    private func groupTitle(_ group: FeatureGroup) -> String {
-        switch group {
-        case .windowsDock: return hub.groupWindowsDock
-        case .mouseKeyboard: return hub.groupMouseKeyboard
-        case .clipboardFiles: return hub.groupClipboardFiles
-        case .sound: return hub.groupSound
-        case .energyDisplay: return hub.groupEnergyDisplay
-        case .tools: return hub.groupTools
-        case .monitor: return hub.groupMonitor
-        }
-    }
 }
 
 // MARK: - Preset card

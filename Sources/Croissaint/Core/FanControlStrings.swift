@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct FanControlFeatureStrings {
+struct FanControlFeatureStrings: LanguageVariants {
     let title: String
     let hubDescription: String
     let showInPanel: String
@@ -49,21 +49,7 @@ struct FanControlFeatureStrings {
 
 extension FeatureStrings {
     static func fanControl(_ language: AppLanguage) -> FanControlFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

@@ -6,7 +6,7 @@ import Foundation
 /// Strings for the Kill Process feature. Same contract as the other
 /// FeatureStrings structs: memberwise init in declaration order, one static
 /// per language, all in this file.
-struct KillProcessFeatureStrings {
+struct KillProcessFeatureStrings: LanguageVariants {
     let pageTitle: String
     let browseSubtitle: String
     let hubDescription: String
@@ -41,21 +41,7 @@ struct KillProcessFeatureStrings {
 
 extension FeatureStrings {
     static func killProcess(_ language: AppLanguage) -> KillProcessFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

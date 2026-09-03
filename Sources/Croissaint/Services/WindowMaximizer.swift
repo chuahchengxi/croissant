@@ -14,8 +14,7 @@ final class WindowMaximizer: ObservableObject {
 
     @Published private(set) var isRunning = false
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var pendingClick: ClickTarget?
     private var originalFrames: [CGWindowID: AXFrame] = [:]
     private var frameAnimations: [CGWindowID: Timer] = [:]
@@ -38,12 +37,7 @@ final class WindowMaximizer: ObservableObject {
     }
 
     func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         pendingClick = nil
         for timer in frameAnimations.values { timer.invalidate() }
         frameAnimations.removeAll()
@@ -54,17 +48,15 @@ final class WindowMaximizer: ObservableObject {
     }
 
     private func start() {
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             isRunning = true
             return
         }
 
         let mask = CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseUp.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        guard eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -76,18 +68,12 @@ final class WindowMaximizer: ObservableObject {
             isRunning = false
             return
         }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         isRunning = true
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
 

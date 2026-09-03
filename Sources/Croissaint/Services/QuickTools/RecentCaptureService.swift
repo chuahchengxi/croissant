@@ -87,27 +87,18 @@ final class RecentCaptureService: ObservableObject {
         panel?.orderOut(nil)
     }
 
-    private final class KeyableHistoryPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
-
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyableHistoryPanel(
+        let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: 468, height: 360),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false)
         panel.title = FeatureStrings.recentCaptures(L10n.shared.language).title
-        panel.isReleasedWhenClosed = false
-        panel.isMovableByWindowBackground = true
-        panel.hidesOnDeactivate = true
         panel.isFloatingPanel = true
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay(hasShadow: false,
+                                 movableByBackground: true,
+                                 hidesOnDeactivate: true)
         let host = NSHostingController(rootView: RecentCapturesWindowView(
             onClose: { [weak self] in self?.hideHistoryWindow() }))
         host.sizingOptions = .preferredContentSize

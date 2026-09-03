@@ -22,8 +22,7 @@ final class MouseNavigationService: ObservableObject {
 
     @Published private(set) var isRunning = false
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     /// Buttons whose current press started over a pass-through app. The Up
     /// and Drag of a gesture must follow its Down: splitting the pair would
     /// leave the target app with an unmatched mouse event. Only touched from
@@ -53,7 +52,7 @@ final class MouseNavigationService: ObservableObject {
     func suspend() { stop() }
 
     private func start() {
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             isRunning = true
             return
         }
@@ -61,10 +60,7 @@ final class MouseNavigationService: ObservableObject {
         let mask = CGEventMask(1 << CGEventType.otherMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.otherMouseUp.rawValue)
             | CGEventMask(1 << CGEventType.otherMouseDragged.rawValue)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
+        guard eventTap.start(
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -78,11 +74,6 @@ final class MouseNavigationService: ObservableObject {
             return
         }
 
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         observeWebHandlerChanges()
         // Which keys carry Back and Forward depends on the keyboard in use, so
         // the answer is asked for now and again on every keyboard change.
@@ -96,10 +87,7 @@ final class MouseNavigationService: ObservableObject {
     }
 
     private func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
+        eventTap.stop()
         if let keyboardObserver {
             DistributedNotificationCenter.default().removeObserver(keyboardObserver)
         }
@@ -112,8 +100,6 @@ final class MouseNavigationService: ObservableObject {
         webHandlerObservers.removeAll()
         MouseNavigationKeys.reset()
         webURLHandlers.removeAll()
-        tap = nil
-        runLoopSource = nil
         passThroughButtons.removeAll()
         isRunning = false
     }
@@ -147,13 +133,13 @@ final class MouseNavigationService: ObservableObject {
         let generation = webHandlerRefreshGeneration
         webHandlerRefreshWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.tap != nil,
+            guard let self, self.eventTap.isRunning,
                   self.webHandlerRefreshGeneration == generation else { return }
             self.webHandlerRefreshWork = nil
             DispatchQueue.global(qos: .utility).async { [weak self] in
                 let handlers = MouseNavigationService.registeredWebURLHandlers()
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.tap != nil,
+                    guard let self, self.eventTap.isRunning,
                           self.webHandlerRefreshGeneration == generation else { return }
                     self.webURLHandlers = handlers
                 }
@@ -165,7 +151,7 @@ final class MouseNavigationService: ObservableObject {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)

@@ -66,10 +66,8 @@ final class RadialMenuService: ObservableObject {
     /// Set while a session was summoned by a mouse button and it is still
     /// down; releasing it runs the pointed slice, mirroring the chord.
     private var holdButton: Int64?
-    private var mouseTap: CFMachPort?
-    private var mouseTapSource: CFRunLoopSource?
-    private var eventMonitors: [Any] = []
-    private var activationObserver: NSObjectProtocol?
+    private let mouseEventTap = EventTap()
+    private let dismissMonitors = PanelDismissMonitors()
     private var promptedForAccessibility = false
 
     private init() {}
@@ -143,16 +141,14 @@ final class RadialMenuService: ObservableObject {
         }
         // A tap the system disabled (Accessibility revoked and regranted)
         // never revives on its own; rebuild it instead of keeping the corpse.
-        if let mouseTap, !CGEvent.tapIsEnabled(tap: mouseTap) {
+        if mouseEventTap.isRunning, !mouseEventTap.isEnabled {
             tearDownMouseTap()
         }
-        guard mouseTap == nil, AXIsProcessTrusted() else { return }
+        guard !mouseEventTap.isRunning, AXIsProcessTrusted() else { return }
         let mask = (CGEventMask(1) << CGEventType.otherMouseDown.rawValue)
             | (CGEventMask(1) << CGEventType.otherMouseUp.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        guard mouseEventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -161,30 +157,17 @@ final class RadialMenuService: ObservableObject {
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else { return }
-        mouseTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        mouseTapSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         if !isWatchingMouseButton { isWatchingMouseButton = true }
     }
 
     private func tearDownMouseTap() {
-        if let mouseTap {
-            CGEvent.tapEnable(tap: mouseTap, enable: false)
-            CFMachPortInvalidate(mouseTap)
-        }
-        if let mouseTapSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), mouseTapSource, .commonModes)
-        }
-        mouseTap = nil
-        mouseTapSource = nil
+        mouseEventTap.stop()
         if isWatchingMouseButton { isWatchingMouseButton = false }
     }
 
     private func handleMouseTap(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let mouseTap { CGEvent.tapEnable(tap: mouseTap, enable: true) }
+            mouseEventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         let pressed = Int(event.getIntegerValueField(.mouseEventButtonNumber))
@@ -339,7 +322,7 @@ final class RadialMenuService: ObservableObject {
     }
 
     private func endSession() {
-        removeMonitors()
+        dismissMonitors.removeAll()
         stopTrackingSuperKeyHold()
         panel?.orderOut(nil)
         stack = []
@@ -464,66 +447,30 @@ final class RadialMenuService: ObservableObject {
     // MARK: - Monitors (session-scoped, removed the moment the wheel closes)
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
+        dismissMonitors.removeAll()
 
-        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak panel] event in
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
             return self.handleKeyDown(event) ? nil : event
-        }) { eventMonitors.append(monitor) }
+        }))
 
-        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] event in
             self?.handleFlagsChanged(event.modifierFlags)
             return event
-        }) { eventMonitors.append(monitor) }
+        }))
 
         let moves: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
-        if let monitor = NSEvent.addLocalMonitorForEvents(matching: moves, handler: { [weak self] event in
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: moves, handler: { [weak self] event in
             self?.pointerMoved()
             return event
-        }) { eventMonitors.append(monitor) }
-        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: moves, handler: { [weak self] _ in
+        }))
+        dismissMonitors.add(NSEvent.addGlobalMonitorForEvents(matching: moves, handler: { [weak self] _ in
             self?.pointerMoved()
-        }) { eventMonitors.append(monitor) }
+        }))
 
-        let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        if let monitor = NSEvent.addLocalMonitorForEvents(matching: clicks, handler: { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return event }
-            if event.window !== panel, !Self.pointerInside(panel) {
-                self.endSession()
-            }
-            return event
-        }) { eventMonitors.append(monitor) }
-        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: clicks, handler: { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return }
-            if event.windowNumber != panel.windowNumber, !Self.pointerInside(panel) {
-                self.endSession()
-            }
-        }) { eventMonitors.append(monitor) }
-
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            self.endSession()
-        }
-    }
-
-    private func removeMonitors() {
-        eventMonitors.forEach { NSEvent.removeMonitor($0) }
-        eventMonitors = []
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
-    }
-
-    private static func pointerInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
+        dismissMonitors.install(for: panel,
+                                onOutsideClick: { [weak self] in self?.endSession() },
+                                onOtherAppActivated: { [weak self] in self?.endSession() })
     }
 
     private func pointerMoved() {
@@ -782,27 +729,17 @@ final class RadialMenuService: ObservableObject {
 
     /// Borderless panels refuse key status by default, and the wheel wants it
     /// for Esc, arrows, digits and the hold-release detection.
-    private final class KeyableWheelPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
         let size = RadialMenuLayout.panelSize
-        let panel = KeyableWheelPanel(contentRect: NSRect(x: 0, y: 0, width: size, height: size),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: size, height: size),
                                       styleMask: [.borderless, .nonactivatingPanel],
                                       backing: .buffered,
                                       defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
-        panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
-        panel.level = .statusBar
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = false
+        panel.configureAsOverlay(level: .statusBar, transient: true, hasShadow: false)
         panel.acceptsMouseMovedEvents = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
         panel.contentViewController = NSHostingController(rootView: RadialMenuView())
         self.panel = panel
         return panel

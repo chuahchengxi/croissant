@@ -159,10 +159,6 @@ enum PanelLayout {
         defaults.object(forKey: id.visibilityKey) as? Bool ?? id.shownByDefault
     }
 
-    static func setShown(_ shown: Bool, for id: PanelSectionID) {
-        defaults.set(shown, forKey: id.visibilityKey)
-    }
-
     static func isCollapsed(_ id: PanelSectionID) -> Bool {
         collapsedSet().contains(id.rawValue)
     }
@@ -335,6 +331,41 @@ struct PanelSection<Content: View>: View {
     }
 }
 
+/// The close control every utility card in the panel carries, top right.
+/// Observes `L10n` so its tooltip follows a language change live, the way the
+/// seven hand-written copies of it did.
+struct PanelCloseButton: View {
+    @ObservedObject private var l10n = L10n.shared
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+        }
+        .buttonStyle(.plain)
+        .help(l10n.s.uninstallerCancel)
+    }
+}
+
+/// Title, icon and close button: the header a utility card opens with.
+struct PanelSectionHeader: View {
+    let title: String
+    let systemImage: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+            Spacer()
+            PanelCloseButton(action: onClose)
+        }
+    }
+}
+
 struct PanelDragHandle: View {
     var body: some View {
         Image(systemName: "line.3.horizontal")
@@ -366,6 +397,39 @@ struct PanelReorderableItem<Item: PanelOrderItem, Content: View>: View {
         } else {
             content()
         }
+    }
+}
+
+/// The card a reorderable panel section is made of: its blocks stacked with
+/// dividers between them, each draggable and each growing a handle while the
+/// section is being edited. The network, power and system sections wrote this
+/// same scaffold out; only `content` differs.
+struct PanelReorderableBlocks<Item: PanelOrderItem, Content: View>: View {
+    let blocks: [Item]
+    let editing: Bool
+    @Binding var order: [Item]
+    @Binding var dragging: Item?
+    @ViewBuilder let content: (Item) -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(blocks.enumerated()), id: \.element) { index, block in
+                if index > 0 { Divider() }
+                PanelReorderableItem(item: block,
+                                     isEnabled: editing,
+                                     order: $order,
+                                     dragging: $dragging) {
+                    HStack(alignment: .top, spacing: 8) {
+                        if editing {
+                            PanelDragHandle()
+                        }
+                        content(block)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+        .panelCard()
     }
 }
 

@@ -4,7 +4,7 @@
 import Foundation
 
 /// Localized strings for the camera preview mirror.
-struct CameraPreviewFeatureStrings {
+struct CameraPreviewFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let panelCaption: String
@@ -18,21 +18,7 @@ struct CameraPreviewFeatureStrings {
 
 extension FeatureStrings {
     static func cameraPreview(_ language: AppLanguage) -> CameraPreviewFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct MouseExceptionStrings {
+struct MouseExceptionStrings: LanguageVariants {
     let listTitle: String
     let addButton: String
     let removeButton: String
@@ -26,21 +26,7 @@ struct MouseExceptionStrings {
 
 extension FeatureStrings {
     static func mouseExceptions(_ language: AppLanguage) -> MouseExceptionStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

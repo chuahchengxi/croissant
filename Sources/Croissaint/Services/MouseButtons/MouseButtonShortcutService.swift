@@ -32,8 +32,7 @@ final class MouseButtonShortcutService: ObservableObject {
     private(set) static var isCaptureActive = false
 
     private var mappings: [Int64: GlobalShortcut] = [:]
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var tapIncludesSideWheel = false
     /// Set only while the Settings capture row is on screen. The tap stays up
     /// during capture even with no mappings yet, so the row can see the press.
@@ -78,7 +77,7 @@ final class MouseButtonShortcutService: ObservableObject {
         // Torn down directly, not through stop(): a dead tap can no longer
         // deliver the pending Up of a held button, so draining for it would
         // only keep the corpse and leave every mapped button silent.
-        if let tap, !CGEvent.tapIsEnabled(tap: tap) {
+        if eventTap.isRunning, !eventTap.isEnabled {
             tearDownTap()
         }
         start()
@@ -119,10 +118,10 @@ final class MouseButtonShortcutService: ObservableObject {
     }
 
     private func start() {
-        if tap != nil, tapIncludesSideWheel != wantsSideWheelEvents {
+        if eventTap.isRunning, tapIncludesSideWheel != wantsSideWheelEvents {
             tearDownTap()
         }
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             Self.hasActiveSideWheelInterest = wantsSideWheelEvents
             MouseAppExceptions.shared.setSourceTracking(wantsSideWheelEvents, for: .buttonShortcuts)
             isRunning = true
@@ -142,10 +141,8 @@ final class MouseButtonShortcutService: ObservableObject {
         if wantsSideWheelEvents {
             mask |= CGEventMask(1) << CGEventType.scrollWheel.rawValue
         }
-        guard let tap = CGEvent.tapCreate(
+        guard eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -160,12 +157,7 @@ final class MouseButtonShortcutService: ObservableObject {
             isRunning = false
             return
         }
-        self.tap = tap
         tapIncludesSideWheel = wantsSideWheelEvents
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         Self.hasActiveSideWheelInterest = wantsSideWheelEvents
         MouseAppExceptions.shared.setSourceTracking(wantsSideWheelEvents, for: .buttonShortcuts)
         isRunning = true
@@ -180,7 +172,7 @@ final class MouseButtonShortcutService: ObservableObject {
         // in drain mode until the release arrives (handle() finishes the
         // teardown), instead of dying between the halves. This also covers
         // ending a capture right after the first press.
-        if !consumedButtons.isEmpty, tap != nil {
+        if !consumedButtons.isEmpty, eventTap.isRunning {
             isDraining = true
             isRunning = false
             return
@@ -191,15 +183,7 @@ final class MouseButtonShortcutService: ObservableObject {
     private func tearDownTap() {
         Self.hasActiveSideWheelInterest = false
         MouseAppExceptions.shared.setSourceTracking(false, for: .buttonShortcuts)
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            CFMachPortInvalidate(tap)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         tapIncludesSideWheel = false
         consumedButtons.removeAll()
         lastGesturePhaseTimestamp = nil
@@ -215,7 +199,7 @@ final class MouseButtonShortcutService: ObservableObject {
             sideWheelGesture.reset()
             preflightedSideWheelTimestamp = nil
             preflightedSideWheelInput = nil
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         if type == .scrollWheel {

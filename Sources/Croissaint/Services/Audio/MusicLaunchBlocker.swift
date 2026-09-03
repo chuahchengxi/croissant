@@ -18,8 +18,7 @@ final class MusicLaunchBlocker: ObservableObject {
     static let blockedBundleIDs: Set<String> = ["com.apple.Music", "com.apple.iTunes"]
 
     private var observers: [NSObjectProtocol] = []
-    private var mediaKeyTap: CFMachPort?
-    private var mediaKeyTapSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     /// One media key press produces both a will-launch and a did-launch
     /// notification; the replacement should open once, not twice.
     private var lastReplacementLaunch: TimeInterval = 0
@@ -36,7 +35,7 @@ final class MusicLaunchBlocker: ObservableObject {
     }
 
     private func start() {
-        guard observers.isEmpty, mediaKeyTap == nil else { return }
+        guard observers.isEmpty, !eventTap.isRunning else { return }
         installMediaKeyTap()
         let center = NSWorkspace.shared.notificationCenter
         // Will-launch usually wins the race before any window shows;
@@ -62,7 +61,7 @@ final class MusicLaunchBlocker: ObservableObject {
         guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               let bundleID = app.bundleIdentifier,
               Self.blockedBundleIDs.contains(bundleID) else { return }
-        if mediaKeyTap != nil {
+        if eventTap.isRunning {
             guard MusicLaunchSupport.shouldBlockLaunch(
                 now: ProcessInfo.processInfo.systemUptime,
                 lastTriggerAt: lastMediaKeyAt
@@ -91,41 +90,26 @@ final class MusicLaunchBlocker: ObservableObject {
     }
 
     private func installMediaKeyTap() {
-        guard mediaKeyTap == nil else { return }
+        guard !eventTap.isRunning else { return }
         let systemDefined = CGEventType(rawValue: MusicLaunchSupport.systemDefinedEventTypeRawValue)!
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else { return Unmanaged.passUnretained(event) }
             let blocker = Unmanaged<MusicLaunchBlocker>.fromOpaque(userInfo).takeUnretainedValue()
             return blocker.handleMediaKeyEvent(type: type, event: event)
         }
-        guard let tap = CGEvent.tapCreate(
+        eventTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
             options: .listenOnly,
             eventsOfInterest: CGEventMask(1 << systemDefined.rawValue),
             callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
-        mediaKeyTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        mediaKeyTapSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+            userInfo: Unmanaged.passUnretained(self).toOpaque())
     }
 
-    private func removeMediaKeyTap() {
-        guard let tap = mediaKeyTap else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        if let mediaKeyTapSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), mediaKeyTapSource, .commonModes)
-        }
-        mediaKeyTapSource = nil
-        mediaKeyTap = nil
-    }
+    private func removeMediaKeyTap() { eventTap.stop() }
 
     private func handleMediaKeyEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let mediaKeyTap { CGEvent.tapEnable(tap: mediaKeyTap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         guard type.rawValue == MusicLaunchSupport.systemDefinedEventTypeRawValue,

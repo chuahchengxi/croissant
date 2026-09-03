@@ -31,10 +31,7 @@ final class CameraPreviewService: ObservableObject {
     /// here and only state lands back on the main thread.
     private let sessionQueue = DispatchQueue(label: "com.croissaint.utils.camera-preview")
     private var panel: NSPanel?
-    private var keyMonitor: Any?
-    private var localClickMonitor: Any?
-    private var outsideClickMonitor: Any?
-    private var activationObserver: NSObjectProtocol?
+    private let dismissMonitors = PanelDismissMonitors()
     private var deviceObservers: [NSObjectProtocol] = []
     /// When the permission dialog resolves, the app that was frontmost
     /// before it reactivates a beat later; that activation must not count
@@ -91,7 +88,7 @@ final class CameraPreviewService: ObservableObject {
 
     func hide() {
         guard panel != nil else { return }
-        removeMonitors()
+        dismissMonitors.removeAll()
         removeDeviceObservers()
         stopSession()
         panel?.orderOut(nil)
@@ -276,26 +273,16 @@ final class CameraPreviewService: ObservableObject {
 
     /// Borderless panels refuse key status by default; the preview needs it
     /// so Esc closes it without a click.
-    private final class KeyablePreviewPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyablePreviewPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
                                         styleMask: [.borderless, .nonactivatingPanel],
                                         backing: .buffered,
                                         defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
         // A mirror is something the user drags next to the meeting window.
-        panel.isMovableByWindowBackground = true
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay(movableByBackground: true)
         let host = NSHostingController(rootView: CameraPreviewView())
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host
@@ -328,67 +315,28 @@ final class CameraPreviewService: ObservableObject {
     }
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
+        dismissMonitors.removeAll()
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
             if event.keyCode == UInt16(kVK_Escape) {
                 self.hide()
                 return nil
             }
             return event
-        }
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideInteraction else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideInteraction else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-        }
+        })
         // Joining the meeting (or just moving on) activates another app;
         // the mirror has done its job and leaves on its own.
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  self.dismissesOnOutsideInteraction,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            if let resolved = self.permissionResolvedAt,
-               Date().timeIntervalSince(resolved) < 1.0 { return }
-            self.hide()
-        }
-    }
-
-    private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
-    }
-
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
+        dismissMonitors.install(
+            for: panel,
+            isArmed: { [weak self] in self?.dismissesOnOutsideInteraction ?? false },
+            onOutsideClick: { [weak self] in self?.hide() },
+            onOtherAppActivated: { [weak self] in
+                guard let self else { return }
+                // The system's own permission prompt counts as another app;
+                // answering it must not take the mirror down with it.
+                if let resolved = self.permissionResolvedAt,
+                   Date().timeIntervalSince(resolved) < 1.0 { return }
+                self.hide()
+            })
     }
 }

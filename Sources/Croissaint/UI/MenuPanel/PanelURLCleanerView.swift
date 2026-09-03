@@ -26,19 +26,9 @@ struct PanelURLCleanerView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Label(l10n.s.urlCleanerName, systemImage: "link")
-                .font(.system(size: 12, weight: .semibold))
-            Spacer()
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .help(l10n.s.uninstallerCancel)
-        }
+        PanelSectionHeader(title: l10n.s.urlCleanerName,
+                           systemImage: "link",
+                           onClose: onClose)
     }
 
     private var autoCleanToggle: some View {

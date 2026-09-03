@@ -68,10 +68,7 @@ final class QuickLauncherService: ObservableObject {
 
     private let hotkey = QuickToolHotkey(id: 14)
     private var panel: NSPanel?
-    private var keyMonitor: Any?
-    private var localClickMonitor: Any?
-    private var outsideClickMonitor: Any?
-    private var activationObserver: NSObjectProtocol?
+    private let dismissMonitors = PanelDismissMonitors()
 
     private init() {
         hotkey.onPress = { [weak self] in self?.toggle() }
@@ -164,7 +161,7 @@ final class QuickLauncherService: ObservableObject {
     }
 
     func hide() {
-        removeMonitors()
+        dismissMonitors.removeAll()
         isEditing = false
         editingOptionsItem = nil
         activeUtility = nil
@@ -305,26 +302,17 @@ final class QuickLauncherService: ObservableObject {
     /// Borderless panels refuse key status by default, and the launcher needs
     /// it for arrows, digits and Esc. Borderless also removes the invisible
     /// title-bar strip that would swallow clicks on the header controls.
-    private final class KeyableLauncherPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyableLauncherPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: 380),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: 380),
                                          styleMask: [.borderless, .nonactivatingPanel],
                                          backing: .buffered,
                                          defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
-        // Item drag-to-reorder needs the mouse drag for itself; a background-
-        // movable window would win the gesture and drag the whole panel.
-        panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        // Not movable by background: item drag-to-reorder needs the mouse
+        // drag for itself, or the window would win the gesture.
+        panel.configureAsOverlay()
         let host = NSHostingController(rootView: QuickLauncherView())
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host
@@ -351,8 +339,8 @@ final class QuickLauncherService: ObservableObject {
     // MARK: - Monitors
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
+        dismissMonitors.removeAll()
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
             if event.keyCode == UInt16(kVK_Escape) {
                 if self.activeUtility != nil {
@@ -386,81 +374,22 @@ final class QuickLauncherService: ObservableObject {
                 self.moveSelection(.down)
                 return nil
             default:
-                if let index = Self.digitIndex(for: event.keyCode) {
+                if let index = PanelKeys.digitIndex(for: event.keyCode) {
                     self.activate(at: index)
                     return nil
                 }
                 return event
             }
-        }
+        })
         // With a utility hosted inside (Media, Homebrew, Uninstaller…) the
         // launcher is a small working window, not a transient HUD: it must
         // survive its own file dialogs and admin prompts, and clicks in other
         // apps to drag a file onto its drop zones. Only the bare grid keeps
         // the Spotlight-like dismiss-on-outside-click behavior.
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideInteraction else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideInteraction else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-        }
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  self.dismissesOnOutsideInteraction,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            self.hide()
-        }
-    }
-
-    private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
-    }
-
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
-    }
-
-    private static func digitIndex(for keyCode: UInt16) -> Int? {
-        switch Int(keyCode) {
-        case kVK_ANSI_1: return 0
-        case kVK_ANSI_2: return 1
-        case kVK_ANSI_3: return 2
-        case kVK_ANSI_4: return 3
-        case kVK_ANSI_5: return 4
-        case kVK_ANSI_6: return 5
-        case kVK_ANSI_7: return 6
-        case kVK_ANSI_8: return 7
-        case kVK_ANSI_9: return 8
-        default: return nil
-        }
+        dismissMonitors.install(
+            for: panel,
+            isArmed: { [weak self] in self?.dismissesOnOutsideInteraction ?? false },
+            onOutsideClick: { [weak self] in self?.hide() },
+            onOtherAppActivated: { [weak self] in self?.hide() })
     }
 }
