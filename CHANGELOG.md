@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-09-03
+
+### Fixed
+- Hiding the recording and camera indicators is no longer offered on macOS 26, because it cannot work there. macOS now draws those indicators above every window an app is allowed to place: the patch that used to cover them is still put in exactly the right spot, and the dot is simply drawn on top of it. The switch is disabled with that explanation instead of sitting there doing nothing, and the machinery behind it no longer runs — it had been sampling the menu bar once a second, which is itself a screen capture, so the cloak was helping to keep the recording dot it meant to hide switched on. The option is unchanged on macOS 14 and 15.
+- Turning Liquid Glass off now turns off all of it. The small round buttons on the floating panels, the backdrop behind the confirmation HUDs and the brightness overlay, and the shelf's shared glass space all ignored the setting and kept their glass on macOS 26, so a panel you had asked to keep flat still had glass chips on it. They read the same setting as every other surface now, and follow Reduce Transparency with it.
+- Permission rows in the menu panel notice a permission the moment it is granted. The panel asks for Accessibility in six places — the pointer nudge that keeps your Mac awake, the brightness keys, the precise volume roller and the window layout row — but never told the app it was showing permission UI, which is what makes a grant made in System Settings appear straight away everywhere else. Those rows could go on insisting the permission was missing after it had been given.
+
 ## [0.1.4] - 2026-08-29
 
 ### Fixed

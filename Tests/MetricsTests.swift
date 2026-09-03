@@ -2509,10 +2509,10 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "0.1.4",
+        expect(plistVersion == "0.1.5",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
-        expect(plistBuild == "87",
+        expect(plistBuild == "88",
                "every app version needs its own incremented bundle build")
         expect(SupportUpdateIntroInfo.releaseVersion == "0.0.8",
                "the support prompt remains deliberately pinned to the fork's current release")
@@ -2528,7 +2528,8 @@ struct MetricsTests {
                && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.0", lastSeenVersion: nil)
                && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.1", lastSeenVersion: nil)
                && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.3", lastSeenVersion: nil)
-               && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.4", lastSeenVersion: nil),
+               && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.4", lastSeenVersion: nil)
+               && !UpdateHighlightsInfo.shouldShow(appVersion: "0.1.5", lastSeenVersion: nil),
                "highlights tour never leaks into another release")
         expect(registeredDefaults[DefaultsKey.mixerLowerVolumeOnHeadphonesDisconnect] as? Bool == false,
                "headphone disconnect volume lowering is opt-in")
