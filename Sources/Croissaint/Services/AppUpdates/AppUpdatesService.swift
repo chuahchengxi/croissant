@@ -506,12 +506,6 @@ final class AppUpdatesService: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
-    /// After a package upgrade finishes the list is stale, so it re-checks
-    /// without touching the schedule.
-    func refreshAfterUpgrade() {
-        check()
-    }
-
     /// What a surface calls when it appears. It scans again when the answer
     /// could have changed behind the app's back: nothing read yet in this
     /// process, an update just finished elsewhere, or the last answer is

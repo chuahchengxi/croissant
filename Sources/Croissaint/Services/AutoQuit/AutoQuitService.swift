@@ -50,8 +50,7 @@ final class AutoQuitService: ObservableObject {
     private var terminateToken: NSObjectProtocol?
     private var activateToken: NSObjectProtocol?
     private var spaceChangeToken: NSObjectProtocol?
-    private var closeRequestTap: CFMachPort?
-    private var closeRequestRunLoopSource: CFRunLoopSource?
+    private let closeRequestTap = EventTap()
     private var recentCloseButtonRequests: [pid_t: Date] = [:]
     private var lastScheduledChecks: [pid_t: Date] = [:]
     /// Apps whose attach is waiting on a retry, so a second round never starts.
@@ -602,10 +601,10 @@ final class AutoQuitService: ObservableObject {
     // MARK: - Close-request monitor
 
     private func startCloseRequestMonitor() {
-        guard closeRequestTap == nil else { return }
+        guard !closeRequestTap.isRunning else { return }
         let mask = CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.keyDown.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        closeRequestTap.start(
             tap: .cgSessionEventTap,
             place: .tailAppendEventTap,
             options: .listenOnly,
@@ -616,29 +615,16 @@ final class AutoQuitService: ObservableObject {
                 return service.handleCloseRequestEvent(type: type, event: event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
-
-        closeRequestTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        closeRequestRunLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        )
     }
 
     private func stopCloseRequestMonitor() {
-        if let closeRequestTap {
-            CGEvent.tapEnable(tap: closeRequestTap, enable: false)
-        }
-        if let closeRequestRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), closeRequestRunLoopSource, .commonModes)
-        }
-        closeRequestTap = nil
-        closeRequestRunLoopSource = nil
+        closeRequestTap.stop()
     }
 
     private func handleCloseRequestEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let closeRequestTap { CGEvent.tapEnable(tap: closeRequestTap, enable: true) }
+            closeRequestTap.reArm()
             return Unmanaged.passUnretained(event)
         }
 

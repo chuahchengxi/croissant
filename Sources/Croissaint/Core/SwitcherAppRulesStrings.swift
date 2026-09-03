@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct SwitcherAppRulesStrings {
+struct SwitcherAppRulesStrings: LanguageVariants {
     let listTitle: String
     let addButton: String
     let removeButton: String
@@ -16,21 +16,7 @@ struct SwitcherAppRulesStrings {
 
 extension FeatureStrings {
     static func switcherAppRules(_ language: AppLanguage) -> SwitcherAppRulesStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

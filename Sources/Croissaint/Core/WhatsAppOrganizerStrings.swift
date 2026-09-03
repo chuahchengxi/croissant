@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct WhatsAppOrganizerStrings {
+struct WhatsAppOrganizerStrings: LanguageVariants {
     let title: String
     let experimental: String
     let description: String
@@ -36,21 +36,7 @@ struct WhatsAppOrganizerStrings {
     let privacyNote: String
 
     static func localized(_ language: AppLanguage) -> WhatsAppOrganizerStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .es: return .es
-        case .tr: return .tr
-        case .ru: return .ru
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

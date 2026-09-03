@@ -73,21 +73,7 @@ final class L10n: ObservableObject {
     }
 
     var s: Strings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhHK: return .zhHK
-        case .zhTW: return .zhTW
-        }
+        .forLanguage(language)
     }
 
     private init() {
@@ -102,7 +88,7 @@ final class L10n: ObservableObject {
 
 /// Flat, compiler-checked catalog of UI strings. Adding a field here forces
 /// both translations to be provided.
-struct Strings {
+struct Strings: LanguageVariants {
     // MARK: Menu bar & context menu
     let statusIdleTooltip: String
     let statusActiveUntil: String      // + time
@@ -3022,4 +3008,45 @@ extension Strings {
         switcherMinimizedPlacementHidden: "Hide",
         switcherShowFullscreenWindows: "Show fullscreen windows"
     )
+}
+
+/// Every localized string group ships one `static let` per language, and each
+/// was reached through its own hand-written thirteen-arm switch — the same
+/// mapping written out forty-one times. Conformance costs nothing (the members
+/// already exist) and brings `forLanguage` with it, so adding a language now
+/// means adding one arm here instead of forty-one.
+protocol LanguageVariants {
+    static var enUS: Self { get }
+    static var ptBR: Self { get }
+    static var tr: Self { get }
+    static var ru: Self { get }
+    static var es: Self { get }
+    static var de: Self { get }
+    static var fr: Self { get }
+    static var it: Self { get }
+    static var ja: Self { get }
+    static var ko: Self { get }
+    static var zhHans: Self { get }
+    static var zhTW: Self { get }
+    static var zhHK: Self { get }
+}
+
+extension LanguageVariants {
+    static func forLanguage(_ language: AppLanguage) -> Self {
+        switch language {
+        case .enUS: return enUS
+        case .ptBR: return ptBR
+        case .tr: return tr
+        case .ru: return ru
+        case .es: return es
+        case .de: return de
+        case .fr: return fr
+        case .it: return it
+        case .ja: return ja
+        case .ko: return ko
+        case .zhHans: return zhHans
+        case .zhTW: return zhTW
+        case .zhHK: return zhHK
+        }
+    }
 }

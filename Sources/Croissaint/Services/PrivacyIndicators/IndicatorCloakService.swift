@@ -16,8 +16,24 @@ import AppKit
 /// higher, filled with a live sample of the neighbouring menu-bar pixels, so
 /// the dot reads as gone. Nothing about capture itself is affected; this only
 /// touches what the user sees. It needs no permissions of its own.
+///
+/// macOS 26 closed this off. The indicator is now composited above every level
+/// an app window can reach: a patch at `kCGMaximumWindowLevel` (2147483631),
+/// or even at `Int32.max`, is placed correctly and still has the dot drawn on
+/// top of it. There is no level left to win from, so on 26 and newer the
+/// service stays down rather than running a timer and a screen capture every
+/// second for a patch that cannot cover anything — capture that, being capture,
+/// would itself keep the screen-recording dot lit.
 final class IndicatorCloakService {
     static let shared = IndicatorCloakService()
+
+    /// False where the OS composites the indicators above any window we can
+    /// make. Checked before anything starts, and read by Settings so the
+    /// toggle can say why it is off rather than silently doing nothing.
+    static var isSupported: Bool {
+        if #available(macOS 26.0, *) { return false }
+        return true
+    }
 
     /// The Window Server names every privacy indicator window this way.
     private static let indicatorName = "StatusIndicator"
@@ -32,12 +48,13 @@ final class IndicatorCloakService {
     private init() {}
 
     func syncWithPreferences() {
-        let enabled = UserDefaults.standard.bool(forKey: DefaultsKey.privacyIndicatorCloakEnabled)
+        let enabled = Self.isSupported
+            && UserDefaults.standard.bool(forKey: DefaultsKey.privacyIndicatorCloakEnabled)
         if enabled { start() } else { stop() }
     }
 
     func start() {
-        guard timer == nil else { return }
+        guard Self.isSupported, timer == nil else { return }
         let t = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.reconcile()
         }

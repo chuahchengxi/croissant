@@ -189,16 +189,7 @@ struct MediaWorkspaceView: View {
             Text(l10n.s.mediaLocalNote)
                 .font(.system(size: compact ? 9.5 : 11, weight: .medium))
                 .foregroundStyle(.secondary)
-            if let onClose {
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .help(l10n.s.uninstallerCancel)
-            }
+            if let onClose { PanelCloseButton(action: onClose) }
         }
     }
 
@@ -1251,10 +1242,6 @@ struct MediaWorkspaceView: View {
             }
         }
         return true
-    }
-
-    private func setInput(_ url: URL) {
-        setInputs([url])
     }
 
     private func setInputs(_ urls: [URL]) {

@@ -19,8 +19,7 @@ import Foundation
 /// enough. Main thread only. Without Accessibility, begin fails and the
 /// field falls back to plain view events, which is how it always worked.
 enum ShortcutRecordingTap {
-    private static var tap: CFMachPort?
-    private static var runLoopSource: CFRunLoopSource?
+    private static let eventTap = EventTap()
     private static var handler: ((Int64, GlobalShortcutModifiers) -> Void)?
     /// The key most recently pressed while recording and possibly still down.
     private static var heldKeyCode: Int64?
@@ -45,28 +44,21 @@ enum ShortcutRecordingTap {
         heldKeyCode = nil
         superState.reset()
         // A tap the system disabled behind our back reads as dead; rebuild.
-        if let tap, !CGEvent.tapIsEnabled(tap: tap) {
+        if eventTap.isRunning, !eventTap.isEnabled {
             tearDown()
         }
-        if tap == nil {
+        if !eventTap.isRunning {
             guard AXIsProcessTrusted() else { return false }
             let mask = (CGEventMask(1) << CGEventType.keyDown.rawValue)
                 | (CGEventMask(1) << CGEventType.keyUp.rawValue)
-            guard let created = CGEvent.tapCreate(
+            guard eventTap.start(
                 tap: .cgSessionEventTap,
-                place: .headInsertEventTap,
-                options: .defaultTap,
                 eventsOfInterest: mask,
                 callback: { _, type, event, _ in
                     ShortcutRecordingTap.handle(type: type, event: event)
                 },
                 userInfo: nil
             ) else { return false }
-            tap = created
-            let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
-            runLoopSource = source
-            CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-            CGEvent.tapEnable(tap: created, enable: true)
         }
         handler = newHandler
         return true
@@ -76,7 +68,7 @@ enum ShortcutRecordingTap {
     /// still down, the tap lingers just long enough to swallow its release.
     static func end() {
         handler = nil
-        guard tap != nil else { return }
+        guard eventTap.isRunning else { return }
         if let heldKeyCode {
             drainingKeyCode = heldKeyCode
             armDrainWatchdog()
@@ -103,20 +95,12 @@ enum ShortcutRecordingTap {
         heldKeyCode = nil
         handler = nil
         superState.reset()
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            CFMachPortInvalidate(tap)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
     }
 
     private static func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)

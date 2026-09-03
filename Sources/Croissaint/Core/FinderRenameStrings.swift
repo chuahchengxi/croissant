@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct FinderRenameFeatureStrings {
+struct FinderRenameFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubTitle: String
     let hubDescription: String
@@ -14,21 +14,7 @@ struct FinderRenameFeatureStrings {
 
 extension FeatureStrings {
     static func finderRename(_ language: AppLanguage) -> FinderRenameFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

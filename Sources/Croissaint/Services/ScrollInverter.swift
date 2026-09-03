@@ -28,8 +28,7 @@ final class ScrollInverter: ObservableObject {
     /// This process's own id, compared against the one every event carries.
     private static let ownProcessID = Int64(getpid())
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     /// Timestamp (ns, event clock) of the last event carrying a gesture phase —
     /// only touch devices emit those. Read/written solely on the tap callback.
     private var lastGesturePhaseTimestamp: UInt64?
@@ -55,16 +54,14 @@ final class ScrollInverter: ObservableObject {
     func suspend() { stop() }
 
     private func start() {
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             MouseAppExceptions.shared.setSourceTracking(true, for: .scrollDirection)
             isRunning = true
             return
         }
         MouseAppExceptions.shared.setSourceTracking(true, for: .scrollDirection)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
+        guard eventTap.start(
             place: .tailAppendEventTap,
-            options: .defaultTap,
             eventsOfInterest: CGEventMask(1 << CGEventType.scrollWheel.rawValue),
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -77,32 +74,19 @@ final class ScrollInverter: ObservableObject {
             isRunning = false
             return
         }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         isRunning = true
     }
 
     private func stop() {
         MouseAppExceptions.shared.setSourceTracking(false, for: .scrollDirection)
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         isRunning = false
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         // macOS disables taps that stall or when the session locks; re-arm.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         guard type == .scrollWheel else { return Unmanaged.passUnretained(event) }

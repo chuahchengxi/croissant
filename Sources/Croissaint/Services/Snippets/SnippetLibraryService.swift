@@ -24,10 +24,7 @@ final class SnippetLibraryService: ObservableObject {
 
     private let hotkey = QuickToolHotkey(id: 19)
     private var panel: NSPanel?
-    private var keyMonitor: Any?
-    private var localClickMonitor: Any?
-    private var outsideClickMonitor: Any?
-    private var activationObserver: NSObjectProtocol?
+    private let dismissMonitors = PanelDismissMonitors()
     /// The permission prompt fires at most once per launch; later attempts
     /// without Accessibility beep instead of nagging (PastePlain's pattern).
     private var promptedForAccessibility = false
@@ -110,7 +107,7 @@ final class SnippetLibraryService: ObservableObject {
     }
 
     func hide() {
-        removeMonitors()
+        dismissMonitors.removeAll()
         panel?.orderOut(nil)
         TextSnippetService.shared.setLibraryVisible(false)
     }
@@ -216,24 +213,15 @@ final class SnippetLibraryService: ObservableObject {
 
     /// Borderless panels refuse key status by default, and the library needs
     /// it for the search field, arrows and Esc.
-    private final class KeyableLibraryPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyableLibraryPanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
                                         styleMask: [.borderless, .nonactivatingPanel],
                                         backing: .buffered,
                                         defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
-        panel.isMovableByWindowBackground = true
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay(movableByBackground: true)
         let host = NSHostingController(rootView: SnippetLibraryView())
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host
@@ -275,8 +263,8 @@ final class SnippetLibraryService: ObservableObject {
     // MARK: - Monitors
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
+        dismissMonitors.removeAll()
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
             switch Int(event.keyCode) {
             case kVK_Escape:
@@ -295,75 +283,15 @@ final class SnippetLibraryService: ObservableObject {
                 // Plain digits belong to the search text; only ⌘1…⌘9 insert
                 // by position.
                 if event.modifierFlags.contains(.command),
-                   let index = Self.digitIndex(for: event.keyCode) {
+                   let index = PanelKeys.digitIndex(for: event.keyCode) {
                     self.insert(at: index)
                     return nil
                 }
                 return event
             }
-        }
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-        }
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            self.hide()
-        }
-    }
-
-    private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
-    }
-
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
-    }
-
-    private static func digitIndex(for keyCode: UInt16) -> Int? {
-        switch Int(keyCode) {
-        case kVK_ANSI_1: return 0
-        case kVK_ANSI_2: return 1
-        case kVK_ANSI_3: return 2
-        case kVK_ANSI_4: return 3
-        case kVK_ANSI_5: return 4
-        case kVK_ANSI_6: return 5
-        case kVK_ANSI_7: return 6
-        case kVK_ANSI_8: return 7
-        case kVK_ANSI_9: return 8
-        default: return nil
-        }
+        })
+        dismissMonitors.install(for: panel,
+                                onOutsideClick: { [weak self] in self?.hide() },
+                                onOtherAppActivated: { [weak self] in self?.hide() })
     }
 }

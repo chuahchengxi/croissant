@@ -4,7 +4,7 @@
 import Foundation
 
 /// Localized strings for the screenshot tool.
-struct ScreenshotFeatureStrings {
+struct ScreenshotFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let captureButton: String
@@ -122,21 +122,7 @@ struct ScreenshotFeatureStrings {
 
 extension FeatureStrings {
     static func screenshot(_ language: AppLanguage) -> ScreenshotFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

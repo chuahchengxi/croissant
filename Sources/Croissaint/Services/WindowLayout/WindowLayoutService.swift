@@ -45,12 +45,9 @@ final class WindowLayoutService: ObservableObject {
     private var directionalSession: WindowDirectionalSession?
     private var directionalTimer: Timer?
     private var directionalIndicatorPanel: NSPanel?
-    private var directionalTap: CFMachPort?
-    private var directionalTapSource: CFRunLoopSource?
-    private var gestureTap: CFMachPort?
-    private var gestureRunLoopSource: CFRunLoopSource?
-    private var edgeSnapTap: CFMachPort?
-    private var edgeSnapRunLoopSource: CFRunLoopSource?
+    private let directionalTap = EventTap()
+    private let gestureTap = EventTap()
+    private let edgeSnapTap = EventTap()
     private var activeGesture: WindowPointerGesture?
     private var pendingGesture: PendingWindowGesture?
     private var edgeSnapPressOrigin: CGPoint?
@@ -735,15 +732,13 @@ final class WindowLayoutService: ObservableObject {
     }
 
     private func startDirectionalTap() {
-        guard directionalTap == nil else { return }
+        guard !directionalTap.isRunning else { return }
         let mask = CGEventMask(1 << CGEventType.scrollWheel.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.rightMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.keyDown.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        directionalTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -751,13 +746,7 @@ final class WindowLayoutService: ObservableObject {
                 return service.observeDirectionalEvent(type: type, event: event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
-
-        directionalTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        directionalTapSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        )
     }
 
     private func observeDirectionalEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -891,15 +880,7 @@ final class WindowLayoutService: ObservableObject {
     }
 
     private func stopDirectionalTap() {
-        if let directionalTapSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), directionalTapSource, .commonModes)
-        }
-        directionalTapSource = nil
-        if let directionalTap {
-            CGEvent.tapEnable(tap: directionalTap, enable: false)
-            CFMachPortInvalidate(directionalTap)
-        }
-        directionalTap = nil
+        directionalTap.stop()
     }
 
     @discardableResult
@@ -965,14 +946,12 @@ final class WindowLayoutService: ObservableObject {
     /// any Accessibility or UI work. It only adjusts the exact top coordinate
     /// after a window move has already been confirmed on the main queue.
     private func startEdgeSnapTap() {
-        guard edgeSnapTap == nil else { return }
+        guard !edgeSnapTap.isRunning else { return }
         let mask = CGEventMask(1 << CGEventType.leftMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseDragged.rawValue)
             | CGEventMask(1 << CGEventType.leftMouseUp.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        edgeSnapTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -980,13 +959,7 @@ final class WindowLayoutService: ObservableObject {
                 return service.observeEdgeSnapEvent(type: type, event: event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return }
-
-        edgeSnapTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        edgeSnapRunLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        )
     }
 
     private func stopEdgeSnapTap() {
@@ -997,22 +970,14 @@ final class WindowLayoutService: ObservableObject {
         edgeSnapResolveAttempts = 0
         edgeSnapDrag = nil
         hideEdgeSnapPreview(immediately: true)
-        if let edgeSnapRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), edgeSnapRunLoopSource, .commonModes)
-        }
-        if let edgeSnapTap {
-            CGEvent.tapEnable(tap: edgeSnapTap, enable: false)
-            CFMachPortInvalidate(edgeSnapTap)
-        }
-        edgeSnapTap = nil
-        edgeSnapRunLoopSource = nil
+        edgeSnapTap.stop()
         edgeSnapPreviewPanel = nil
     }
 
     private func observeEdgeSnapEvent(type: CGEventType,
                                       event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let edgeSnapTap { CGEvent.tapEnable(tap: edgeSnapTap, enable: true) }
+            edgeSnapTap.reArm()
             DispatchQueue.main.async { [weak self] in self?.cancelEdgeSnapTracking() }
             return Unmanaged.passUnretained(event)
         }
@@ -1370,7 +1335,7 @@ final class WindowLayoutService: ObservableObject {
     // MARK: - Move and resize gesture
 
     private func startGestureTap() {
-        guard gestureTap == nil else {
+        guard !gestureTap.isRunning else {
             isGestureRunning = true
             return
         }
@@ -1380,10 +1345,8 @@ final class WindowLayoutService: ObservableObject {
             | CGEventMask(1 << CGEventType.rightMouseDown.rawValue)
             | CGEventMask(1 << CGEventType.rightMouseDragged.rawValue)
             | CGEventMask(1 << CGEventType.rightMouseUp.rawValue)
-        guard let tap = CGEvent.tapCreate(
+        guard gestureTap.start(
             tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { proxy, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -1395,12 +1358,6 @@ final class WindowLayoutService: ObservableObject {
             isGestureRunning = false
             return
         }
-
-        gestureTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        gestureRunLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         isGestureRunning = true
     }
 
@@ -1408,15 +1365,7 @@ final class WindowLayoutService: ObservableObject {
         // A press still under custody has to go back to the app before the
         // tap that is holding it disappears, or that click is simply lost.
         flushPending(proxy: nil, at: nil)
-        if let gestureRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), gestureRunLoopSource, .commonModes)
-        }
-        if let gestureTap {
-            CGEvent.tapEnable(tap: gestureTap, enable: false)
-            CFMachPortInvalidate(gestureTap)
-        }
-        gestureTap = nil
-        gestureRunLoopSource = nil
+        gestureTap.stop()
         activeGesture = nil
         pendingGesture = nil
         endGestureAssistiveMode()
@@ -1457,9 +1406,7 @@ final class WindowLayoutService: ObservableObject {
         }
 
         let tapDisabled = type == .tapDisabledByTimeout || type == .tapDisabledByUserInput
-        if tapDisabled, let gestureTap {
-            CGEvent.tapEnable(tap: gestureTap, enable: true)
-        }
+        if tapDisabled { gestureTap.reArm() }
 
         var chord: (button: WindowPointerGesture.Button, wantsResize: Bool)?
         let input: WindowGestureInput

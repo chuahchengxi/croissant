@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct WindowPreviewExclusionStrings {
+struct WindowPreviewExclusionStrings: LanguageVariants {
     let sectionTitle: String
     let listTitle: String
     let addButton: String
@@ -13,21 +13,7 @@ struct WindowPreviewExclusionStrings {
 
 extension FeatureStrings {
     static func windowPreviewExclusions(_ language: AppLanguage) -> WindowPreviewExclusionStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

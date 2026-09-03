@@ -879,14 +879,6 @@ final class ShelfService: ObservableObject {
         scheduleDockedSync()
     }
 
-    func toggleDocked() {
-        if dockedVisible, dockedExpanded {
-            collapseDocked()
-        } else {
-            expandDocked()
-        }
-    }
-
     /// Shows the docked shelf exactly when the option is on and there is a
     /// reason to (items to keep, a drag to catch, or an explicit open), keeps
     /// it anchored under the menu bar icon, and hides it the moment the shelf
@@ -936,9 +928,7 @@ final class ShelfService: ObservableObject {
 
     /// Borderless Shelf panels need key status after a tile click so standard
     /// keyboard selection commands can reach them without activating the app.
-    private final class KeyableShelfPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-
+    private final class KeyableShelfPanel: KeyablePanel {
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
             let modifiers = event.modifierFlags.intersection([.command, .option, .shift, .control])
             if ShelfSelectionSupport.isClearSelectionShortcut(
@@ -2338,16 +2328,10 @@ final class ShelfService: ObservableObject {
         let panel = KeyableShelfPanel(contentRect: .zero,
                                       styleMask: [.borderless, .nonactivatingPanel],
                                       backing: .buffered, defer: false)
-        panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.becomesKeyOnlyIfNeeded = true
-        panel.hasShadow = false
         // Not movable by background: dragging a tile must start an item drag,
         // not move the whole panel.
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay(hasShadow: false)
+        panel.becomesKeyOnlyIfNeeded = true
         let host = NSHostingController(rootView: ShelfView().environmentObject(self))
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host

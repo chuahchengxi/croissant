@@ -97,8 +97,7 @@ final class BrightnessService: ObservableObject {
     /// Media-key tap, alive while pointer routing or the optional overlay is
     /// on and Accessibility is granted. Its mask covers system-defined events
     /// only, so ordinary typing never touches it.
-    private var keyTap: CFMachPort?
-    private var keyTapSource: CFRunLoopSource?
+    private let keyTap = EventTap()
     /// Second tap for keyboards that send brightness as an ordinary key
     /// press instead of a media key. Every keystroke in the session passes
     /// through it, so it runs on its own thread: the window server waits for
@@ -667,35 +666,21 @@ final class BrightnessService: ObservableObject {
     }
 
     private func installKeyTap() {
-        guard keyTap == nil else { return }
+        guard !keyTap.isRunning else { return }
         let systemDefined = CGEventType(rawValue: CleaningSystemKeyEvent.systemDefinedEventTypeRawValue)!
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else { return Unmanaged.passUnretained(event) }
             let service = Unmanaged<BrightnessService>.fromOpaque(userInfo).takeUnretainedValue()
             return service.handleKeyEvent(type: type, event: event)
         }
-        guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap,
-                                          place: .headInsertEventTap,
-                                          options: .defaultTap,
-                                          eventsOfInterest: CGEventMask(1 << systemDefined.rawValue),
-                                          callback: callback,
-                                          userInfo: Unmanaged.passUnretained(self).toOpaque())
-        else { return }
-        keyTap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        keyTapSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        keyTap.start(tap: .cgSessionEventTap,
+                     eventsOfInterest: CGEventMask(1 << systemDefined.rawValue),
+                     callback: callback,
+                     userInfo: Unmanaged.passUnretained(self).toOpaque())
     }
 
     private func removeKeyTap() {
-        guard let tap = keyTap else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        if let keyTapSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), keyTapSource, .commonModes)
-        }
-        keyTapSource = nil
-        keyTap = nil
+        keyTap.stop()
     }
 
     // MARK: - Brightness keys on other keyboards
@@ -966,7 +951,7 @@ final class BrightnessService: ObservableObject {
     /// Both halves are swallowed so the system never performs the same step.
     private func handleKeyEvent(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let keyTap { CGEvent.tapEnable(tap: keyTap, enable: true) }
+            keyTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         guard type.rawValue == CleaningSystemKeyEvent.systemDefinedEventTypeRawValue,

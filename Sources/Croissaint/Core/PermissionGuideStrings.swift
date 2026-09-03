@@ -7,7 +7,7 @@ import Foundation
 /// person through System Settings and notices the grant by itself. Same
 /// contract as the other FeatureStrings structs: memberwise init in
 /// declaration order, one static per language, all in this file.
-struct PermissionGuideStrings {
+struct PermissionGuideStrings: LanguageVariants {
     let title: String
     let stepOpen: String
     let stepToggle: String
@@ -19,21 +19,7 @@ struct PermissionGuideStrings {
 
 extension FeatureStrings {
     static func permissionGuide(_ language: AppLanguage) -> PermissionGuideStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

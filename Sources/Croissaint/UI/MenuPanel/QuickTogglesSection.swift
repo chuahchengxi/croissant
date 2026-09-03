@@ -48,19 +48,9 @@ struct PanelQuickTogglesView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Label(FeatureStrings.quickToggles(l10n.language).pageTitle, systemImage: "togglepower")
-                .font(.system(size: 12, weight: .semibold))
-            Spacer()
-            Button(action: onClose) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .help(l10n.s.uninstallerCancel)
-        }
+        PanelSectionHeader(title: FeatureStrings.quickToggles(l10n.language).pageTitle,
+                           systemImage: "togglepower",
+                           onClose: onClose)
     }
 }
 

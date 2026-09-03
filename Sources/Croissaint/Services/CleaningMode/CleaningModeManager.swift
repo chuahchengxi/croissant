@@ -35,8 +35,7 @@ final class CleaningModeManager: ObservableObject {
     /// wiping the keyboard cannot complete the gesture accidentally.
     let unlockThreshold = 5
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var overlays: [NSPanel] = []
     private var screenObserver: NSObjectProtocol?
 
@@ -106,10 +105,7 @@ final class CleaningModeManager: ObservableObject {
             | (1 << CGEventType.scrollWheel.rawValue)
             | (1 << Self.systemDefinedEventType.rawValue)
             | (1 << Self.gestureEventType.rawValue)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
+        guard eventTap.start(
             eventsOfInterest: CGEventMask(mask),
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -120,19 +116,11 @@ final class CleaningModeManager: ObservableObject {
         ) else {
             return false
         }
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         return true
     }
 
     private func removeTap() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
     }
 
     /// The tap callback. Its run-loop source lives on the main run loop, so this
@@ -141,7 +129,7 @@ final class CleaningModeManager: ObservableObject {
         // The system disables taps that stall or when the session locks; re-arm so
         // the keyboard stays locked instead of silently coming back.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return nil
         }
 

@@ -26,10 +26,13 @@ struct AdvancedSettings: View {
         Form {
             Section("Menu bar privacy") {
                 Toggle("Hide recording & camera indicators", isOn: $indicatorCloakEnabled)
+                    .disabled(!IndicatorCloakService.isSupported)
                     .onChange(of: indicatorCloakEnabled) { _, _ in
                         IndicatorCloakService.shared.syncWithPreferences()
                     }
-                Text("Covers the purple screen-recording dot and the camera/microphone indicators with a patch of the surrounding menu bar while something is capturing. Nothing about capture changes — only what you see. No extra permission needed.")
+                Text(IndicatorCloakService.isSupported
+                     ? "Covers the purple screen-recording dot and the camera/microphone indicators with a patch of the surrounding menu bar while something is capturing. Nothing about capture changes — only what you see. No extra permission needed."
+                     : "Unavailable on this version of macOS: the system now draws the recording and camera indicators above every window an app is allowed to place, so nothing can cover them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

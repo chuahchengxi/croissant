@@ -1196,20 +1196,6 @@ final class ScreenshotEditorController: NSObject, NSWindowDelegate {
         return ClipboardPayload(png: png, tiff: bitmap.tiffRepresentation)
     }
 
-    @discardableResult
-    static func copyClipboardPayload(_ payload: ClipboardPayload) -> Bool {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        let item = NSPasteboardItem()
-        if let png = payload.png {
-            item.setData(png, forType: .png)
-        }
-        if let tiff = payload.tiff {
-            item.setData(tiff, forType: .tiff)
-        }
-        return pasteboard.writeObjects([item])
-    }
-
     func save() {
         guard let image = model.exportImage(),
               let data = ScreenshotRenderer.pngData(from: image)

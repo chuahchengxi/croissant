@@ -6,7 +6,7 @@ import Foundation
 /// Localized strings for the command bar, the type-and-run field that finds
 /// everything the app can do. Action rows reuse each feature's own strings;
 /// only the bar's chrome lives here.
-struct CommandBarFeatureStrings {
+struct CommandBarFeatureStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let panelCaption: String
@@ -162,21 +162,7 @@ struct CommandBarFeatureStrings {
 
 extension FeatureStrings {
     static func commandBar(_ language: AppLanguage) -> CommandBarFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

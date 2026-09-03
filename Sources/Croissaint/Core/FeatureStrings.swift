@@ -5,93 +5,23 @@ import Foundation
 
 enum FeatureStrings {
     static func settingsCategories(_ language: AppLanguage) -> SettingsCategoryStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func clipboard(_ language: AppLanguage) -> ClipboardFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func windowLayout(_ language: AppLanguage) -> WindowLayoutFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func monitorAlerts(_ language: AppLanguage) -> MonitorAlertFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func mixer(_ language: AppLanguage) -> MixerFeatureStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 
     static func whatsAppDownloads(_ language: AppLanguage) -> WhatsAppDownloadStrings {
@@ -99,7 +29,7 @@ enum FeatureStrings {
     }
 }
 
-struct MixerFeatureStrings {
+struct MixerFeatureStrings: LanguageVariants {
     let hideInactiveApps: String
 
     static let enUS = MixerFeatureStrings(hideInactiveApps: "Hide inactive apps")
@@ -284,7 +214,7 @@ extension MonitorAlertFeatureStrings {
     )
 }
 
-struct SettingsCategoryStrings {
+struct SettingsCategoryStrings: LanguageVariants {
     let essentials: String
     let windowsControls: String
     let files: String
@@ -401,7 +331,7 @@ struct SettingsCategoryStrings {
     )
 }
 
-struct ClipboardFeatureStrings {
+struct ClipboardFeatureStrings: LanguageVariants {
     let title: String
     let enable: String
     let caption: String
@@ -1116,7 +1046,7 @@ struct ClipboardFeatureStrings {
     )
 }
 
-struct WindowLayoutFeatureStrings {
+struct WindowLayoutFeatureStrings: LanguageVariants {
     let title: String
     let caption: String
     let showInPanel: String
@@ -1896,7 +1826,7 @@ struct WindowLayoutFeatureStrings {
     )
 }
 
-struct MonitorAlertFeatureStrings {
+struct MonitorAlertFeatureStrings: LanguageVariants {
     let section: String
     let caption: String
     let notificationsDenied: String

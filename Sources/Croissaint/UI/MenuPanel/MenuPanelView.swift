@@ -84,6 +84,14 @@ struct MenuPanelView: View {
     @State private var updateBannerHeight: CGFloat = 0
     @State private var selectedSection: PanelSectionID = PanelLayout.order.first ?? .keepAwake
     @State private var selectedMetric: MetricDetailKind?
+    /// The panel carries six Accessibility affordances of its own (keep-awake's
+    /// pointer nudge, brightness keys, the precise volume roller, the window
+    /// layout row). Settings and the feature hub announce themselves as
+    /// permission surfaces so a grant made in System Settings lands in the UI
+    /// at once; the panel never did, which left those rows insisting the
+    /// permission was missing after it had been given. One demand for the whole
+    /// panel covers every row in it, present and future.
+    @State private var permissionDemandID = UUID()
     @FocusState private var focusedSection: PanelSectionID?
 
     /// Cap the panel to the usable screen height so it never overflows the menu
@@ -107,11 +115,13 @@ struct MenuPanelView: View {
             applyFocus(panelFocus.request)
             KeepAwakeManager.shared.refreshPasswordlessStatus()
             syncMonitorSampling()
+            Permissions.shared.setActivePermissionSurface(permissionDemandID, visible: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: .menuPanelWillShow)) { _ in
             syncMonitorSampling()
         }
         .onDisappear {
+            Permissions.shared.setActivePermissionSurface(permissionDemandID, visible: false)
             if !panelFocus.isSwitchingMetricAnchor {
                 SystemMonitor.shared.setMenuPanelNeeds(.none)
             }

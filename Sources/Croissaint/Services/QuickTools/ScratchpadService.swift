@@ -32,9 +32,7 @@ final class ScratchpadService: ObservableObject {
 
     private let hotkey = QuickToolHotkey(id: 18)
     private var panel: NSPanel?
-    private var keyMonitor: Any?
-    private var localClickMonitor: Any?
-    private var outsideClickMonitor: Any?
+    private let dismissMonitors = PanelDismissMonitors()
     private weak var textView: NSTextView?
     private var pendingSave: DispatchWorkItem?
     private var document: ScratchpadDocument?
@@ -110,7 +108,7 @@ final class ScratchpadService: ObservableObject {
     func hide() {
         guard panel != nil else { return }
         flushSave()
-        removeMonitors()
+        dismissMonitors.removeAll()
         panel?.orderOut(nil)
         isPinned = false
         isPreviewing = false
@@ -358,27 +356,17 @@ final class ScratchpadService: ObservableObject {
 
     /// Borderless panels refuse key status by default; the pad needs it so
     /// typing and Esc work without activating the app.
-    private final class KeyableScratchpadPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyableScratchpadPanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 300),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 300),
                                            styleMask: [.borderless, .nonactivatingPanel, .resizable],
                                            backing: .buffered,
                                            defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
-        // Dragging inside the pad must select text, never move the window;
-        // the header strip is the handle.
-        panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.hasShadow = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        // Not movable by background: dragging inside the pad must select
+        // text, never move the window; the header strip is the handle.
+        panel.configureAsOverlay()
         panel.contentMinSize = NSSize(width: 280, height: 220)
         let host = NSHostingController(rootView: ScratchpadView())
         // No preferred-size tracking: the pad is user-resizable and the view
@@ -424,8 +412,8 @@ final class ScratchpadService: ObservableObject {
     }
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
+        dismissMonitors.removeAll()
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
             if event.keyCode == UInt16(kVK_Escape) {
                 // Mid-composition Esc belongs to the input method, not the pad.
@@ -436,40 +424,10 @@ final class ScratchpadService: ObservableObject {
                 return nil
             }
             return event
-        }
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideClick else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible, self.dismissesOnOutsideClick else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-        }
-    }
-
-    /// A click on the pad's own edge (its resize border) still belongs to it.
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
-    }
-
-    private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
+        })
+        // No activation observer: the pad stays up behind other apps.
+        dismissMonitors.install(for: panel,
+                                isArmed: { [weak self] in self?.dismissesOnOutsideClick ?? false },
+                                onOutsideClick: { [weak self] in self?.hide() })
     }
 }

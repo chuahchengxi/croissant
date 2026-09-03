@@ -26,13 +26,6 @@ enum FloatingPanel {
     }
 }
 
-/// Transparent interaction layer: forwards clicks, blocks SwiftUI hit-testing underneath.
-final class TapOnlyContainerView: NSView {
-    var onTap: (() -> Void)?
-    override func hitTest(_ point: NSPoint) -> NSView? { self }
-    override func mouseUp(with event: NSEvent) { onTap?() }
-}
-
 // MARK: - View model shared with SwiftUI
 
 final class DesktopViewModel: ObservableObject {
@@ -381,13 +374,6 @@ final class DesktopPetController {
         if vm.buddyVisible != (want && pet.snapshot.species != nil) {
             vm.buddyVisible = want && pet.snapshot.species != nil
         }
-    }
-
-    func setVisible(_ visible: Bool) {
-        if visible { window?.makeKeyAndOrderFront(nil) }
-        else { window?.orderOut(nil) }
-        isShown = window?.isVisible ?? false
-        vm.buddyVisible = isShown
     }
 
     private func setupWindow() {

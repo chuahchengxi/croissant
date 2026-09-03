@@ -25,9 +25,19 @@ IDENTITY="Croissaint Utils Signing"
 KC="$HOME/Library/Keychains/croissaint-signing.keychain-db"
 KCPASS="croissaint-signing"
 
+# Being listed is not the same as being usable. A keychain whose password no
+# longer matches ours still shows its identity in find-identity, while every
+# signing attempt fails with errSecInternalComponent — which is how a build
+# silently falls back to ad-hoc, and how this check used to report success over
+# an identity that could not sign. Unlocking is the cheap proof: it is the thing
+# that was actually broken, and unlike a test signature it never waits on a GUI
+# prompt, so this stays safe to run from a script or CI.
 if security find-identity -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
-    echo "✓ Signing identity already installed."
-    exit 0
+    if security unlock-keychain -p "$KCPASS" "$KC" 2>/dev/null; then
+        echo "✓ Signing identity already installed."
+        exit 0
+    fi
+    echo "Existing '$IDENTITY' keychain does not unlock; rebuilding it."
 fi
 
 WORK="$(mktemp -d)"

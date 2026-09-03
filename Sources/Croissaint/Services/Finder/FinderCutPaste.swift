@@ -727,13 +727,7 @@ final class FinderCutPaste: ObservableObject {
         let panel = NSPanel(contentRect: .zero,
                             styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay(level: .statusBar, hasShadow: false)
         let host = NSHostingController(rootView: CutFeedbackView().environmentObject(self))
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host

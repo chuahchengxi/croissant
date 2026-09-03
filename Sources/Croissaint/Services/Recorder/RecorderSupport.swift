@@ -674,13 +674,4 @@ enum RecorderSupport {
         freeBytes < minimumFreeBytesToContinue
     }
 
-    /// Rough size of one second of master, used only to tell the person what
-    /// a long recording will cost before they start one.
-    static func estimatedBytesPerSecond(pixelSize: CGSize, fps: Int) -> Int64 {
-        let bits = averageBitRate(width: Int(pixelSize.width),
-                                  height: Int(pixelSize.height),
-                                  fps: fps,
-                                  quality: takeQuality)
-        return Int64(Double(bits) / 8)
-    }
 }

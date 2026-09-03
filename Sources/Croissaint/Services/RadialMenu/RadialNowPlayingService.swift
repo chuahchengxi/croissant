@@ -99,13 +99,7 @@ final class RadialNowPlayingService {
                             backing: .buffered,
                             defer: false)
         panel.title = "Now Playing"
-        panel.level = .statusBar
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.hidesOnDeactivate = false
-        panel.isReleasedWhenClosed = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        panel.configureAsOverlay(level: .statusBar, transient: true)
         self.panel = panel
         return panel
     }

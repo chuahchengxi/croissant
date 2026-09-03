@@ -96,11 +96,7 @@ final class CommandBarService: ObservableObject {
     private let hotkey = QuickToolHotkey(id: 20)
     private var rowHotkeys: [QuickToolHotkey] = []
     private var panel: NSPanel?
-    private var keyMonitor: Any?
-    private var outsideClickMonitor: Any?
-    private var localClickMonitor: Any?
-    private var flagsMonitor: Any?
-    private var activationObserver: NSObjectProtocol?
+    private let dismissMonitors = PanelDismissMonitors()
 
     private var catalog: [CommandBarEntry] = []
     let scriptRunner = CommandBarScriptRunner()
@@ -2327,24 +2323,15 @@ final class CommandBarService: ObservableObject {
 
     /// Borderless panels refuse key status by default, and the bar's field
     /// needs it for typing while the target app stays active.
-    private final class KeyableBarPanel: NSPanel {
-        override var canBecomeKey: Bool { true }
-    }
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = KeyableBarPanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 380),
+        let panel = KeyablePanel(contentRect: NSRect(x: 0, y: 0, width: 560, height: 380),
                                     styleMask: [.borderless, .nonactivatingPanel],
                                     backing: .buffered,
                                     defer: false)
         panel.title = "Croissaint"
-        panel.isReleasedWhenClosed = false
-        panel.isMovableByWindowBackground = false
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.backgroundColor = .clear
-        panel.isOpaque = false
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        panel.configureAsOverlay()
         let host = NSHostingController(rootView: CommandBarView())
         host.sizingOptions = .preferredContentSize
         panel.contentViewController = host
@@ -2417,8 +2404,8 @@ final class CommandBarService: ObservableObject {
     // MARK: - Monitors
 
     private func installMonitors(for panel: NSPanel) {
-        removeMonitors()
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
+        dismissMonitors.removeAll()
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
 
             // While a language is composing a character (Japanese, Korean,
@@ -2533,7 +2520,7 @@ final class CommandBarService: ObservableObject {
             default:
                 // ⌘1…⌘9 run by position; plain digits belong to the field.
                 if event.modifierFlags.contains(.command),
-                   let index = Self.digitIndex(for: event.keyCode) {
+                   let index = PanelKeys.digitIndex(for: event.keyCode) {
                     self.run(at: index)
                     return nil
                 }
@@ -2566,62 +2553,21 @@ final class CommandBarService: ObservableObject {
                 if case .naming = self.mode { self.aliasWarning = nil }
                 return event
             }
-        }
-        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+        })
+        dismissMonitors.add(NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             guard let self else { return event }
             let held = event.modifierFlags.contains(.command)
             if held != self.commandIsHeld { self.commandIsHeld = held }
             return event
-        }
-        let mouseEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return event }
-            if event.window !== panel, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-            return event
-        }
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseEvents) { [weak self, weak panel] event in
-            guard let self, let panel, panel.isVisible else { return }
-            if event.windowNumber != panel.windowNumber, !Self.mouseIsInside(panel) {
-                self.hide()
-            }
-        }
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
-            else { return }
-            self.hide()
-        }
+        })
+        dismissMonitors.install(for: panel,
+                                onOutsideClick: { [weak self] in self?.hide() },
+                                onOtherAppActivated: { [weak self] in self?.hide() })
     }
 
     private func removeMonitors() {
-        if let keyMonitor {
-            NSEvent.removeMonitor(keyMonitor)
-            self.keyMonitor = nil
-        }
-        if let localClickMonitor {
-            NSEvent.removeMonitor(localClickMonitor)
-            self.localClickMonitor = nil
-        }
-        if let outsideClickMonitor {
-            NSEvent.removeMonitor(outsideClickMonitor)
-            self.outsideClickMonitor = nil
-        }
-        if let flagsMonitor {
-            NSEvent.removeMonitor(flagsMonitor)
-            self.flagsMonitor = nil
-        }
+        dismissMonitors.removeAll()
         commandIsHeld = false
-        if let activationObserver {
-            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
-            self.activationObserver = nil
-        }
     }
 
     /// True while an input method is still composing in the field. The panel
@@ -2631,22 +2577,4 @@ final class CommandBarService: ObservableObject {
         return responder.hasMarkedText()
     }
 
-    private static func mouseIsInside(_ panel: NSPanel) -> Bool {
-        panel.frame.insetBy(dx: -2, dy: -2).contains(NSEvent.mouseLocation)
-    }
-
-    private static func digitIndex(for keyCode: UInt16) -> Int? {
-        switch Int(keyCode) {
-        case kVK_ANSI_1: return 0
-        case kVK_ANSI_2: return 1
-        case kVK_ANSI_3: return 2
-        case kVK_ANSI_4: return 3
-        case kVK_ANSI_5: return 4
-        case kVK_ANSI_6: return 5
-        case kVK_ANSI_7: return 6
-        case kVK_ANSI_8: return 7
-        case kVK_ANSI_9: return 8
-        default: return nil
-        }
-    }
 }

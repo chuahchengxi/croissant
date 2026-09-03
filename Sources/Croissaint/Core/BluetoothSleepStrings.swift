@@ -6,7 +6,7 @@ import Foundation
 /// Strings for the Bluetooth on sleep feature. Same contract as the other
 /// FeatureStrings structs: memberwise init with labeled arguments in
 /// declaration order, one static per language, all in this file.
-struct BluetoothSleepStrings {
+struct BluetoothSleepStrings: LanguageVariants {
     let pageTitle: String
     let hubDescription: String
     let enable: String
@@ -18,21 +18,7 @@ struct BluetoothSleepStrings {
 
 extension FeatureStrings {
     static func bluetoothSleep(_ language: AppLanguage) -> BluetoothSleepStrings {
-        switch language {
-        case .enUS: return .enUS
-        case .ptBR: return .ptBR
-        case .tr: return .tr
-        case .ru: return .ru
-        case .es: return .es
-        case .de: return .de
-        case .fr: return .fr
-        case .it: return .it
-        case .ja: return .ja
-        case .ko: return .ko
-        case .zhHans: return .zhHans
-        case .zhTW: return .zhTW
-        case .zhHK: return .zhHK
-        }
+        .forLanguage(language)
     }
 }
 

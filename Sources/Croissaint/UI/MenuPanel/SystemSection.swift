@@ -42,25 +42,12 @@ struct SystemSection: View {
         PanelSection(.system, title: l10n.s.systemSection, collapsible: collapsible,
                      supportsEditing: true,
                      resetAction: resetPanelDefaults) { editing in
-            VStack(alignment: .leading, spacing: 10) {
-                let currentBlocks = blocks(editing: editing)
-                ForEach(Array(currentBlocks.enumerated()), id: \.element) { index, block in
-                    if index > 0 { Divider() }
-                    PanelReorderableItem(item: block,
-                                         isEnabled: editing,
-                                         order: blockOrderBinding,
-                                         dragging: $draggingBlock) {
-                        HStack(alignment: .top, spacing: 8) {
-                            if editing {
-                                PanelDragHandle()
-                            }
-                            blockContent(block, editing: editing)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
+            PanelReorderableBlocks(blocks: blocks(editing: editing),
+                                   editing: editing,
+                                   order: blockOrderBinding,
+                                   dragging: $draggingBlock) { block in
+                blockContent(block, editing: editing)
             }
-            .panelCard()
         }
         .onReceive(monitor.$snapshot) { _ in
             // The breakdown forks `ps` (and walks IORegistry for GPU), so refresh it

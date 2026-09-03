@@ -23,8 +23,7 @@ final class SmoothScrollService: ObservableObject {
     /// True while the event tap is installed.
     @Published private(set) var isRunning = false
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let eventTap = EventTap()
     private var frameTimer: Timer?
     /// Remaining glide distance per axis, in pixels. Touched only on the main
     /// thread (tap callback and timer both live on the main run loop).
@@ -71,16 +70,13 @@ final class SmoothScrollService: ObservableObject {
     func suspend() { stop() }
 
     private func start() {
-        guard tap == nil else {
+        guard !eventTap.isRunning else {
             MouseAppExceptions.shared.setSourceTracking(true, for: .smoothScroll)
             isRunning = true
             return
         }
         MouseAppExceptions.shared.setSourceTracking(true, for: .smoothScroll)
-        guard let tap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
+        guard eventTap.start(
             eventsOfInterest: CGEventMask(1 << CGEventType.scrollWheel.rawValue),
             callback: { _, type, event, userInfo in
                 guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -93,25 +89,12 @@ final class SmoothScrollService: ObservableObject {
             isRunning = false
             return
         }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
         isRunning = true
     }
 
     private func stop() {
         MouseAppExceptions.shared.setSourceTracking(false, for: .smoothScroll)
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        eventTap.stop()
         stopGlide()
         isRunning = false
     }
@@ -119,7 +102,7 @@ final class SmoothScrollService: ObservableObject {
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         // macOS disables taps that stall or when the session locks; re-arm.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            eventTap.reArm()
             return Unmanaged.passUnretained(event)
         }
         guard type == .scrollWheel else { return Unmanaged.passUnretained(event) }
