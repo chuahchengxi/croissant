@@ -7239,10 +7239,10 @@ struct MetricsTests {
             expect(installerScript.contains(step),
                    "installer script reports the \(step) step")
         }
-        expect(installerScript.contains("spctl --status"),
-               "installer script skips Gatekeeper assessment when the user disabled it")
-        expect(installerScript.contains("Signature=adhoc"),
-               "installer accepts the fork's ad-hoc signed builds that spctl always rejects")
+        expect(installerScript.contains("codesign -v --deep --strict -R=\"$VERIFY_REQ\"")
+                && !installerScript.contains("spctl --status")
+                && !installerScript.contains("Signature=adhoc"),
+               "installer accepts any signed build satisfying the fork's identifier — ad-hoc, legacy self-signed, or Developer ID — not just Gatekeeper-approved or ad-hoc")
         let dmgVerification = installerScript.range(of: "hdiutil imageinfo")
         let dmgMount = installerScript.range(of: "/usr/bin/hdiutil attach")
         expect(dmgVerification != nil && dmgMount != nil

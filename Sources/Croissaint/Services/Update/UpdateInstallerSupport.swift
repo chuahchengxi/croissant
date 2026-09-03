@@ -107,25 +107,13 @@ enum UpdateInstallerSupport {
                 note fail-version
                 BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$STAGE/Contents/Info.plist" 2>/dev/null)"
                 if [ "$BUNDLE_VERSION" = "$EXPECTED_VERSION" ]; then
-                    # When the user disabled Gatekeeper, spctl cannot assess anything
-                    # and rejects even a healthy bundle; the codesign identity check
-                    # below stays as the gate in that case.
-                    GATEKEEPER_OK=0
-                    if /usr/sbin/spctl --status 2>/dev/null | /usr/bin/grep -q disabled; then
-                        GATEKEEPER_OK=1
-                    elif /usr/sbin/spctl -a -t exec "$STAGE" >/dev/null 2>&1; then
-                        GATEKEEPER_OK=1
-                    fi
+                    # Fork releases are not notarized, so spctl rejects them; the
+                    # strict codesign check below is the gate. It passes for a
+                    # Developer ID build, a legacy self-signed build, and an
+                    # ad-hoc build alike — each has the fork's bundle identifier.
                     VERIFY_REQ='identifier "com.croissaint.utils"'
                     note fail-verify
-                    # A Developer ID build passes Gatekeeper assessment directly.
-                    # The fork's ad-hoc build can never satisfy spctl, so it is
-                    # accepted on the strength of the full strict signature
-                    # validation instead. codesign spells an ad-hoc signature
-                    # "Signature=adhoc" (and "TeamIdentifier=not set").
-                    SIGNED_ADHOC="$(/usr/bin/codesign -dv "$STAGE" 2>&1 | /usr/bin/grep -c 'Signature=adhoc')"
-                    if /usr/bin/codesign -v --deep --strict -R="$VERIFY_REQ" "$STAGE" 2>/dev/null \
-                        && { [ "$GATEKEEPER_OK" = 1 ] || [ "$SIGNED_ADHOC" -ge 1 ]; }; then
+                    if /usr/bin/codesign -v --deep --strict -R="$VERIFY_REQ" "$STAGE" 2>/dev/null; then
                         note fail-swap
                         # The backup name is unique per run: after an elevated
                         # install the old bundle is root-owned, a later user-run
