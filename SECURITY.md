@@ -36,4 +36,4 @@ Security fixes land on the latest released version. Before you report, please ma
 
 ## Scope
 
-Croissaint runs locally and ships as a signed and notarized macOS app. The reports that matter most are the ones that could affect the integrity of the app or its self update flow, or that could let the app's permissions be misused. Issues in the outside services the app merely talks to, like GitHub's releases API or the speed test endpoint, are best taken to those providers.
+Croissaint runs locally and ships as a signed but currently unnotarized macOS app. The reports that matter most are the ones that could affect the integrity of the app or its self update flow, or that could let the app's permissions be misused. Issues in the outside services the app merely talks to, like GitHub's releases API or the speed test endpoint, are best taken to those providers.

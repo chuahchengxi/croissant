@@ -58,6 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // quitting to relaunch under the new name, so skip the rest of startup.
         if BundleMigration.run() { return }
 
+        // 0.1.6 intentionally changes from the ad-hoc bridge signature to the
+        // stable release identity. macOS drops the old TCC grants once, so put
+        // updated installs directly back on the permission step while leaving
+        // their feature choices and ordinary settings untouched.
+        PermissionTransitionInfo.prepareIfNeeded(appVersion: AppInfo.version)
+
         // Shape a clean install before any feature can create a listener,
         // timer or shortcut. The onboarding can replace this set after the
         // person chooses what they actually want.

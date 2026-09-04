@@ -15456,6 +15456,37 @@ struct MetricsTests {
                "an ordinary stored shortcut still reads back")
         expect(!backupKeys.contains(DefaultsKey.startupDidNotFinish),
                "the backup never carries a note about a start that did not finish")
+
+        let permissionTransitionSuite = "com.croissaint.tests.permission-transition.\(UUID().uuidString)"
+        if let transitionDefaults = UserDefaults(suiteName: permissionTransitionSuite) {
+            transitionDefaults.set(true, forKey: DefaultsKey.hasOnboarded)
+            transitionDefaults.set(true, forKey: DefaultsKey.switcherEnabled)
+            expect(PermissionTransitionInfo.prepareIfNeeded(
+                appVersion: "0.1.5", defaults: transitionDefaults
+            ) == false,
+            "the ad-hoc bridge release leaves completed setup alone")
+            expect(PermissionTransitionInfo.prepareIfNeeded(
+                appVersion: "0.1.6", defaults: transitionDefaults
+            ) == true,
+            "the stable-signature release schedules one fresh permission setup")
+            expect(!transitionDefaults.bool(forKey: DefaultsKey.hasOnboarded)
+                    && transitionDefaults.integer(forKey: DefaultsKey.onboardingStep) == 2,
+                   "the 0.1.6 transition reopens the permission step")
+            expect(transitionDefaults.bool(forKey: DefaultsKey.switcherEnabled),
+                   "the permission transition preserves ordinary settings")
+            transitionDefaults.set(true, forKey: DefaultsKey.hasOnboarded)
+            transitionDefaults.set(0, forKey: DefaultsKey.onboardingStep)
+            expect(PermissionTransitionInfo.prepareIfNeeded(
+                appVersion: "0.1.6", defaults: transitionDefaults
+            ) == false,
+            "the permission setup is not replayed after it has been scheduled once")
+            expect(transitionDefaults.bool(forKey: DefaultsKey.hasOnboarded)
+                    && transitionDefaults.integer(forKey: DefaultsKey.onboardingStep) == 0,
+                   "a later 0.1.6 launch keeps completed setup complete")
+            transitionDefaults.removePersistentDomain(forName: permissionTransitionSuite)
+        } else {
+            expect(false, "permission-transition defaults suite can be created")
+        }
         expect(backupKeys.contains(DefaultsKey.hasOnboarded)
                 && backupKeys.contains(DefaultsKey.featuresOnboardingVersion)
                 && backupKeys.contains(DefaultsKey.lastUpdateIntroVersion),

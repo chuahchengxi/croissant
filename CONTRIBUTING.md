@@ -54,16 +54,14 @@ security unlock-keychain ~/Library/Keychains/login.keychain-db
 `./build.sh --allow-adhoc` builds without an identity anyway. Use it for a
 throwaway build or on CI, not for anything you plan to grant permissions to.
 
-Official releases work differently. CI signs the app and DMG with an Apple
-**Developer ID**, using credentials isolated in the protected `release-signing`
-environment, then
-**notarizes** and staples them through `Tools/notarize.sh`, with secrets
-`NOTARY_API_KEY_P8`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID`, so downloads open
-with no Gatekeeper warning. `build.sh` prefers the Developer ID identity when it
-is present, with the hardened runtime and `Resources/Croissaint.entitlements`,
-and falls back to the self signed identity. Ad hoc is never automatic; CI asks
-for it explicitly with `--allow-adhoc`, since a runner has no granted
-permissions to lose.
+Official releases use the same stable self-signed identity from 0.1.6 onward,
+imported from protected CI secrets so its designated requirement stays constant
+for every user. This preserves permissions but does not satisfy Gatekeeper:
+downloads still need the documented quarantine removal because the project has
+no Apple Developer ID or notarization credentials. 0.1.5 is the deliberate
+exception, built with `--force-adhoc` as a bridge the 0.1.4 updater can accept.
+The release workflow verifies both sides of that transition and refuses an
+ad-hoc build for any later tag.
 
 ## Project layout
 

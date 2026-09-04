@@ -1,7 +1,7 @@
 name: Release
 
-# Push a tag (vX.Y.Z) and CI does the whole release: build, sign (Developer ID +
-# hardened runtime), notarize the app and the DMG, staple both, verify, and
+# Push a tag (vX.Y.Z) and CI does the whole release: build, apply the release
+# signing policy, optionally notarize when Apple credentials exist, verify, and
 # publish the GitHub release with the styled DMG. Releases are NOT cut locally, so
 # nothing ever has to enable/disable a workflow. If a run hits a transient
 # failure, re-run it with `gh run rerun <run-id>` (or from the Actions tab); no
@@ -33,14 +33,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Unit tests already gate this exact commit in CI on main; the release
-      # run goes straight to building so the tag reaches users faster. Signing
-      # and notarization happen when their secrets are configured; without
-      # them ci-setup-signing.sh and notarize.sh skip and the DMG ships ad-hoc.
+      # run goes straight to building so the tag reaches users faster. 0.1.5
+      # is the sole ad-hoc bridge; later tags require the stable signing secret.
+      # Apple notarization remains optional and is skipped without its secrets.
 
       - name: Set up signing
         env:
           SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
           SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          # 0.1.5 is the ad-hoc bridge accepted by the updater in 0.1.4.
+          # Every later release must use the stable identity so permissions
+          # survive after the one deliberate reset in 0.1.6.
+          REQUIRE_SIGNING: ${{ github.ref_name == 'v0.1.5' && '0' || '1' }}
         run: ./Tools/ci-setup-signing.sh
 
       - name: Verify release version
@@ -55,7 +59,29 @@ jobs:
           fi
 
       - name: Build
-        run: ./build.sh --allow-adhoc
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "v0.1.5" ]]; then
+            ./build.sh --force-adhoc
+          else
+            ./build.sh --allow-adhoc
+          fi
+
+      - name: Verify release signing transition
+        id: signing_policy
+        run: |
+          SIGNATURE="$(codesign -dv build/stage/Croissaint.app 2>&1)"
+          if [[ "$GITHUB_REF_NAME" == "v0.1.5" ]]; then
+            grep -q 'Signature=adhoc' <<< "$SIGNATURE" || {
+              echo "v0.1.5 must be the ad-hoc updater bridge" >&2
+              exit 1
+            }
+            echo "MODE=adhoc" >> "$GITHUB_OUTPUT"
+          elif grep -q 'Signature=adhoc' <<< "$SIGNATURE"; then
+            echo "$GITHUB_REF_NAME must use the stable release identity" >&2
+            exit 1
+          else
+            echo "MODE=stable" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Selftest
         run: ./build/Croissaint --selftest
@@ -125,6 +151,18 @@ jobs:
             echo ""
             if [[ -n "${NOTARY_API_KEY_P8:-}" ]]; then
               echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+            elif [[ "${{ steps.signing_policy.outputs.MODE }}" == "stable" ]]; then
+              echo '## macOS will say this app is damaged. It is not.'
+              echo ''
+              echo 'This build uses Croissaint’s stable self-signed identity so Accessibility and Screen Recording grants survive later updates. It is not Apple-notarized, so Gatekeeper still refuses the quarantined download.'
+              echo ''
+              echo 'Open the .dmg below, drag Croissaint to Applications, then run this once in Terminal:'
+              echo ''
+              echo '```sh'
+              echo 'xattr -dr com.apple.quarantine /Applications/Croissaint.app'
+              echo '```'
+              echo ''
+              echo 'Croissaint opens normally from then on. Requires macOS 14 or later.'
             else
               echo '## macOS will say this app is damaged. It is not.'
               echo ''

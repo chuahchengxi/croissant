@@ -38,6 +38,25 @@ wait $pid 2>/dev/null
 kill $watchdog 2>/dev/null
 ! grep -q 'refusing to sign ad-hoc' "$log"; check "--allow-adhoc is not refused" $?
 
+# 3. The bridge-release flag must choose ad-hoc even when CI imported the
+#    legacy certificate. Observe the real identity-resolution boundary: a
+#    forced build must not ask `security` for an identity at all.
+identity_stub="$STUB/identity-bin"
+mkdir -p "$identity_stub"
+identity_log="$STUB/identity.log"
+printf '%s\n' '#!/bin/sh' \
+    'printf '\''%s\n'\'' "$*" >> "$SIGNING_STUB_LOG"' \
+    'printf '\''  1) ABCDEF "Croissaint Utils Signing"\n'\''' \
+    > "$identity_stub/security"
+chmod +x "$identity_stub/security"
+force_log="$STUB/force.log"
+SIGNING_STUB_LOG="$identity_log" PATH="$identity_stub:$PATH" \
+    ./build.sh --force-adhoc >"$force_log" 2>&1 & pid=$!
+{ sleep 8; kill -9 $pid 2>/dev/null } & watchdog=$!
+wait $pid 2>/dev/null
+kill $watchdog 2>/dev/null
+[[ ! -s "$identity_log" ]]; check "--force-adhoc ignores every installed identity" $?
+
 print -r -- ""
 (( fail )) && print -r -- "FAILED" || print -r -- "All checks passed."
 exit $fail

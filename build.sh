@@ -12,17 +12,20 @@ cd "$(dirname "$0")"
 
 # Flags: --dev builds the local-only "Croissaint (Developer)" variant (its own
 # bundle id, so it coexists with the official app); --install puts it in /Applications;
-# --allow-adhoc permits signing without an identity (see the signing block below).
+# --allow-adhoc permits signing without an identity; --force-adhoc deliberately
+# ignores every identity for the one bridge release that older updaters require.
 DEV=0
 INSTALL=0
 TEST=0
 ALLOW_ADHOC=0
+FORCE_ADHOC=0
 for arg in "$@"; do
     case "$arg" in
         --dev)         DEV=1 ;;
         --install)     INSTALL=1 ;;
         --test)        TEST=1 ;;
         --allow-adhoc) ALLOW_ADHOC=1 ;;
+        --force-adhoc) FORCE_ADHOC=1 ;;
     esac
 done
 
@@ -71,21 +74,26 @@ developer_id_identity() {
 # find-identity print nothing and is indistinguishable from owning no identity
 # at all, so the common case for hitting this is not "fresh clone" — it is a
 # working setup that quietly stopped signing.
-DEVID="$(developer_id_identity)"
-if [[ -n "$DEVID" ]]; then
-    SIGN_MODE=devid
-elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
-    SIGN_MODE=legacy
-elif (( ALLOW_ADHOC )); then
+DEVID=""
+if (( FORCE_ADHOC )); then
     SIGN_MODE=adhoc
 else
-    echo "error: no code signing identity available; refusing to sign ad-hoc." >&2
-    echo "  If you have never set one up:  Tools/setup-signing.sh" >&2
-    echo "  If you have one, the keychain is probably locked:" >&2
-    echo "      security unlock-keychain ~/Library/Keychains/login.keychain-db" >&2
-    echo "  To build anyway:  $0 $@ --allow-adhoc" >&2
-    echo "  Ad-hoc builds lose every granted permission on each rebuild." >&2
-    exit 1
+    DEVID="$(developer_id_identity)"
+    if [[ -n "$DEVID" ]]; then
+        SIGN_MODE=devid
+    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+        SIGN_MODE=legacy
+    elif (( ALLOW_ADHOC )); then
+        SIGN_MODE=adhoc
+    else
+        echo "error: no code signing identity available; refusing to sign ad-hoc." >&2
+        echo "  If you have never set one up:  Tools/setup-signing.sh" >&2
+        echo "  If you have one, the keychain is probably locked:" >&2
+        echo "      security unlock-keychain ~/Library/Keychains/login.keychain-db" >&2
+        echo "  To build anyway:  $0 $@ --allow-adhoc" >&2
+        echo "  Ad-hoc builds lose every granted permission on each rebuild." >&2
+        exit 1
+    fi
 fi
 
 codesign_with_timestamp_retry() {
@@ -557,7 +565,7 @@ sign_bundle() {
     elif [[ "$SIGN_MODE" == legacy ]]; then
         echo "  signing with legacy self-signed identity: $LEGACY_IDENTITY"
     else
-        echo "  signing ad-hoc (--allow-adhoc) — permissions reset on every rebuild"
+        echo "  signing ad-hoc — permissions reset on every rebuild"
     fi
     [[ -f "$helper" ]] && codesign_fan_helper "$helper"
     codesign_app "$bundle"

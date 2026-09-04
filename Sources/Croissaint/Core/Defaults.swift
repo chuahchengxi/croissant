@@ -13,6 +13,7 @@ enum DefaultsKey {
     static let clamshellPreferred = "clamshellPreferred"  // apply closed-lid mode to every session
     static let onboardingStep = "onboardingStep"          // resume point if onboarding is interrupted
     static let featuresOnboardingVersion = "featuresOnboardingVersion" // last feature-tour marker handled
+    static let permissionTransitionVersion = "permissionTransitionVersion" // stable-signature setup already scheduled
     static let lastUpdateIntroVersion = "lastUpdateIntroVersion"
     static let supportUpdateIntroVersion = "supportUpdateIntroVersion"
     static let updateHighlightsSeenVersion = "updateHighlightsSeenVersion"
@@ -599,6 +600,28 @@ enum OnboardingInfo {
     // 3: app languages and support settings.
     // 4: navigable menu panel sections.
     static let currentFeatureSet = 4
+}
+
+/// Moves existing installs through the one signing-identity transition. The
+/// 0.1.5 ad-hoc bridge can be installed by the old updater; 0.1.6 then adopts
+/// the stable self-signed identity, which invalidates TCC grants once. Reopen
+/// only the permission step and preserve every feature choice and preference.
+enum PermissionTransitionInfo {
+    static let releaseVersion = "0.1.6"
+
+    @discardableResult
+    static func prepareIfNeeded(appVersion: String,
+                                defaults: UserDefaults = .standard) -> Bool {
+        guard appVersion == releaseVersion,
+              defaults.string(forKey: DefaultsKey.permissionTransitionVersion) != releaseVersion
+        else { return false }
+
+        defaults.set(releaseVersion, forKey: DefaultsKey.permissionTransitionVersion)
+        guard defaults.bool(forKey: DefaultsKey.hasOnboarded) else { return false }
+        defaults.set(false, forKey: DefaultsKey.hasOnboarded)
+        defaults.set(2, forKey: DefaultsKey.onboardingStep)
+        return true
+    }
 }
 
 /// The one-time tour of a release's headline features, shown right after the

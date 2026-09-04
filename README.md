@@ -173,7 +173,7 @@ Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per 
 brew install --cask chuahchengxi/tap/croissaint
 ```
 
-Released builds are ad-hoc signed as well, and both Homebrew and Safari quarantine whatever they download. That combination makes macOS report the app as **damaged** and offer only *Move to Trash* — it is Gatekeeper refusing an ad-hoc signature, not a corrupt download. Right click then Open does not help: that escape hatch was removed for ad-hoc code in macOS 15, and no *Open Anyway* button appears under System Settings → Privacy & Security either.
+The 0.1.5 bridge release is ad-hoc signed; releases from 0.1.6 onward use a stable self-signed identity so granted permissions survive later updates. Neither is Apple-notarized, and both Homebrew and Safari quarantine what they download. macOS therefore reports the app as **damaged** and offers only *Move to Trash* — Gatekeeper is refusing the signature, not reporting a corrupt download. Right click then Open does not help for the ad-hoc bridge on macOS 15, and no *Open Anyway* button appears under System Settings → Privacy & Security either.
 
 Clear the quarantine flag once and it opens normally from then on:
 
