@@ -6,14 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-04
+
+Croissaint 0.2.0 brings the latest upstream improvements to the fork, with more reliable update installation, new input controls, and a smoother everyday workflow. Croissaint's branding, desktop pets, and fork-specific customizations remain intact.
+
+### Added
+- Quit and close protection for Command-Q and Command-W, with hold-to-confirm, double-press, extra-modifier, and per-app rules.
+- Mouse acceleration control, accidental-click filtering, and extra-button gestures for Spaces, Mission Control, and App Exposé.
+- Timed blur regions in recording edits, timeline scrubbing, and a capture magnifier with pixel-level movement and color copying.
+- Native macOS Shelf sharing, including AirDrop, and an optional clear-on-close setting.
+- Configurable window-layout gaps, top-edge maximization, cross-display window shortcuts, and App Switcher placement options.
+- Clipboard batch deletion and larger history limits, date/time variables for snippets, and paragraph-style OCR output.
+
 ### Changed
 - Merged upstream through `4560cf6`, including quit protection, mouse acceleration and click filtering, recording blur, system Shelf sharing, and input/session fixes. Croissaint branding, desktop pets and the fork's removed online services remain unchanged.
+- Improved scrolling, Dock Preview responsiveness, recording performance, and search navigation.
+- Keep Awake pauses while the Mac is locked and resumes on unlock.
+- This release does not repeat the settings reset introduced in 0.1.6.
 
 ### Fixed
 - Update installers run in their own process session so they survive the app exiting, including administrator-assisted installs.
 - Signing checks the local identity by actually signing, unlocks the dedicated keychain before use, and never replaces an existing identity just because signing fails.
 - Apple signing identities are selected by certificate fingerprint, fixing ambiguous-name errors when multiple Apple Development certificates have the same name.
 - Release signing uses configured credentials consistently instead of forcing an ad-hoc build through notarization.
+- Improved input handling across user-session changes, recording audio, clipboard edge cases, and recovery of saved Shelf items.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
 
 ## [0.1.6] - 2026-09-04
 

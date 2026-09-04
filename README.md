@@ -168,7 +168,7 @@ Croissaint ships from source, and `--install` puts it in Applications for you:
 ./build.sh --install
 ```
 
-Local builds require a signing identity (`Tools/setup-signing.sh`); developer builds can create that local identity automatically. Use `--allow-adhoc` only for throwaway builds. Nothing quarantines a file you built yourself, so it opens straight away — the warnings below only apply to builds you download.
+The command above uses an available signing identity. Without one, build and install the regular app with `./build.sh --force-adhoc --install`; this explicitly avoids selecting an unusable or revoked certificate. No developer account is required. Ad-hoc builds may need Accessibility and Screen Recording permissions granted again after rebuilding. For ongoing local development, `Tools/setup-signing.sh` can create a stable self-signed identity, but it does not provide Apple notarization.
 
 Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per machine:
 
@@ -176,15 +176,7 @@ Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per 
 brew install --cask chuahchengxi/tap/croissaint
 ```
 
-Releases 0.1.5 and 0.1.6 are ad-hoc signed and not Apple-notarized. Future releases state their actual signing status in the release notes. For unnotarized downloads, macOS may report the app as **damaged** — Gatekeeper is refusing the signature, not necessarily reporting a corrupt download. A stable self-signed identity can preserve permissions between builds, but only Developer ID signing plus Apple notarization resolves the distribution trust warning.
-
-Clear the quarantine flag once and it opens normally from then on:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Croissaint.app
-```
-
-This goes away for good once releases are signed with a Developer ID certificate and notarized.
+Release 0.2.0, like 0.1.5 and 0.1.6, is ad-hoc signed and not Apple-notarized. macOS may block a downloaded copy. If you trust its source and integrity, follow [Apple's instructions for opening an unidentified developer's app](https://support.apple.com/en-us/102445) when Open Anyway is available. If macOS reports malware, revoked authorization, or a damaged app, stop and investigate rather than assuming the warning is harmless. Building from the reviewed source is another option. Developer ID signing plus Apple notarization is required for the normal trusted distribution path; people installing the app do not need their own signing identity.
 
 ## Uninstall
 

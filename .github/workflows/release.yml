@@ -154,29 +154,21 @@ jobs:
             elif [[ "${{ steps.signing_policy.outputs.MODE }}" == "developer-id" ]]; then
               echo 'Signed with an Apple Developer ID, but not notarized. macOS may require approval in Privacy & Security. Requires macOS 14 or later.'
             elif [[ "${{ steps.signing_policy.outputs.MODE }}" == "stable" ]]; then
-              echo '## macOS will say this app is damaged. It is not.'
+              echo '## Installation and macOS security'
               echo ''
-              echo 'This build uses Croissaint’s stable self-signed identity so Accessibility and Screen Recording grants survive later updates. It is not Apple-notarized, so Gatekeeper still refuses the quarantined download.'
+              echo 'This build uses a stable self-signed identity. It is not Apple-notarized, and macOS may block a downloaded copy. No signing identity is required on the installing Mac.'
               echo ''
-              echo 'Open the .dmg below, drag Croissaint to Applications, then run this once in Terminal:'
+              echo 'Open the .dmg and drag Croissaint to Applications. If you trust the source and integrity of the app, follow [Apple’s instructions](https://support.apple.com/en-us/102445) when Open Anyway is available. Do not dismiss malware, revoked-authorization, or damaged-app warnings as harmless.'
               echo ''
-              echo '```sh'
-              echo 'xattr -dr com.apple.quarantine /Applications/Croissaint.app'
-              echo '```'
-              echo ''
-              echo 'Croissaint opens normally from then on. Requires macOS 14 or later.'
+              echo 'Requires an Apple Silicon Mac running macOS 14 or later.'
             else
-              echo '## macOS will say this app is damaged. It is not.'
+              echo '## Installation and macOS security'
               echo ''
-              echo 'This build is ad-hoc signed (no notarization credentials configured), so Gatekeeper refuses it and offers only Move to Trash. Right-click then Open does NOT work for ad-hoc code on macOS 15 or later, and no Open Anyway button appears under Privacy & Security.'
+              echo 'This build is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it, but macOS may block a downloaded copy. Accessibility and Screen Recording permissions may need to be granted again after updates.'
               echo ''
-              echo 'Open the .dmg below, drag Croissaint to Applications, then run this once in Terminal:'
+              echo 'Open the .dmg and drag Croissaint to Applications. If you trust the source and integrity of the app, follow [Apple’s instructions](https://support.apple.com/en-us/102445) when Open Anyway is available. Do not dismiss malware, revoked-authorization, or damaged-app warnings as harmless.'
               echo ''
-              echo '```sh'
-              echo 'xattr -dr com.apple.quarantine /Applications/Croissaint.app'
-              echo '```'
-              echo ''
-              echo 'Croissaint opens normally from then on. Requires macOS 14 or later.'
+              echo 'Alternatively, build from the reviewed source with `./build.sh --force-adhoc --install`. Requires an Apple Silicon Mac running macOS 14 or later.'
             fi
             echo "__VRSS_EOF__"
             if [[ "$VERSION" =~ (beta|rc|alpha) ]]; then
