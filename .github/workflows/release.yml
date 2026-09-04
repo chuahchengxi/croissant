@@ -23,12 +23,13 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     env:
-      # Mirrored at job scope so any step can branch on whether real signing
-      # and notarization will happen.
-      SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
-      NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
-      NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-      NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+      # v0.2.0 is deliberately ad-hoc, matching the locally tested build.
+      # Leave stored credentials untouched for later signed releases.
+      SIGNING_CERT_P12: ${{ github.ref_name != 'v0.2.0' && secrets.SIGNING_CERT_P12 || '' }}
+      SIGNING_CERT_PASSWORD: ${{ github.ref_name != 'v0.2.0' && secrets.SIGNING_CERT_PASSWORD || '' }}
+      NOTARY_API_KEY_P8: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_API_KEY_P8 || '' }}
+      NOTARY_KEY_ID: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_KEY_ID || '' }}
+      NOTARY_ISSUER_ID: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_ISSUER_ID || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -38,8 +39,6 @@ jobs:
 
       - name: Set up signing
         env:
-          SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
-          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
           REQUIRE_SIGNING: 0
         run: ./Tools/ci-setup-signing.sh
 
@@ -87,20 +86,12 @@ jobs:
         run: ./build/Croissaint --selftest
 
       - name: Notarize app
-        env:
-          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: ./Tools/notarize.sh build/stage/Croissaint.app
 
       - name: Package DMG
         run: ./Tools/make-dmg.sh
 
       - name: Notarize DMG
-        env:
-          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: ./Tools/notarize.sh dist/*.dmg
 
       - name: Prepare release showcase media

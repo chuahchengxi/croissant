@@ -51,4 +51,11 @@ if NOTARY_KEY_ID=invalid ./Tools/ci-setup-signing.sh >/dev/null 2>&1; then
     echo 'FAIL: notarization without signing credentials was accepted' >&2
     exit 1
 fi
-echo 'PASS: signing guards, duplicate certificate names, force-ad-hoc isolation and incomplete release credentials'
+# The v0.2.0 release must match the explicitly ad-hoc local installation even
+# when the repository has old credentials. A step-level override must not
+# reintroduce a secret after the job-level selection.
+for key in SIGNING_CERT_P12 SIGNING_CERT_PASSWORD NOTARY_API_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID; do
+    grep -Fq "$key: \${{ github.ref_name != 'v0.2.0' && secrets.$key || '' }}" .github/workflows/release.yml
+    [[ "$(grep -c "^[[:space:]]*$key:" .github/workflows/release.yml)" == 1 ]]
+done
+echo 'PASS: signing guards, duplicate certificate names, force-ad-hoc isolation, incomplete release credentials and v0.2.0 release mode'
