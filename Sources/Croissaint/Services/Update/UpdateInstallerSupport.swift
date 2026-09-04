@@ -56,8 +56,11 @@ enum UpdateInstallerSupport {
         }
         cleanup_script() { case "$SCRIPT" in /*) /bin/rm -f "$SCRIPT";; esac; }
         relaunch() {
-            if [ -n "$ASUSER" ] && [ "$(/usr/bin/id -u)" = "0" ]; then
-                /bin/launchctl asuser "$ASUSER" /usr/bin/open "$1" && return
+            if running_as_root; then
+                [ -n "$ASUSER" ] || return 1
+                # asuser selects the GUI session, but does not drop root's uid.
+                /bin/launchctl asuser "$ASUSER" /usr/bin/sudo -n -u "#$ASUSER" /usr/bin/open "$1"
+                return
             fi
             /usr/bin/open "$1"
         }
@@ -77,7 +80,7 @@ enum UpdateInstallerSupport {
         note fail-tempdir
         MNT="$(/usr/bin/mktemp -d)" || { /bin/rm -f "$DMG"; finalize; relaunch "$APP"; cleanup_script; exit 1; }
         note fail-mount
-        if ! /usr/bin/hdiutil attach "$DMG" -nobrowse -quiet -mountpoint "$MNT"; then
+        if ! /usr/bin/hdiutil attach "$DMG" -readonly -nobrowse -quiet -mountpoint "$MNT"; then
             /bin/rmdir "$MNT" 2>/dev/null
             /bin/rm -f "$DMG"
             finalize
@@ -97,10 +100,9 @@ enum UpdateInstallerSupport {
             # Stage the full copy FIRST; the old app is only removed after the
             # copy completed, so a failure mid-copy never leaves the user with no
             # app at all.
-            STAGE="$DEST.update-new"
-            /bin/rm -rf "$STAGE"
             note fail-copy
-            if /usr/bin/ditto "$SRC" "$STAGE"; then
+            STAGE="$(/usr/bin/mktemp -d "$DEST.update-new.XXXXXX")"
+            if [ -n "$STAGE" ] && /usr/bin/ditto "$SRC" "$STAGE"; then
                 # Clear ALL xattrs (quarantine + FinderInfo the DMG round-trip
                 # adds): FinderInfo breaks strict signature verification.
                 /usr/bin/xattr -cr "$STAGE" 2>/dev/null
@@ -118,11 +120,9 @@ enum UpdateInstallerSupport {
                         # The backup name is unique per run: after an elevated
                         # install the old bundle is root-owned, a later user-run
                         # cannot delete that backup, and reusing a fixed name
-                        # would make the NEXT swap fail on it. Strays from
-                        # earlier runs are swept best-effort (an elevated run
-                        # clears even the root-owned ones).
-                        BACKUP="$DEST.update-old.$PID"
-                        /bin/rm -rf "$DEST".update-old "$DEST".update-old.* 2>/dev/null
+                        # would make the NEXT swap fail on it. Keep earlier
+                        # backups untouched: they may be someone's recovery copy.
+                        BACKUP="$DEST.update-old.$PID.${STAGE##*.}"
                         if { [ ! -d "$DEST" ] || /bin/mv "$DEST" "$BACKUP"; } \
                             && /bin/mv "$STAGE" "$DEST"; then
                             LAUNCH="$DEST"
@@ -165,8 +165,8 @@ enum UpdateInstallerSupport {
     /// The shell command run with admin rights when the app's folder is not
     /// writable by the current user. The whole installer travels inline (no
     /// script file that another process could rewrite before root runs it)
-    /// and is detached with nohup so the prompt returns while the installer
-    /// waits for the app to quit.
+    /// and is started in its own session (`DetachedProcess`) so the prompt
+    /// returns immediately and the installer outlives the app it replaces.
     static func elevatedInstallCommand(appPath: String,
                                        dmgPath: String,
                                        pid: Int32,
@@ -177,7 +177,8 @@ enum UpdateInstallerSupport {
         let args = [appPath, dmgPath, "\(pid)", resultPath, "\(uid)", expectedVersion]
             .map(shellSingleQuoted)
             .joined(separator: " ")
-        return "/usr/bin/nohup /bin/sh -c \(script) croissaint-installer \(args) >/dev/null 2>&1 &"
+        return DetachedProcess.detachedShellCommand(
+            quotedArgv: "/bin/sh -c \(script) croissaint-installer \(args)")
     }
 
     /// Whether the next install attempt should go straight through the admin

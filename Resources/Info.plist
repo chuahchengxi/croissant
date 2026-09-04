@@ -55,7 +55,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Croissaint uses Automation to move files in Finder, send items to the Trash and open Terminal commands when you ask for Homebrew actions.</string>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>Croissaint taps individual app audio only to adjust each app's volume in the mixer. Nothing is recorded or leaves your Mac.</string>
+	<string>Croissaint uses each app's audio to adjust its volume in the mixer and to include the Mac's sound in the screen recordings you start. Nothing leaves your Mac.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Croissaint uses Bluetooth only to read the battery level of connected peripherals. Nothing leaves your Mac.</string>
 	<key>NSCameraUsageDescription</key>

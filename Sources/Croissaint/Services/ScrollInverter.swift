@@ -32,8 +32,16 @@ final class ScrollInverter: ObservableObject {
     /// Timestamp (ns, event clock) of the last event carrying a gesture phase —
     /// only touch devices emit those. Read/written solely on the tap callback.
     private var lastGesturePhaseTimestamp: UInt64?
+    private var tapCreationRetryUsed = false
+    private var tapCreationRetryWork: DispatchWorkItem?
 
-    private init() {}
+    private init() {
+        // Fast user switching: the tap goes back while this session is off
+        // screen and is built again from the preferences on the way in.
+        SessionActivity.shared.onChange { [weak self] _ in
+            self?.syncWithPreferences()
+        }
+    }
 
     /// Applies the persisted preference; safe to call repeatedly.
     func syncWithPreferences() {
@@ -41,7 +49,9 @@ final class ScrollInverter: ObservableObject {
         let wanted = AppFeature.scrollInverter.isAvailable
             && (defaults.bool(forKey: DefaultsKey.scrollInverterEnabled)
                 || defaults.bool(forKey: DefaultsKey.scrollInverterHorizontalEnabled))
-        if wanted, Permissions.shared.accessibility {
+        if SessionActivitySupport.tapShouldRun(featureWanted: wanted,
+                                               accessibilityGranted: Permissions.shared.accessibility,
+                                               sessionIsActive: SessionActivity.shared.isActive) {
             start()
         } else {
             stop()
@@ -55,6 +65,7 @@ final class ScrollInverter: ObservableObject {
 
     private func start() {
         guard !eventTap.isRunning else {
+            eventTap.reArm()
             MouseAppExceptions.shared.setSourceTracking(true, for: .scrollDirection)
             isRunning = true
             return
@@ -72,21 +83,42 @@ final class ScrollInverter: ObservableObject {
         ) else {
             MouseAppExceptions.shared.setSourceTracking(false, for: .scrollDirection)
             isRunning = false
+            // A create that fails during the session handoff gets one more look once the switch settles.
+            guard !tapCreationRetryUsed else { return }
+            tapCreationRetryUsed = true
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.tapCreationRetryWork = nil
+                self.syncWithPreferences()
+            }
+            tapCreationRetryWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
             return
         }
+
+        tapCreationRetryUsed = false
+        tapCreationRetryWork?.cancel()
+        tapCreationRetryWork = nil
         isRunning = true
     }
 
     private func stop() {
+        tapCreationRetryWork?.cancel()
+        tapCreationRetryWork = nil
+        tapCreationRetryUsed = false
         MouseAppExceptions.shared.setSourceTracking(false, for: .scrollDirection)
         eventTap.stop()
         isRunning = false
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        // macOS disables taps that stall or when the session locks; re-arm.
+        // macOS disables taps that stall or when the session locks; re-arm,
+        // unless this session is the one that was switched away from, where
+        // the stall is the reason the tap was disabled and re-arming feeds it.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            eventTap.reArm()
+            if SessionActivity.shared.isActive {
+                eventTap.reArm()
+            }
             return Unmanaged.passUnretained(event)
         }
         guard type == .scrollWheel else { return Unmanaged.passUnretained(event) }

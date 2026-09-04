@@ -1055,6 +1055,53 @@ enum MenuBarRenderer {
         }
     }
 
+    private static func estimatedSnapshot(fanCount: Int) -> SystemSnapshot {
+        var snapshot = SystemSnapshot()
+        snapshot.cpuUsage = 1
+        snapshot.gpuUsage = 1
+        snapshot.memoryUsed = 100
+        snapshot.memoryAppUsed = 100
+        snapshot.memoryTotal = 100
+        snapshot.memoryPressure = .normal
+        snapshot.cpuTemperature = 125
+        snapshot.gpuTemperature = 125
+        snapshot.batteryTemperature = 125
+        snapshot.fanSpeeds = Array(repeating: 20_000, count: fanCount)
+        snapshot.netDownBytesPerSec = 1_000_000_000
+        snapshot.netUpBytesPerSec = 1_000_000_000
+        snapshot.disk = DiskReading(devices: [
+            DiskDeviceReading(id: "main",
+                              name: "Macintosh HD",
+                              mountPath: "/",
+                              bsdName: "disk3s1",
+                              wholeDisk: "disk3",
+                              ioCounterID: "disk3",
+                              fileSystem: "APFS",
+                              totalBytes: 1_000_000_000_000,
+                              freeBytes: 0,
+                              purgeableBytes: nil,
+                              usedBytes: 1_000_000_000_000,
+                              isInternal: true,
+                              isRemovable: false,
+                              isEjectable: false,
+                              smart: nil,
+                              readBytesPerSec: 1_000_000_000,
+                              writeBytesPerSec: 1_000_000_000,
+                              totalReadBytes: nil,
+                              totalWrittenBytes: nil),
+        ])
+        var power = PowerReading()
+        power.systemWatts = 99
+        power.chargePercent = 100
+        power.timeRemainingSeconds = 359_940
+        power.isCharging = true
+        snapshot.power = power
+        snapshot.peripheralBatteries = [
+            PeripheralBatteryDevice(id: "mouse", name: "Magic Mouse", percent: 100, kind: .mouse),
+        ]
+        return snapshot
+    }
+
     private static func primaryDisk(from reading: DiskReading?) -> DiskDeviceReading? {
         guard let devices = reading?.devices, !devices.isEmpty else { return nil }
         return devices.first(where: { $0.isInternal }) ?? devices.first

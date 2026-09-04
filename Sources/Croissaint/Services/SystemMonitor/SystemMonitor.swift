@@ -899,15 +899,21 @@ final class SystemMonitor: ObservableObject {
         tempKeysPrepared = true
 
         let all = client.keys { name in
-            name.hasPrefix("Tp") || name.hasPrefix("Te") || name.hasPrefix("Tg")
+            TemperatureSensorSelector.isCPUTemperatureKey(name, platform: cpuTemperaturePlatform)
+                || name.hasPrefix("Tg")
                 || name.range(of: "^TB[0-9]T$", options: .regularExpression) != nil
         }
-        cpuKeys = all.filter { $0.name.hasPrefix("Tp") || $0.name.hasPrefix("Te") }
+        cpuKeys = all.filter {
+            TemperatureSensorSelector.isCPUTemperatureKey($0.name,
+                                                          platform: cpuTemperaturePlatform)
+        }
         preferredCPUKeys = cpuKeys.filter {
             TemperatureSensorSelector.isCPUCoreKey($0.name, platform: cpuTemperaturePlatform)
         }
         let preferredNames = Set(preferredCPUKeys.map(\.name))
-        fallbackCPUKeys = cpuKeys.filter { !preferredNames.contains($0.name) }
+        fallbackCPUKeys = TemperatureSensorSelector.hasCPUCoreSet(platform: cpuTemperaturePlatform)
+            ? []
+            : cpuKeys.filter { !preferredNames.contains($0.name) }
         gpuKeys = all.filter { $0.name.hasPrefix("Tg") }
         batteryKeys = all.filter { $0.name.hasPrefix("TB") }
     }
@@ -1009,12 +1015,14 @@ final class SystemMonitor: ObservableObject {
                                            &iterator) == kIOReturnSuccess else { return nil }
         defer { IOObjectRelease(iterator) }
 
-        var entry = IOIteratorNext(iterator)
-        while entry != 0 {
-            defer {
-                IOObjectRelease(entry)
-                entry = IOIteratorNext(iterator)
-            }
+        // The advance lives in the `while` condition so the `defer` only
+        // releases. With the advance inside the defer, returning from the loop
+        // ran it: it released the entry it was done with and then took a
+        // reference on the next service that nothing released. Machines with a
+        // second IOAccelerator (Intel dual graphics, an eGPU) leaked one
+        // io_object_t per sampling tick that way.
+        while case let entry = IOIteratorNext(iterator), entry != 0 {
+            defer { IOObjectRelease(entry) }
             // Fetch ONLY PerformanceStatistics, not the whole (large) property
             // tree. Copying every property each tick is what made continuous GPU
             // sampling for the menu bar expensive.

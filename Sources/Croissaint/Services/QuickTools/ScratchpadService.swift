@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 /// nothing runs at rest and edits remain available between openings. It steps
 /// aside on a click outside, and an option keeps it floating over other apps
 /// instead.
-final class ScratchpadService: ObservableObject {
+final class ScratchpadService: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = ScratchpadService()
 
     @Published private(set) var shortcutRegistrationFailed = false
@@ -41,7 +41,8 @@ final class ScratchpadService: ObservableObject {
     private var isReplacingText = false
     private var modalInteractionActive = false
 
-    private init() {
+    private override init() {
+        super.init()
         hotkey.onPress = { [weak self] in self?.toggle() }
     }
 
@@ -324,7 +325,15 @@ final class ScratchpadService: ObservableObject {
             let response = savePanel.runModal()
             self?.modalInteractionActive = false
             if response == .OK, let url = savePanel.url {
-                try? content.write(to: url, atomically: true, encoding: .utf8)
+                do {
+                    try content.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    // A read-only volume or a full disk used to end here in
+                    // silence, with the save panel closed and nothing written.
+                    QuickToolHUD.show(
+                        icon: "exclamationmark.triangle",
+                        message: FeatureStrings.scratchpad(L10n.shared.language).exportFailed)
+                }
             }
             guard let self, let panel = self.panel, panel.isVisible else { return }
             panel.makeKey()
@@ -368,6 +377,8 @@ final class ScratchpadService: ObservableObject {
         // text, never move the window; the header strip is the handle.
         panel.configureAsOverlay()
         panel.contentMinSize = NSSize(width: 280, height: 220)
+        panel.minSize = NSSize(width: 280, height: 220)
+        panel.delegate = self
         let host = NSHostingController(rootView: ScratchpadView())
         // No preferred-size tracking: the pad is user-resizable and the view
         // fills whatever frame the panel has.
@@ -379,6 +390,10 @@ final class ScratchpadService: ObservableObject {
         center(panel)
         self.panel = panel
         return panel
+    }
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        NSSize(width: max(280, frameSize.width), height: max(220, frameSize.height))
     }
 
     private func center(_ panel: NSPanel) {

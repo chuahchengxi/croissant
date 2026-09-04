@@ -37,12 +37,23 @@ final class MouseNavigationService: ObservableObject {
     private var webHandlerRefreshWork: DispatchWorkItem?
     private var webHandlerRefreshGeneration = 0
 
-    private init() {}
+    private init() {
+        // A filter tap owned by a switched-away login session stalls input in
+        // the session on screen. Hand it back on resign and rebuild it from
+        // preferences when this session becomes active again.
+        SessionActivity.shared.onChange { [weak self] _ in
+            self?.syncWithPreferences()
+        }
+    }
 
     func syncWithPreferences() {
         let wanted = AppFeature.mouseNavigation.isAvailable
             && UserDefaults.standard.bool(forKey: DefaultsKey.mouseNavigationEnabled)
-        if wanted, Permissions.shared.accessibility {
+        if SessionActivitySupport.tapShouldRun(
+            featureWanted: wanted,
+            accessibilityGranted: AXIsProcessTrusted(),
+            sessionIsActive: SessionActivity.shared.isActive
+        ) {
             start()
         } else {
             stop()
@@ -151,7 +162,23 @@ final class MouseNavigationService: ObservableObject {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            eventTap.reArm()
+            let wanted = AppFeature.mouseNavigation.isAvailable
+                && UserDefaults.standard.bool(forKey: DefaultsKey.mouseNavigationEnabled)
+            let shouldRearm = SessionActivitySupport.tapShouldRun(
+                featureWanted: wanted,
+                accessibilityGranted: AXIsProcessTrusted(),
+                sessionIsActive: SessionActivity.shared.isActive
+            )
+            if shouldRearm {
+                eventTap.reArm()
+            } else {
+                // Invalidating the port from its own callback stack is unsafe;
+                // finish this callback fail-open, then release the tap.
+                DispatchQueue.main.async { [weak self] in
+                    self?.stop()
+                    self?.syncWithPreferences()
+                }
+            }
             return Unmanaged.passUnretained(event)
         }
         let buttonNumber = event.getIntegerValueField(.mouseEventButtonNumber)
@@ -167,7 +194,8 @@ final class MouseNavigationService: ObservableObject {
         // other side button keeps navigating. While the shortcut capture row
         // is listening, every press belongs to it, including a button with no
         // mapping yet, or the capture could never see the button it is asked
-        // to watch for.
+        // to watch for. Both claims are asked again on every Drag of a held
+        // side button, so both have to stay cheap.
         if RadialMenuSupport.claimsMouseButton(buttonNumber)
             || MouseButtonShortcutSupport.claimsButton(buttonNumber)
             || MouseButtonShortcutService.isCaptureActive {

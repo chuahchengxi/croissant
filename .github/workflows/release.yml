@@ -33,9 +33,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Unit tests already gate this exact commit in CI on main; the release
-      # run goes straight to building so the tag reaches users faster. Public
-      # releases stay ad-hoc because the project has no Apple-issued certificate.
-      # Apple notarization remains optional and is skipped without its secrets.
+      # run goes straight to building. With no credentials this remains ad-hoc;
+      # configured signing must succeed and never silently downgrade.
 
       - name: Set up signing
         env:
@@ -57,17 +56,32 @@ jobs:
 
       - name: Build
         run: |
-          ./build.sh --force-adhoc
+          if [[ -n "$SIGNING_CERT_P12" ]]; then
+            ./build.sh
+          else
+            ./build.sh --force-adhoc
+          fi
 
       - name: Verify release signing policy
         id: signing_policy
         run: |
           SIGNATURE="$(codesign -dv build/stage/Croissaint.app 2>&1)"
-          if ! grep -q 'Signature=adhoc' <<< "$SIGNATURE"; then
-            echo "$GITHUB_REF_NAME must be ad-hoc signed" >&2
-            exit 1
+          codesign --verify --deep --strict build/stage/Croissaint.app
+          if [[ -n "$SIGNING_CERT_P12" ]]; then
+            if grep -q 'Signature=adhoc' <<< "$SIGNATURE"; then
+              echo "Configured release signing produced an ad-hoc app" >&2
+              exit 1
+            fi
+            if grep -q 'Authority=Developer ID Application:' <<< "$SIGNATURE"; then
+              echo "MODE=developer-id" >> "$GITHUB_OUTPUT"
+            else
+              grep -q 'Authority=Croissaint Utils Signing' <<< "$SIGNATURE"
+              echo "MODE=stable" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            grep -q 'Signature=adhoc' <<< "$SIGNATURE"
+            echo "MODE=adhoc" >> "$GITHUB_OUTPUT"
           fi
-          echo "MODE=adhoc" >> "$GITHUB_OUTPUT"
 
       - name: Selftest
         run: ./build/Croissaint --selftest
@@ -137,6 +151,8 @@ jobs:
             echo ""
             if [[ -n "${NOTARY_API_KEY_P8:-}" ]]; then
               echo "Signed with an Apple Developer ID and notarized by Apple, so it downloads and opens normally. Requires macOS 14 or later. Open the .dmg below and drag Croissaint to Applications."
+            elif [[ "${{ steps.signing_policy.outputs.MODE }}" == "developer-id" ]]; then
+              echo 'Signed with an Apple Developer ID, but not notarized. macOS may require approval in Privacy & Security. Requires macOS 14 or later.'
             elif [[ "${{ steps.signing_policy.outputs.MODE }}" == "stable" ]]; then
               echo '## macOS will say this app is damaged. It is not.'
               echo ''

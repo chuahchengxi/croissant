@@ -24,12 +24,16 @@ final class WindowMaximizer: ObservableObject {
     private let frameTolerance: CGFloat = 4
     private let zoomAnimationDuration: TimeInterval = 0.22
 
-    private init() {}
+    private init() {
+        SessionActivity.shared.onChange { [weak self] _ in self?.syncWithPreferences() }
+    }
 
     func syncWithPreferences() {
         let wanted = AppFeature.windowMaximizer.isAvailable
             && UserDefaults.standard.bool(forKey: DefaultsKey.windowMaximizeEnabled)
-        if wanted, Permissions.shared.accessibility {
+        if SessionActivitySupport.tapShouldRun(featureWanted: wanted,
+                                               accessibilityGranted: AXIsProcessTrusted(),
+                                               sessionIsActive: SessionActivity.shared.isActive) {
             start()
         } else {
             stop()
@@ -73,7 +77,11 @@ final class WindowMaximizer: ObservableObject {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            eventTap.reArm()
+            if SessionActivity.shared.isActive, AXIsProcessTrusted() {
+                eventTap.reArm()
+            } else {
+                DispatchQueue.main.async { [weak self] in self?.syncWithPreferences() }
+            }
             return Unmanaged.passUnretained(event)
         }
 
@@ -225,10 +233,8 @@ final class WindowMaximizer: ObservableObject {
 
     private func elementAt(point: CGPoint) -> AXUIElement? {
         let system = AXUIElementCreateSystemWide()
-        // Bounded AX inside the mouse tap: a hung app under the cursor must
-        // not stall the main thread (and with it every event tap) for the
-        // 6 second default timeout.
-        AXUIElementSetMessagingTimeout(system, 0.35)
+        // No cap here: on the system-wide element a timeout is the default for
+        // every question this process asks, whoever asks it (#938).
         var element: AXUIElement?
         guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &element) == .success,
               let element

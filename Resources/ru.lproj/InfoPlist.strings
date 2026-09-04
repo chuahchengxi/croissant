@@ -2,7 +2,7 @@
 "NSAppleEventsUsageDescription" = "Croissaint использует Автоматизацию, чтобы перемещать файлы в Finder, отправлять объекты в Корзину и открывать команды Терминала, когда вы запрашиваете действия Homebrew.";
 
 /* macOS Screen & System Audio Recording permission prompt. */
-"NSAudioCaptureUsageDescription" = "Croissaint обращается к звуку отдельных приложений только для того, чтобы регулировать их громкость в микшере. Ничего не записывается и не покидает ваш Mac.";
+"NSAudioCaptureUsageDescription" = "Croissaint использует звук каждого приложения, чтобы регулировать его громкость в микшере и добавлять звук Mac в записи экрана, которые вы запускаете. Ничего не покидает ваш Mac.";
 
 /* macOS Bluetooth permission prompt. */
 "NSBluetoothAlwaysUsageDescription" = "Croissaint использует Bluetooth только для чтения заряда подключённых периферийных устройств. Ничего не покидает ваш Mac.";

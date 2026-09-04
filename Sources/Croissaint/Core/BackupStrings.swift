@@ -46,7 +46,7 @@ extension BackupFeatureStrings {
         importButton: "Import settings…",
         exported: "Backup saved",
         importConfirmTitle: "Import these settings?",
-        importConfirmBody: "Your current settings are replaced by the file's and the app restarts. Nothing else on this Mac is touched.",
+        importConfirmBody: "Your current settings are replaced by the file’s and the app restarts. Nothing else on this Mac is touched.",
         importAction: "Import and restart",
         invalidFile: "This file is not a valid Croissaint backup."
     )
@@ -65,12 +65,12 @@ extension BackupFeatureStrings {
 
     static let tr = BackupFeatureStrings(
         title: "Yedek",
-        description: "Kurulumunuzu başka bir Mac'e taşıyın: tüm tercihleri bir dosyaya aktarın ve orada içe aktarın. Karalama defteri notlarınızın metni dosyaya dahil edilir. Pano geçmişi, raf öğeleri ve sistem izinleri bu Mac'ten asla çıkmaz.",
+        description: "Kurulumunuzu başka bir Mac’e taşıyın: tüm tercihleri bir dosyaya aktarın ve orada içe aktarın. Karalama defteri notlarınızın metni dosyaya dahil edilir. Pano geçmişi, raf öğeleri ve sistem izinleri bu Mac’ten asla çıkmaz.",
         exportButton: "Ayarları dışa aktar…",
         importButton: "Ayarları içe aktar…",
         exported: "Yedek kaydedildi",
         importConfirmTitle: "Bu ayarlar içe aktarılsın mı?",
-        importConfirmBody: "Mevcut ayarlar dosyadakilerle değiştirilir ve uygulama yeniden başlar. Bu Mac'te başka hiçbir şeye dokunulmaz.",
+        importConfirmBody: "Mevcut ayarlar dosyadakilerle değiştirilir ve uygulama yeniden başlar. Bu Mac’te başka hiçbir şeye dokunulmaz.",
         importAction: "İçe aktar ve yeniden başlat",
         invalidFile: "Bu dosya geçerli bir Croissaint yedeği değil."
     )
@@ -113,14 +113,14 @@ extension BackupFeatureStrings {
 
     static let fr = BackupFeatureStrings(
         title: "Sauvegarde",
-        description: "Emportez votre configuration sur un autre Mac : exportez toutes les préférences dans un fichier et importez-le là-bas. Le fichier inclut le texte de vos notes dans Brouillon. L'historique du presse-papiers, les éléments de l'étagère et les autorisations système ne quittent jamais ce Mac.",
+        description: "Emportez votre configuration sur un autre Mac\u{00A0}: exportez toutes les préférences dans un fichier et importez-le là-bas. Le fichier inclut le texte de vos notes dans Brouillon. L’historique du presse-papiers, les éléments de l’étagère et les autorisations système ne quittent jamais ce Mac.",
         exportButton: "Exporter les réglages…",
         importButton: "Importer les réglages…",
         exported: "Sauvegarde enregistrée",
-        importConfirmTitle: "Importer ces réglages ?",
-        importConfirmBody: "Les réglages actuels sont remplacés par ceux du fichier et l'app redémarre. Rien d'autre ne change sur ce Mac.",
+        importConfirmTitle: "Importer ces réglages\u{00A0}?",
+        importConfirmBody: "Les réglages actuels sont remplacés par ceux du fichier et l’app redémarre. Rien d’autre ne change sur ce Mac.",
         importAction: "Importer et redémarrer",
-        invalidFile: "Ce fichier n'est pas une sauvegarde Croissaint valide."
+        invalidFile: "Ce fichier n’est pas une sauvegarde Croissaint valide."
     )
 
     static let it = BackupFeatureStrings(
@@ -130,7 +130,7 @@ extension BackupFeatureStrings {
         importButton: "Importa impostazioni…",
         exported: "Backup salvato",
         importConfirmTitle: "Importare queste impostazioni?",
-        importConfirmBody: "Le impostazioni attuali vengono sostituite da quelle del file e l'app si riavvia. Nient'altro cambia su questo Mac.",
+        importConfirmBody: "Le impostazioni attuali vengono sostituite da quelle del file e l’app si riavvia. Nient’altro cambia su questo Mac.",
         importAction: "Importa e riavvia",
         invalidFile: "Questo file non è un backup Croissaint valido."
     )
@@ -152,9 +152,9 @@ extension BackupFeatureStrings {
         description: "把你的配置带到另一台 Mac：将所有偏好设置导出为文件并在那里导入。文件中也包含草稿板里的笔记文本。剪贴板历史、暂存架项目和系统权限永远不会离开这台 Mac。",
         exportButton: "导出设置…",
         importButton: "导入设置…",
-        exported: "备份已保存",
+        exported: "备份已存储",
         importConfirmTitle: "导入这些设置？",
-        importConfirmBody: "当前设置将被文件中的设置替换，应用会重启。这台 Mac 上的其他内容不受影响。",
+        importConfirmBody: "当前设置将被文件中的设置替换，App 会重启。这台 Mac 上的其他内容不受影响。",
         importAction: "导入并重启",
         invalidFile: "该文件不是有效的 Croissaint 备份。"
     )

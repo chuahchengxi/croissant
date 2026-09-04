@@ -69,6 +69,9 @@ final class SuperKeyService: ObservableObject {
     private var tapThread: Thread?
     private var shouldStopTapThread = false
     private var pendingTapRestart = false
+    /// Invalidates a mapping request that was captured before a stop. Without
+    /// this, a raw-key repair can enqueue a new mapping after the final clear.
+    private var mappingGeneration: UInt = 0
     private let stateLock = NSLock()
     private var state = SuperKeySupport.State()
     private var soloAction: SuperKeySoloAction = .none
@@ -78,6 +81,9 @@ final class SuperKeyService: ObservableObject {
     /// The mapping is written off the main thread, and in the order it was
     /// asked for: a queue of one keeps an apply and a clear from crossing.
     private let mappingQueue = DispatchQueue(label: "com.croissaint.utils.superkey-mapping")
+    /// Lives only while the mapping is owned and clears it if this process is
+    /// killed before applicationWillTerminate can run.
+    private var mappingGuard: SuperKeyMappingGuard.Handle?
     /// When the last mapping went in, so a keyboard that arrives without one
     /// is repaired once and not on every keystroke.
     private var lastMappingAt: TimeInterval = 0
@@ -89,20 +95,23 @@ final class SuperKeyService: ObservableObject {
     /// modifiers would ride every keystroke from then on, with no way back but
     /// pressing the key again, and typing would be dead in the meantime.
     private var heldKeyWatchdog: DispatchWorkItem?
-    /// How long the press may go without a repeat before it is let go. A key
-    /// really held repeats, so this is pushed out again and again and never
-    /// runs; it only decides how long a press whose release was lost can hold
-    /// the modifiers down. Taken from the keyboard's own first-repeat delay, so
-    /// a slow setting is never fought, and bounded at both ends: never so short
-    /// that a hold is cut off, never so long that the keyboard stays unusable
-    /// when repeat is switched off and no repeat is ever coming.
+    /// How long before a held press is re-checked. The source is remapped to
+    /// F18, which does not autorepeat, so the deadline cannot lean on repeats to
+    /// know the key is still down: when it fires the watchdog reads the key's
+    /// real state and either watches again or lets go (`reevaluateHold`).
+    /// So this is both the poll interval while held and the longest a press
+    /// whose key-up was lost keeps the modifiers down. Taken from the keyboard's
+    /// own first-repeat delay and bounded at both ends: never so short it churns,
+    /// never so long a lost release strands the keyboard.
     private var heldKeyTimeout: TimeInterval {
         let firstRepeat = NSEvent.keyRepeatDelay
         guard firstRepeat.isFinite, firstRepeat > 0 else { return 3 }
         return min(30, max(3, firstRepeat * 2))
     }
 
-    private init() {}
+    private init() {
+        SessionActivity.shared.onChange { [weak self] _ in self?.syncWithPreferences() }
+    }
 
     func syncWithPreferences() {
         let defaults = UserDefaults.standard
@@ -125,6 +134,7 @@ final class SuperKeyService: ObservableObject {
         self.source = source
         let enabled = AppFeature.superKey.isAvailable
             && defaults.bool(forKey: DefaultsKey.superKeyEnabled)
+            && SessionActivity.shared.isActive
         guard enabled else {
             stop()
             return
@@ -185,6 +195,7 @@ final class SuperKeyService: ObservableObject {
             () -> (runLoop: CFRunLoop?, tap: CFMachPort?, mouseTap: CFMachPort?, threadExists: Bool) in
             shouldStopTapThread = true
             pendingTapRestart = false
+            mappingGeneration &+= 1
             return (tapRunLoop, tap, mouseTap, tapThread != nil)
         }
         if let tap = snapshot.tap { CGEvent.tapEnable(tap: tap, enable: false) }
@@ -335,11 +346,12 @@ final class SuperKeyService: ObservableObject {
     }
 
     private func tapDidStart(_ startedTap: CFMachPort) {
-        let active = lifecycleLock.withLock {
-            tap === startedTap && !shouldStopTapThread
+        let generation = lifecycleLock.withLock { () -> UInt? in
+            guard tap === startedTap, !shouldStopTapThread else { return nil }
+            return mappingGeneration
         }
-        guard active else { return }
-        confirmMapping(for: startedTap, publishingRunState: true)
+        guard let generation else { return }
+        confirmMapping(for: startedTap, generation: generation, publishingRunState: true)
     }
 
     /// The mapping is cleared even when this service never applied it: an
@@ -365,17 +377,19 @@ final class SuperKeyService: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             guard let self,
-                  let activeTap = self.lifecycleLock.withLock({
-                      self.shouldStopTapThread ? nil : self.tap
+                  let active = self.lifecycleLock.withLock({
+                      self.shouldStopTapThread ? nil : self.tap.map { ($0, self.mappingGeneration) }
                   })
             else { return }
-            self.confirmMapping(for: activeTap, publishingRunState: false)
+            self.confirmMapping(for: active.0, generation: active.1, publishingRunState: false)
         }
     }
 
     // MARK: - The key mapping
 
     private func applyMapping(_ enabled: Bool,
+                              expectedTap: CFMachPort? = nil,
+                              generation: UInt? = nil,
                               synchronously: Bool = false,
                               completion: ((SuperKeyMappingFailure?) -> Void)? = nil) {
         let source = stateLock.withLock { eventSource }
@@ -385,6 +399,23 @@ final class SuperKeyService: ObservableObject {
         }
         let work = { [weak self] in
             guard let self else { return }
+            defer {
+                if enabled {
+                    self.stateLock.withLock { self.pendingMappingEnableCount -= 1 }
+                }
+            }
+            if enabled {
+                guard let expectedTap, let generation,
+                      self.lifecycleLock.withLock({
+                          SuperKeySupport.mappingRequestIsAuthorized(
+                              requestGeneration: generation,
+                              currentGeneration: self.mappingGeneration,
+                              tapIsCurrent: self.tap === expectedTap,
+                              stopping: self.shouldStopTapThread
+                          )
+                      })
+                else { return }
+            }
             let defaults = UserDefaults.standard
             let previousMarker = defaults.bool(forKey: DefaultsKey.superKeyMappingApplied)
             let ownedSource = previousMarker ? SuperKeySource.sanitized(
@@ -396,15 +427,14 @@ final class SuperKeyService: ObservableObject {
                 ownedSource: ownedSource
             )
             if !enabled {
+                let guardConfirmed = self.mappingGuard?.stop() ?? false
+                self.mappingGuard = nil
                 let marker = SuperKeySupport.mappingMarkerAfterClear(
                     previous: previousMarker,
-                    readbackConfirmed: failure == nil
+                    readbackConfirmed: failure == nil || guardConfirmed
                 )
                 defaults.set(marker, forKey: DefaultsKey.superKeyMappingApplied)
                 if !marker { defaults.removeObject(forKey: DefaultsKey.superKeyMappedSource) }
-            }
-            if enabled {
-                self.stateLock.withLock { self.pendingMappingEnableCount -= 1 }
             }
             if let completion {
                 DispatchQueue.main.async { completion(failure) }
@@ -451,12 +481,35 @@ final class SuperKeyService: ObservableObject {
         )
         if !enabled, ownedSource == nil,
            SuperKeySupport.mappingsMatch(existing, wanted) { return nil }
+        var startedGuard = false
+        var mappingConfirmed = false
         if enabled {
+            if let mappingGuard, mappingGuard.source != source {
+                guard mappingGuard.stop() else { return .systemRefused }
+                self.mappingGuard = nil
+            }
+            if mappingGuard == nil {
+                guard let guardHandle = SuperKeyMappingGuard.start(source: source) else {
+                    return .systemRefused
+                }
+                mappingGuard = guardHandle
+                startedGuard = true
+            }
             // Recovery is write-ahead only after every external-mapping check
             // passed. A crash after the command starts must leave the next
             // launch authorized to remove a possibly partial application.
             UserDefaults.standard.set(true, forKey: DefaultsKey.superKeyMappingApplied)
             UserDefaults.standard.set(source.rawValue, forKey: DefaultsKey.superKeyMappedSource)
+        }
+        defer {
+            if startedGuard, !mappingConfirmed {
+                let cleared = mappingGuard?.stop() ?? false
+                mappingGuard = nil
+                if cleared {
+                    UserDefaults.standard.set(false, forKey: DefaultsKey.superKeyMappingApplied)
+                    UserDefaults.standard.removeObject(forKey: DefaultsKey.superKeyMappedSource)
+                }
+            }
         }
         let write = Shell.run(
             hidutilPath,
@@ -470,15 +523,22 @@ final class SuperKeyService: ObservableObject {
              "--get", SuperKeySupport.userMappingProperty]
         )
         guard readback.status == 0 else { return .systemRefused }
-        return SuperKeySupport.mappingReportConfirms(readback.output, expected: wanted)
-            ? nil : .systemRefused
+        mappingConfirmed = SuperKeySupport.mappingReportConfirms(readback.output, expected: wanted)
+        return mappingConfirmed ? nil : .systemRefused
     }
 
-    private func confirmMapping(for expectedTap: CFMachPort, publishingRunState: Bool) {
-        applyMapping(true) { [weak self] failure in
+    private func confirmMapping(for expectedTap: CFMachPort,
+                                generation: UInt,
+                                publishingRunState: Bool) {
+        applyMapping(true, expectedTap: expectedTap, generation: generation) { [weak self] failure in
             guard let self else { return }
             let active = self.lifecycleLock.withLock {
-                self.tap === expectedTap && !self.shouldStopTapThread
+                SuperKeySupport.mappingRequestIsAuthorized(
+                    requestGeneration: generation,
+                    currentGeneration: self.mappingGeneration,
+                    tapIsCurrent: self.tap === expectedTap,
+                    stopping: self.shouldStopTapThread
+                )
             }
             guard active else { return }
             guard let failure else {
@@ -517,15 +577,15 @@ final class SuperKeyService: ObservableObject {
     /// at most once every few seconds. A keyboard that refuses the mapping
     /// cannot turn typing into a stream of commands.
     private func repairMappingIfStale() {
-        guard let activeTap = lifecycleLock.withLock({
-            shouldStopTapThread ? nil : tap
+        guard let active = lifecycleLock.withLock({
+            shouldStopTapThread ? nil : tap.map { ($0, mappingGeneration) }
         }) else { return }
         let now = ProcessInfo.processInfo.systemUptime
         let shouldRepair = stateLock.withLock {
             now - lastMappingAt >= mappingRepairInterval
         }
         if shouldRepair {
-            confirmMapping(for: activeTap, publishingRunState: false)
+            confirmMapping(for: active.0, generation: active.1, publishingRunState: false)
         }
     }
 
@@ -536,8 +596,12 @@ final class SuperKeyService: ObservableObject {
             let currentTaps = lifecycleLock.withLock {
                 shouldStopTapThread ? (nil, nil) : (tap, mouseTap)
             }
-            if let currentTap = currentTaps.0 { CGEvent.tapEnable(tap: currentTap, enable: true) }
-            if let currentMouseTap = currentTaps.1 { CGEvent.tapEnable(tap: currentMouseTap, enable: true) }
+            if SessionActivity.shared.isActive, AXIsProcessTrusted() {
+                if let currentTap = currentTaps.0 { CGEvent.tapEnable(tap: currentTap, enable: true) }
+                if let currentMouseTap = currentTaps.1 { CGEvent.tapEnable(tap: currentMouseTap, enable: true) }
+            } else {
+                DispatchQueue.main.async { [weak self] in self?.syncWithPreferences() }
+            }
             forgetHeldKey()
             return Unmanaged.passUnretained(event)
         }
@@ -604,9 +668,53 @@ final class SuperKeyService: ObservableObject {
 
     private func armHeldKeyWatchdog() {
         heldKeyWatchdog?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.forgetHeldKey() }
+        let work = DispatchWorkItem { [weak self] in self?.reevaluateHold() }
         heldKeyWatchdog = work
         DispatchQueue.main.asyncAfter(deadline: .now() + heldKeyTimeout, execute: work)
+    }
+
+    /// Decides whether a hold that reached its deadline should survive, and
+    /// acts on it — re-arm the watchdog or let the modifiers go. The watchdog
+    /// exists for a press whose key-up was lost, but the physical key (F18) does
+    /// not autorepeat, so a key held perfectly steadily reaches here too. The
+    /// only way to tell those apart is the real hardware state: still down means
+    /// the hold is real, so watch again; up means the release was missed, so let
+    /// go. Runs on the main thread, where the watchdog is scheduled; only the
+    /// hardware read is moved off it.
+    private func reevaluateHold() {
+        guard stateLock.withLock({ state.isHeld }),
+              lifecycleLock.withLock({ tap != nil && !shouldStopTapThread })
+        else { forgetHeldKey(); return }
+        readPhysicalKeyDown { [weak self] physicalKeyDown in
+            guard let self else { return }
+            // Re-read on the way back: the key may have come up during the hop.
+            let stateThinksHeld = self.stateLock.withLock { self.state.isHeld }
+            let tapAlive = self.lifecycleLock.withLock { self.tap != nil && !self.shouldStopTapThread }
+            switch SuperKeySupport.heldKeyWatchdogOutcome(physicalKeyDown: physicalKeyDown,
+                                                          stateThinksHeld: stateThinksHeld,
+                                                          tapAlive: tapAlive) {
+            case .reArm:
+                self.armHeldKeyWatchdog()
+            case .forget:
+                self.forgetHeldKey()
+            }
+        }
+    }
+
+    /// Reads whether the physical source key is down, then calls `handler` on
+    /// the main thread. It queries `triggerKeyCode` (F18), not `source.keyCode`:
+    /// the key the user presses is remapped to F18 by hidutil, so that is what
+    /// the hardware reports as down. Two things force the read off the main
+    /// thread: keyState reaches the window server over a lock the main run loop
+    /// itself has to service, so calling it from a main-queue block deadlocks
+    /// the app; and only `.hidSystemState` reflects the remapped key — the
+    /// combined session state reports it up even while it is held.
+    private func readPhysicalKeyDown(_ handler: @escaping (Bool) -> Void) {
+        let key = CGKeyCode(SuperKeySupport.triggerKeyCode)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let physicalKeyDown = CGEventSource.keyState(.hidSystemState, key: key)
+            DispatchQueue.main.async { handler(physicalKeyDown) }
+        }
     }
 
     private func cancelHeldKeyWatchdog() {

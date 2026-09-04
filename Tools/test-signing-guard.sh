@@ -1,62 +1,54 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026 Croissaint
-#
-# build.sh must refuse to sign ad-hoc unless explicitly asked. A locked login
-# keychain makes `security find-identity` print nothing, which looks exactly
-# like a machine with no identity at all — so this stubs `security` to return
-# nothing and checks both halves of the guard.
-#
-# Run: Tools/test-signing-guard.sh
-set -uo pipefail
+# Checks signing policy without starting a compiler or modifying a keychain.
+set -euo pipefail
 cd "$(dirname "$0")/.."
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/bin"
+printf '#!/bin/sh\nprintf called >> "$SIGNING_STUB_LOG"\nexit 0\n' > "$WORK/bin/security"
+chmod +x "$WORK/bin/security"
+# Execute the actual identity-resolution prefix, stopping before build steps.
+sed '/^codesign_with_timestamp_retry()/,$d' build.sh > "$WORK/build.sh"
+printf '\nprint -r -- "mode=$SIGN_MODE"\n' >> "$WORK/build.sh"
+export SIGNING_STUB_LOG="$WORK/security.log"
+export PATH="$WORK/bin:$PATH"
+unset CODESIGN_IDENTITY
 
-STUB="$(mktemp -d)"
-trap 'rm -rf "$STUB"' EXIT
-printf '#!/bin/sh\nexit 0\n' > "$STUB/security"
-chmod +x "$STUB/security"
+if output=$(zsh "$WORK/build.sh" 2>&1); then
+    echo "FAIL: an identity-less build succeeded" >&2
+    exit 1
+fi
+grep -q 'refusing to sign ad-hoc' <<< "$output"
+grep -q 'unlock-keychain' <<< "$output"
+grep -q -- '--allow-adhoc' <<< "$output"
+for flag in --allow-adhoc --force-adhoc; do
+    output=$(zsh "$WORK/build.sh" "$flag")
+    grep -q 'mode=adhoc' <<< "$output"
+done
+printf '' > "$SIGNING_STUB_LOG"
+zsh "$WORK/build.sh" --dev --force-adhoc | grep -q 'mode=adhoc'
+[[ ! -s "$SIGNING_STUB_LOG" ]]
 
-fail=0
-check() {  # check <name> <condition-exit-status>
-    if (( $2 == 0 )); then print -r -- "ok   - $1"
-    else print -r -- "FAIL - $1"; fail=1; fi
-}
-
-# 1. No identity and no flag: refuse, before building anything.
-out="$(PATH="$STUB:$PATH" ./build.sh 2>&1)" && rc=0 || rc=$?
-[[ $rc -ne 0 ]]; check "exits non-zero without an identity" $?
-grep -q 'refusing to sign ad-hoc' <<<"$out"; check "explains the refusal" $?
-grep -q 'unlock-keychain'         <<<"$out"; check "names the unlock escape hatch" $?
-grep -q -- '--allow-adhoc'        <<<"$out"; check "names --allow-adhoc" $?
-
-# 2. --allow-adhoc: the guard lets it through. The build itself is slow and is
-#    not what we are testing, so give it a moment, then kill it.
-log="$STUB/allow.log"
-PATH="$STUB:$PATH" ./build.sh --allow-adhoc >"$log" 2>&1 & pid=$!
-{ sleep 8; kill -9 $pid 2>/dev/null } & watchdog=$!
-wait $pid 2>/dev/null
-kill $watchdog 2>/dev/null
-! grep -q 'refusing to sign ad-hoc' "$log"; check "--allow-adhoc is not refused" $?
-
-# 3. The bridge-release flag must choose ad-hoc even when CI imported the
-#    legacy certificate. Observe the real identity-resolution boundary: a
-#    forced build must not ask `security` for an identity at all.
-identity_stub="$STUB/identity-bin"
-mkdir -p "$identity_stub"
-identity_log="$STUB/identity.log"
+# Duplicate display names are legal; codesign needs one exact fingerprint.
 printf '%s\n' '#!/bin/sh' \
-    'printf '\''%s\n'\'' "$*" >> "$SIGNING_STUB_LOG"' \
-    'printf '\''  1) ABCDEF "Croissaint Utils Signing"\n'\''' \
-    > "$identity_stub/security"
-chmod +x "$identity_stub/security"
-force_log="$STUB/force.log"
-SIGNING_STUB_LOG="$identity_log" PATH="$identity_stub:$PATH" \
-    ./build.sh --force-adhoc >"$force_log" 2>&1 & pid=$!
-{ sleep 8; kill -9 $pid 2>/dev/null } & watchdog=$!
-wait $pid 2>/dev/null
-kill $watchdog 2>/dev/null
-[[ ! -s "$identity_log" ]]; check "--force-adhoc ignores every installed identity" $?
+    'echo '\''  1) AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA "Apple Development: Same Name"'\''' \
+    'echo '\''  2) BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB "Apple Development: Same Name"'\''' \
+    > "$WORK/bin/security"
+printf '\nprint -r -- "identity=$DEVID"\n' >> "$WORK/build.sh"
+output=$(zsh "$WORK/build.sh")
+grep -q 'mode=devid' <<< "$output"
+grep -q 'identity=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' <<< "$output"
 
-print -r -- ""
-(( fail )) && print -r -- "FAILED" || print -r -- "All checks passed."
-exit $fail
+# No secrets is an explicit ad-hoc release. Partial secrets must never be one.
+unset SIGNING_CERT_P12 SIGNING_CERT_PASSWORD NOTARY_API_KEY_P8 NOTARY_KEY_ID NOTARY_ISSUER_ID REQUIRE_SIGNING
+./Tools/ci-setup-signing.sh | grep -q 'No release signing credentials'
+if SIGNING_CERT_P12=invalid ./Tools/ci-setup-signing.sh >/dev/null 2>&1; then
+    echo 'FAIL: partial signing credentials were accepted' >&2
+    exit 1
+fi
+if NOTARY_KEY_ID=invalid ./Tools/ci-setup-signing.sh >/dev/null 2>&1; then
+    echo 'FAIL: notarization without signing credentials was accepted' >&2
+    exit 1
+fi
+echo 'PASS: signing guards, duplicate certificate names, force-ad-hoc isolation and incomplete release credentials'

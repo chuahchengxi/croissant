@@ -59,15 +59,19 @@ final class DockClickService {
     private static let syntheticEventMarker: Int64 = 0x564F5253
     private var pendingSweeps: [pid_t: DispatchWorkItem] = [:]
 
-    private init() {}
+    private init() {
+        SessionActivity.shared.onChange { [weak self] _ in self?.syncWithPreferences() }
+    }
 
     func syncWithPreferences() {
         let minimizeEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.dockClickMinimize)
         let hideEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.dockClickHide)
         let cycleEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.dockClickCycleWindows)
-        if AppFeature.dockClick.isAvailable,
-           (minimizeEnabled || hideEnabled || cycleEnabled),
-           Permissions.shared.accessibility {
+        if SessionActivitySupport.tapShouldRun(
+            featureWanted: AppFeature.dockClick.isAvailable
+                && (minimizeEnabled || hideEnabled || cycleEnabled),
+            accessibilityGranted: AXIsProcessTrusted(),
+            sessionIsActive: SessionActivity.shared.isActive) {
             start()
         } else {
             stop()
@@ -106,7 +110,11 @@ final class DockClickService {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            eventTap.reArm()
+            if SessionActivity.shared.isActive, AXIsProcessTrusted() {
+                eventTap.reArm()
+            } else {
+                DispatchQueue.main.async { [weak self] in self?.syncWithPreferences() }
+            }
             return Unmanaged.passUnretained(event)
         }
         // The replayed down of a press that became a drag: the Dock must
@@ -150,10 +158,14 @@ final class DockClickService {
         // click near the edge of a Dock-less display whose long-axis
         // coordinate lines up with an icon would minimize or restore apps out
         // of thin air. Only clicks inside the Dock strip that is actually on
-        // screen can mean an icon.
+        // screen, with nothing drawn over it, can mean an icon.
         guard let dockPID = dockProcessID(),
-              let dockBounds = Self.revealedDockBounds(dockPID: dockPID),
-              dockBounds.insetBy(dx: -8, dy: -8).contains(point) else {
+              DockClickSupport.dockOwnsPoint(
+                point,
+                windows: WindowServerSupport.onScreenWindows(),
+                dockProcessID: dockPID,
+                dockLayer: Int(CGWindowLevelForKey(.dockWindow)),
+                ownProcessID: getpid()) else {
             return Unmanaged.passUnretained(event)
         }
 
@@ -209,6 +221,16 @@ final class DockClickService {
                     windows = Self.standardWindows(pid: pid, timeout: 0.7)
                 }
             }
+            // Counted on the Space the user is looking at, the only windows
+            // the raise can reach; the AX list above spans every Space.
+            //
+            // Gated on the full precondition of the ladder's cycling branch,
+            // not just the setting: clicking a background app's icon is the
+            // common Dock click, and the count costs a window-server list plus
+            // an id resolve per window inside the event tap.
+            let cycleCandidateCount = cycleEnabled && frontmost && !windows.hasFullscreen
+                ? Self.cycleCandidates(pid: pid, windows: windows.unminimized).count
+                : 0
             let hasUnminimized = DockClickSupport.effectiveHasUnminimized(
                 unminimizedCount: windows.unminimized.count,
                 minimizedCount: windows.minimized.count,
@@ -221,7 +243,7 @@ final class DockClickService {
                                              minimizeEnabled: minimizeEnabled,
                                              hideEnabled: hideEnabled,
                                              cycleWindowsEnabled: cycleEnabled,
-                                             unminimizedWindowCount: windows.unminimized.count,
+                                             cycleCandidateCount: cycleCandidateCount,
                                              ownsMinimize: ownsMinimize(pid: pid,
                                                                         minimized: windows.minimized))
         }
@@ -452,6 +474,11 @@ final class DockClickService {
     /// Minimize item (⌘M): one window per click, but the click works. This
     /// runs off the tap, so it can afford a longer leash than the tap-side
     /// window enumeration — busy JVMs routinely need it.
+    /// Menu items one Minimize All walk may read. The other menu walks in
+    /// this app stop at 600; an unbounded one here reads every item of every
+    /// menu the app has, at two or three cross-process reads each.
+    private static let minimizeMenuItemBudget = 600
+
     private static func handleMinimizeMenu(pid: pid_t) -> MinimizeMenuOutcome {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 1.0)
@@ -462,12 +489,24 @@ final class DockClickService {
         var plainMinimize: AXUIElement?
         var minimizeAll: AXUIElement?
         var hasConflictingOptionM = false
-        // The Window menu sits near the end of the menu bar.
-        for barItem in topLevel.reversed() {
+        // Deliberately not stopped once both items are in hand. The blind
+        // ⌥⌘M this outcome may authorise would fire whatever else is bound to
+        // that combination, so `hasConflictingOptionM` is only trustworthy
+        // after the whole menu bar has been read. The cap below bounds the
+        // walk instead, and a walk that hits it reports the conflict it cannot
+        // rule out. The Window menu sits near the end, hence the reversal.
+        var visited = 0
+        var truncated = false
+        outer: for barItem in topLevel.reversed() {
             guard let menus = elementArray(barItem, kAXChildrenAttribute as String) else { continue }
             for menu in menus {
                 guard let items = elementArray(menu, kAXChildrenAttribute as String) else { continue }
                 for item in items {
+                    guard visited < Self.minimizeMenuItemBudget else {
+                        truncated = true
+                        break outer
+                    }
+                    visited += 1
                     let commandCharacter = stringAttribute(item, "AXMenuItemCmdChar")
                     let modifiers = intAttribute(item, "AXMenuItemCmdModifiers")
                     let isVerifiedMinimizeAll = DockClickSupport.isVerifiedMinimizeAll(
@@ -477,7 +516,12 @@ final class DockClickService {
                     )
                     if isVerifiedMinimizeAll, minimizeAll == nil {
                         minimizeAll = item
-                    } else if commandCharacter?.uppercased() == "M", modifiers == 2 {
+                    }
+                    // Independent of the capture above: a second verified
+                    // Minimize All used to fall through to this branch and
+                    // report the real item as the conflict.
+                    if !isVerifiedMinimizeAll,
+                       commandCharacter?.uppercased() == "M", modifiers == 2 {
                         hasConflictingOptionM = true
                     }
                     if commandCharacter?.uppercased() == "M",
@@ -501,7 +545,9 @@ final class DockClickService {
                 return .performed
             }
         }
-        return hasConflictingOptionM ? .shortcutUnsafe : .unavailable
+        // A truncated walk cannot vouch for the absence of another ⌥⌘M, and
+        // `.unavailable` is what authorises posting one blind.
+        return (hasConflictingOptionM || truncated) ? .shortcutUnsafe : .unavailable
     }
 
     private static func postMinimizeAllShortcut() {
@@ -650,7 +696,7 @@ final class DockClickService {
     private static func activate(pid: pid_t) {
         DispatchQueue.main.async {
             guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else { return }
-            NSApp.yieldActivation(to: app)
+            ActivationHandoff.yield(to: app)
             if !app.activate(from: NSRunningApplication.current, options: []) {
                 app.activate(options: [])
             }
@@ -667,8 +713,8 @@ final class DockClickService {
         AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
     }
 
-    /// Cycles through an app's unminimized windows by raising the rearmost one
-    /// to the front, mimicking ⌘` (Command-Tilde) behavior.
+    /// Cycles through an app's windows on the current Space by raising the
+    /// rearmost one to the front, mimicking ⌘` (Command-Tilde) behavior.
     ///
     /// The rearmost window comes from the WindowServer's real z-order, not the
     /// AX windows array: that array keeps the focused window first, so
@@ -676,62 +722,37 @@ final class DockClickService {
     /// two frontmost windows and the rest are never visited. Raising the true
     /// rearmost window walks every window in round-robin order.
     private static func cycleWindows(pid: pid_t, windows: [AXUIElement]) {
-        guard windows.count > 1 else { return }
-
-        let rearWindow: AXUIElement
-        if let rear = rearmostByZOrder(pid: pid, windows: windows) {
-            rearWindow = rear
-        } else {
-            // No z-order available (window ids unresolved): the AX array is
-            // focused-first, so its last element is still the best rear guess.
-            rearWindow = windows[windows.count - 1]
-        }
+        let candidates = cycleCandidates(pid: pid, windows: windows)
+        // More than one only fails here when a window closed between the press
+        // and the release; the click was decided on the same list.
+        guard candidates.count > 1, let rearWindow = candidates.last else { return }
 
         AXUIElementPerformAction(rearWindow, kAXRaiseAction as CFString)
         let app = AXUIElementCreateApplication(pid)
+        // Runs on main, and a hung app would otherwise hold the focus write
+        // for the multi-second AX default with the menu bar and every panel
+        // frozen behind it.
+        AXUIElementSetMessagingTimeout(app, 0.35)
         AXUIElementSetAttributeValue(app, kAXFocusedWindowAttribute as CFString, rearWindow)
     }
 
-    /// The candidate that sits deepest in the WindowServer's front-to-back
-    /// on-screen list. Windows on other Spaces are not in that list, which is
+    /// The passed windows that the WindowServer currently lists on screen,
+    /// front to back. Windows on other Spaces are not in that list, which is
     /// wanted: cycling from the Dock must not yank the user across Spaces.
-    private static func rearmostByZOrder(pid: pid_t, windows: [AXUIElement]) -> AXUIElement? {
-        let orderedIDs = onScreenWindowIDs(pid: pid)
-        guard orderedIDs.count > 1 else { return nil }
-        var rear: (window: AXUIElement, depth: Int)?
-        for window in windows {
-            guard let id = AXWindowResolver.windowID(for: window),
-                  let depth = orderedIDs.firstIndex(of: id) else { continue }
-            if rear == nil || depth > rear!.depth {
-                rear = (window, depth)
-            }
-        }
-        return rear?.window
+    ///
+    /// Both the decision to cycle and the raise read this list. They used to
+    /// disagree — the decision counted every AX window, Spaces included, so a
+    /// Space holding one window still promised a rotation and the raise then
+    /// had to guess (issue #1204).
+    private static func cycleCandidates(pid: pid_t, windows: [AXUIElement]) -> [AXUIElement] {
+        let ids = windows.map { AXWindowResolver.windowID(for: $0) }
+        let indices = DockClickSupport.cycleCandidateIndices(
+            windowIDs: ids,
+            onScreenFrontToBack: onScreenWindowIDs(pid: pid))
+        return indices.map { windows[$0] }
     }
 
     // MARK: - Geometry
-
-    /// The on-screen bounds of the Dock strip, in the same top-left-origin
-    /// global coordinates as event locations, or nil while it is off screen.
-    /// The strip is the single layer-20 window the Dock owns; with auto-hide
-    /// its on-screen state flips as it slides in and out, verified empirically
-    /// on macOS 27. The bounds also pin the strip to the one display that has
-    /// it, so edge clicks on other displays never reach the icon matching.
-    private static func revealedDockBounds(dockPID: pid_t) -> CGRect? {
-        guard let list = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID)
-                as? [[String: Any]] else { return nil }
-        let dockLevel = Int(CGWindowLevelForKey(.dockWindow))
-        for window in list {
-            guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == dockPID,
-                  (window[kCGWindowLayer as String] as? Int) == dockLevel,
-                  let boundsDict = window[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
-                  bounds.width > 0, bounds.height > 0
-            else { continue }
-            return bounds
-        }
-        return nil
-    }
 
     /// Cheap pre-filter before any AX call, in the event's top-left-origin
     /// global coordinates. With magnification the hovered icon can grow above

@@ -53,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // Before any window exists, so nothing is ever built with the wrong
         // appearance and then repainted.
         AppAppearanceController.shared.apply()
+        GlobalShortcut.startObservingKeyboardLayout()
         // UNUserNotificationCenter aborts in a process without a bundle;
         // guard keeps ad-hoc runs of the bare binary alive for probing.
         if Bundle.main.bundleIdentifier != nil {
@@ -60,6 +61,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
         beginStartupWatch()
         Self.boundAccessibilityWaits()
+        // Resolve the Accessibility Keyboard's pid now. The lookup is async, so
+        // a feature that asks first and has no second chance — the switcher
+        // judges a click only after cancelSession() has already run — would
+        // otherwise be told "not running" once per launch.
+        _ = AssistiveKeyboard.isRunning
 
         // Finish the on-disk rename for installs carried over from a pre-2.5
         // build, or retire a leftover old-named bundle. Returns true when we are
@@ -146,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                     .dockPreview, .finderCutPaste, .finderRename, .autoQuit, .dockClick,
                     .middleClick, .windowMaximizer, .keyboardDebounce, .windowLayout,
                     .textSnippets, .brightness, .radialMenu, .mouseButtonShortcuts,
-                    .superKey, .mixer,
+                    .mouseClickDebounce, .superKey, .quitWindowProtection, .mixer,
                 ])
             }
             .store(in: &cancellables)
@@ -243,11 +249,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         WindowMaximizer.shared.stop()
         WindowLayoutService.shared.suspend()
         KeyboardDebounceService.shared.suspend()
+        MouseClickDebounceService.shared.suspend()
         TextSnippetService.shared.suspend()
         // Takes the Super key mapping back out before the process goes away.
         SuperKeyService.shared.suspend()
+        // Dock's app and window switcher hotkeys persist after quit.
+        AppSwitcher.shared.suspend()
+        MouseButtonShortcutService.shared.suspend()
         MiddleClickService.shared.suspend()
+        ScrollInverter.shared.suspend()
         SmoothScrollService.shared.suspend()
+        if AppFeature.mouseAcceleration.isAvailable
+            || MouseAccelerationRecovery.hasPendingEntries() {
+            MouseAccelerationService.shared.stop()
+        }
         MouseNavigationService.shared.suspend()
         DockPreviewService.shared.stop()
         SoundOutputSwitcher.shared.stop()
@@ -1339,6 +1354,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             let window = NSWindow(contentViewController: host)
             // .miniaturizable so the Window menu's Minimize (Cmd+M) actually works.
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            host.view.widthAnchor.constraint(greaterThanOrEqualToConstant: SettingsWindowSupport.minContentWidth).isActive = true
+            host.view.heightAnchor.constraint(greaterThanOrEqualToConstant: SettingsWindowSupport.minContentHeight).isActive = true
+            let minFrame = window.frameRect(forContentRect: NSRect(
+                x: 0, y: 0,
+                width: SettingsWindowSupport.minContentWidth,
+                height: SettingsWindowSupport.minContentHeight
+            )).size
+            window.minSize = minFrame
             window.contentMinSize = NSSize(width: SettingsWindowSupport.minContentWidth,
                                            height: SettingsWindowSupport.minContentHeight)
             let visible = NSScreen.pointerVisibleFrame
@@ -1377,8 +1400,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         let margin: CGFloat = 40
         let availableWidth = max(1, visible.width - margin)
         let availableHeight = max(1, visible.height - margin)
-        let width = min(max(window.frame.width, 360), availableWidth)
-        let height = min(max(window.frame.height, 320), availableHeight)
+        let minFrame = window.frameRect(forContentRect: NSRect(
+            x: 0, y: 0,
+            width: SettingsWindowSupport.minContentWidth,
+            height: SettingsWindowSupport.minContentHeight
+        )).size
+        let width = min(max(window.frame.width, minFrame.width), availableWidth)
+        let height = min(max(window.frame.height, minFrame.height), availableHeight)
         var frame = force
             ? NSRect(x: visible.midX - width / 2,
                      y: visible.midY - height / 2,
@@ -1533,7 +1561,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         return true
     }
 
-    func showUpdateHighlights(includeSupportIntro: Bool = false) {
+    func showUpdateHighlights() {
         closePopover()
         if let window = updateHighlightsWindow {
             NSApp.activate(ignoringOtherApps: true)
@@ -1545,13 +1573,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
                 guard let self else { return }
                 self.markUpdateHighlightsSeen()
                 self.updateHighlightsWindow?.close()
-                DispatchQueue.main.async { [weak self] in
-                    if includeSupportIntro {
-                        self?.showSupportUpdateIntro()
-                    } else {
-                        _ = self?.showSupportUpdateIntroIfNeeded()
-                    }
-                }
             }
         ))
         host.sizingOptions = .preferredContentSize
@@ -1737,6 +1758,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        if sender === settingsWindow {
+            let minFrame = sender.frameRect(forContentRect: NSRect(
+                x: 0, y: 0,
+                width: SettingsWindowSupport.minContentWidth,
+                height: SettingsWindowSupport.minContentHeight
+            )).size
+            return NSSize(
+                width: max(frameSize.width, minFrame.width),
+                height: max(frameSize.height, minFrame.height)
+            )
+        }
+        return frameSize
+    }
+
     func windowDidEndLiveResize(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window === settingsWindow else { return }
         saveSettingsWindowSize(window)
@@ -1746,6 +1782,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     /// restore is title bar independent).
     private func saveSettingsWindowSize(_ window: NSWindow) {
         guard let size = window.contentView?.frame.size else { return }
+        guard SettingsWindowSupport.isValidContentSize(width: Double(size.width),
+                                                      height: Double(size.height)) else { return }
         UserDefaults.standard.set(Double(size.width), forKey: DefaultsKey.settingsWindowWidth)
         UserDefaults.standard.set(Double(size.height), forKey: DefaultsKey.settingsWindowHeight)
     }

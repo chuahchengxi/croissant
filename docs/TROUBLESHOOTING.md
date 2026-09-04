@@ -68,6 +68,11 @@ To wipe Croissaint's granted permissions and let macOS ask again from scratch, p
   tccutil reset ScreenCapture com.croissaint.utils
   ```
 
+  A self-built Developer variant has its own grants under
+  `com.vorssaint.utils.dev`. Resetting is the way out when System Settings
+  shows the permission as granted but the app disagrees — that happens when a
+  grant was given to an earlier ad-hoc build whose signature no longer matches.
+
 ## Clean uninstall
 
 The bundled script takes out everything Croissaint added, the app itself, its preferences and saved state, the login item, its privacy grants, and the optional closed lid `sudoers` rule.

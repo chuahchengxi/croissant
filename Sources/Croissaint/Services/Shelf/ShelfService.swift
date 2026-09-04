@@ -101,6 +101,16 @@ final class ShelfService: ObservableObject {
             case let .batch(items): return items.flatMap { $0.tooltipLeafKinds }
             }
         }
+
+        /// Whether this item, or anything nested in it, is a file. Recurses
+        /// the way leafCount does but stops at the first one it finds.
+        var holdsFile: Bool {
+            switch payload {
+            case .file: return true
+            case .text, .link: return false
+            case let .batch(items): return items.contains(where: \.holdsFile)
+            }
+        }
     }
 
     @Published private(set) var items: [Item] = [] {
@@ -169,10 +179,11 @@ final class ShelfService: ObservableObject {
     @Published private(set) var dockedJustCaught = false
     private var dockedFlashWork: DispatchWorkItem?
     private var dockedEndWork: DispatchWorkItem?
+    private var dockDwellStart: TimeInterval?
     /// The global monitor cannot see every way a drag ends (drops on our own
     /// windows, cancelled drags, mouse-ups the drag machinery consumes), so a
-    /// small timer watches the physical button while a drag holds the docked
-    /// shelf up. Alive only during a drag.
+    /// small timer watches the physical button and advances hover dwells after
+    /// pointer movement stops. Alive only during a drag.
     private var dockedWatchdog: Timer?
     /// Set when the shortcut or a menu opens an empty shelf on purpose, so it
     /// shows even with nothing in it yet. Items keep it up on their own.
@@ -428,10 +439,10 @@ final class ShelfService: ObservableObject {
                     self.handleDrag(event)
                 }
                 if defaults.bool(forKey: DefaultsKey.shelfDropZoneEnabled) {
-                    self.handleDragForDock()
+                    self.handleDragForDock(event)
                 }
                 if defaults.bool(forKey: DefaultsKey.shelfEdgeDragEnabled) {
-                    self.handleDragForEdge(event)
+                    self.handleDragForEdge(at: event.timestamp)
                 }
                 // Every open gesture gets the button watchdog, not just one
                 // that engaged the drop zone: a mouse-up swallowed by the
@@ -452,6 +463,7 @@ final class ShelfService: ObservableObject {
         dockedWatchdog = nil
         dockedEndWork?.cancel()
         dockedEndWork = nil
+        dockDwellStart = nil
         dockedDragActive = false
         dockedProximate = false
         edgeDwellMatch = nil
@@ -614,12 +626,12 @@ final class ShelfService: ObservableObject {
     }
 
     /// A qualifying drag is in flight: keep the pill under the icon as a small,
-    /// minimized target, and let the card open only while the pointer is near
+    /// minimized target, and let the card open only when the pointer dwells near
     /// it. It never hides mid drag on its own account. If the classic shelf
     /// panel comes up instead (shake, shortcut, or now an edge peek), that
     /// panel is the target and `syncDockedShelf` steps the docked one aside
     /// for as long as the classic panel is visible, one shelf at a time.
-    private func handleDragForDock() {
+    private func handleDragForDock(_ event: NSEvent) {
         guard dockedFeatureOn, automaticOpenAllowed, !isVisible,
               !isInternalDragActive, isContentDragActive() else { return }
         // Drag events still flowing means the drag is alive: a pending end
@@ -628,10 +640,50 @@ final class ShelfService: ObservableObject {
         dockedEndWork = nil
         var changed = false
         if !dockedDragActive { dockedDragActive = true; changed = true }
-        let near = mouseNearDock(NSEvent.mouseLocation)
-        if near != dockedProximate { dockedProximate = near; changed = true }
+        if updateDockedProximity(at: event.timestamp) { changed = true }
+
         startDockedWatchdog()
         if changed { scheduleDockedSync() }
+    }
+
+    /// Advances the hover dwell from both drag events and the drag watchdog.
+    /// A user can stop moving immediately after entering the pill, so relying
+    /// on another dragged event would leave the 150 ms dwell unfinished.
+    private func updateDockedProximity(at now: TimeInterval) -> Bool {
+        var changed = false
+        let mouse = NSEvent.mouseLocation
+        let anchor = statusItemFrameProvider?()
+        let screen = anchor.flatMap { rect in
+            NSScreen.screens.first { $0.frame.intersects(rect) }
+        }?.frame ?? NSScreen.main?.frame
+
+        let near = ShelfDockDragSupport.isPointNearDock(
+            point: mouse,
+            isProximate: dockedProximate,
+            panelFrame: dockedPanel?.frame,
+            anchorFrame: anchor,
+            screenFrame: screen)
+
+        if dockedProximate {
+            if !near {
+                dockedProximate = false
+                dockDwellStart = nil
+                changed = true
+            }
+        } else {
+            if near {
+                if dockDwellStart == nil {
+                    dockDwellStart = now
+                }
+                if let start = dockDwellStart, ShelfDockDragSupport.hasDwelled(since: start, now: now) {
+                    dockedProximate = true
+                    changed = true
+                }
+            } else {
+                dockDwellStart = nil
+            }
+        }
+        return changed
     }
 
     /// The drag ended. Drop the drag state; if a drop landed the shelf now has
@@ -640,6 +692,7 @@ final class ShelfService: ObservableObject {
     /// as a single cancellable work item so the monitor and the watchdog can
     /// both call this without racing each other.
     private func endDockedDrag() {
+        dockDwellStart = nil
         guard dockedDragActive, dockedEndWork == nil else { return }
         dockedWatchdog?.invalidate()
         dockedWatchdog = nil
@@ -659,35 +712,44 @@ final class ShelfService: ObservableObject {
     /// Ends the drag state even when no mouse-up ever reaches the global
     /// monitor: the drag machinery can consume it, the drop may land on one of
     /// our own windows, or the drag may be cancelled. The physical button is
-    /// the one truth that survives all of those.
+    /// the one truth that survives all of those. The same tick also completes
+    /// a dock or edge dwell after the pointer comes to rest.
     private func startDockedWatchdog() {
         guard dockedWatchdog == nil else { return }
-        dockedWatchdog = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        dockedWatchdog = Timer.scheduledTimer(
+            withTimeInterval: min(ShelfDockDragSupport.dwell, ShelfEdgeDragSupport.dwell),
+            repeats: true
+        ) { [weak self] _ in
             guard let self else { return }
             guard self.dockedDragActive || self.sawGestureStart else {
                 self.dockedWatchdog?.invalidate()
                 self.dockedWatchdog = nil
                 return
             }
-            if !CGEventSource.buttonState(.combinedSessionState, button: .left) {
+            guard CGEventSource.buttonState(.combinedSessionState, button: .left) else {
                 self.closeDragGesture()
                 self.endDockedDrag()
                 self.endEdgePeekDrag()
+                return
             }
+            let now = ProcessInfo.processInfo.systemUptime
+            if self.dockedDragActive, self.updateDockedProximity(at: now) {
+                self.scheduleDockedSync()
+            }
+            self.handleDragForEdge(at: now)
         }
         dockedWatchdog?.tolerance = 0.05
     }
 
     /// A qualifying drag held near a screen's left or right edge for a short
     /// dwell peeks the classic panel in from that side, offset mostly off
-    /// screen. Once peeking, this same function checks retreat on every
-    /// later drag event instead of considering a new trigger, since by then
+    /// screen. Once peeking, this same function checks retreat on every drag
+    /// event or watchdog tick instead of considering a new trigger, since by then
     /// `isVisible` is already true and would otherwise block the check.
-    private func handleDragForEdge(_ event: NSEvent) {
+    private func handleDragForEdge(at now: TimeInterval) {
         guard edgeFeatureOn, automaticOpenAllowed, !isInternalDragActive, isContentDragActive()
         else { return }
         let mouse = NSEvent.mouseLocation
-        let now = event.timestamp
         if let edgePeekMatch {
             // The panel's own on-screen strip sits well within retreatDistance
             // of the edge by construction (its width is a fraction of the
@@ -825,27 +887,11 @@ final class ShelfService: ObservableObject {
         scheduleDockedSync()
     }
 
-    /// True when the pointer is close enough to the docked shelf to open it. It
-    /// uses the shown card's own frame once open (so moving onto it to drop
-    /// keeps it open) and a generous band hanging under the icon while still a
-    /// pill (so a little approach is enough to trigger it).
-    private func mouseNearDock(_ mouse: NSPoint) -> Bool {
-        guard let anchor = statusItemFrameProvider?() else { return false }
-        if dockedProximate, let frame = dockedPanel?.frame {
-            return frame.insetBy(dx: -72, dy: -72).contains(mouse)
-        }
-        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(anchor) }) ?? NSScreen.withMouse
-        else { return false }
-        let band = NSRect(x: anchor.midX - 150,
-                          y: screen.frame.maxY - 200,
-                          width: 300, height: 200)
-        return band.contains(mouse)
-    }
-
     /// Called by the docked view when a drop lands on it: settle back to the
     /// pill with a brief green tick, so the catch reads without the card
     /// staying in the way.
     func dockDidAccept() {
+        dockDwellStart = nil
         dockedJustCaught = true
         dockedCollapsed = true
         dockedForcedOpen = false
@@ -1263,26 +1309,36 @@ final class ShelfService: ObservableObject {
     /// part of it; otherwise they stay scoped to that tile. Batches flatten to
     /// their leaves just like an external drag.
     func fileURLsForActions(startingAt item: Item) -> [URL] {
-        fileURLs(for: selection.contains(item.id) ? selectedItems() : [item])
+        fileURLs(in: selection.contains(item.id) ? selectedItems() : [item])
     }
 
-    /// The same list for an action that belongs to the whole shelf rather than
-    /// one tile (the header's AirDrop chip): the selection when there is one,
-    /// every item otherwise.
-    func fileURLsForShelfActions() -> [URL] {
-        fileURLs(for: selection.isEmpty ? items : selectedItems())
-    }
-
-    /// Whether such an action has anything to send. Payload-only, no file
-    /// system hits, so a view can ask on every render.
-    var hasFileItems: Bool {
-        dragItems(for: selection.isEmpty ? items : selectedItems()).contains { entry in
-            if case .file = entry.payload { return true }
-            return false
+    /// What the panel's own buttons act on: the selection when there is one,
+    /// everything otherwise, the way its trash button already reads. A grab
+    /// whose files have all died says so and retires them, exactly as a dead
+    /// drag does, rather than leaving a button that quietly does nothing.
+    func fileURLsForActions() -> [URL] {
+        let candidates = selectionOrEverything
+        let urls = fileURLs(in: candidates)
+        guard urls.isEmpty else { return urls }
+        let leaves = dragItems(for: candidates)
+        if leaves.contains(where: \.holdsFile) {
+            handleDeadDrag(leaves)
         }
+        return []
     }
 
-    private func fileURLs(for candidates: [Item]) -> [URL] {
+    /// Whether those same candidates hold a file at all. It never touches the
+    /// disk and stops at the first one, so a button can ask on every redraw
+    /// and stay disabled while the shelf holds only text and links.
+    var hasFilesForActions: Bool {
+        selectionOrEverything.contains(where: \.holdsFile)
+    }
+
+    private var selectionOrEverything: [Item] {
+        selection.isEmpty ? items : selectedItems()
+    }
+
+    private func fileURLs(in candidates: [Item]) -> [URL] {
         // Actions heal moved files the same way a drag does: Open or Reveal
         // on a renamed file should find it, not shrug.
         livingDragItems(in: dragItems(for: candidates)).compactMap { entry in
@@ -1974,6 +2030,11 @@ final class ShelfService: ObservableObject {
     /// thumbnails touch the disk, and this runs at launch), merges it with
     /// anything added in the meantime, then sweeps payload files that lost
     /// their item (crash between write and save, or dropped at sanitizing).
+    /// A blob this build cannot read whole — one that will not decode at all,
+    /// and one that decoded with entries dropped — skips both the save-back
+    /// and the sweep: it is a store this build cannot read, not a shelf the
+    /// user emptied, and the entries it dropped still own payload files that
+    /// the blob it kept still points at.
     private func restoreItems() {
         let sweepCutoff = Date()
         let data = UserDefaults.standard.data(forKey: DefaultsKey.shelfItems)
@@ -1985,8 +2046,9 @@ final class ShelfService: ObservableObject {
             // NSWorkspace and SF Symbols, which are only safe on the main
             // thread, so that step waits for the hop below.
             var sanitized: [ShelfPersistedItem] = []
-            if let data,
-               let decoded = try? JSONDecoder().decode([ShelfPersistedItem].self, from: data) {
+            let store = ShelfPersistenceSupport.load(data)
+            switch store {
+            case let .items(decoded), let .partial(decoded):
                 sanitized = ShelfPersistenceSupport.sanitized(decoded, fileExists: { path in
                     if FileManager.default.fileExists(atPath: path) { return true }
                     // A file on an unmounted volume is not gone: the app can
@@ -1998,6 +2060,8 @@ final class ShelfService: ObservableObject {
                     }
                     return false
                 }, resolveBookmark: Self.resolvedBookmarkPath)
+            case .unreadable:
+                break
             }
             DispatchQueue.main.async {
                 let restored = sanitized.compactMap { self.restoredItem(from: $0) }
@@ -2013,6 +2077,14 @@ final class ShelfService: ObservableObject {
                     self.items = keptRestored + self.items
                     self.startContentThumbnails(for: keptRestored)
                 }
+                // A store this build could not read whole is not an empty
+                // shelf, and it is not the shelf either. Saving over it and
+                // sweeping the payload files it still references would turn
+                // entries this build cannot read into permanent loss — the
+                // dropped entry's file is still there and still referenced,
+                // unlike a `sanitized` drop, whose file is gone by definition.
+                // Both wait for a launch that can read the store again.
+                guard case .items = store else { return }
                 if ShelfPersistenceSupport.needsPersistAfterRestore(
                     restoredIsEmpty: restored.isEmpty,
                     liveItemCount: liveItemCount) {
@@ -2131,6 +2203,15 @@ final class ShelfService: ObservableObject {
         panel?.orderOut(nil)
         ShelfTooltipPopover.shared.hide()
         scheduleDockedSync()
+    }
+
+    /// Handles the floating panel's explicit close button. Automatic hiding,
+    /// shortcut toggling and collapsing the docked shelf keep their contents.
+    func close() {
+        if UserDefaults.standard.bool(forKey: DefaultsKey.shelfClearOnClose) {
+            clear()
+        }
+        hide()
     }
 
     func noteInteraction() {

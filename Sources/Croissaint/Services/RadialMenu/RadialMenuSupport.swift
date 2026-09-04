@@ -4,6 +4,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
 import SwiftUI
 
 /// Accent colors available for radial menu profiles.
@@ -73,6 +74,10 @@ struct RadialMenuProfile: Codable, Identifiable, Equatable {
     var shortcut: String = ""
     var mouseButton: String = RadialMenuMouseTrigger.off.rawValue
     var items: [RadialMenuItem] = []
+    /// The starter set this wheel was created from, so restoring its actions
+    /// brings back that one. Kept as the raw value because it is persisted;
+    /// nil for a wheel whose origin is not known.
+    var preset: String?
 
     func displayName(_ text: RadialMenuFeatureStrings) -> String {
         name.isEmpty ? text.presetGeneral : name
@@ -81,7 +86,7 @@ struct RadialMenuProfile: Codable, Identifiable, Equatable {
 
 extension RadialMenuProfile {
     private enum CodingKeys: String, CodingKey {
-        case id, name, color, shortcut, mouseButton, items
+        case id, name, color, shortcut, mouseButton, items, preset
     }
 
     init(from decoder: Decoder) throws {
@@ -92,7 +97,8 @@ extension RadialMenuProfile {
                   shortcut: try container.decodeIfPresent(String.self, forKey: .shortcut) ?? "",
                   mouseButton: try container.decodeIfPresent(String.self, forKey: .mouseButton) ?? RadialMenuMouseTrigger.off.rawValue,
                   items: try container.decodeIfPresent([FailableRadialMenuItem].self, forKey: .items)?
-                      .compactMap(\.value) ?? [])
+                      .compactMap(\.value) ?? [],
+                  preset: try container.decodeIfPresent(String.self, forKey: .preset))
     }
 }
 
@@ -101,6 +107,19 @@ private struct FailableRadialMenuProfile: Decodable {
 
     init(from decoder: Decoder) throws {
         value = try? RadialMenuProfile(from: decoder)
+    }
+}
+
+/// A profile read for its mouse button alone: the question the event taps ask,
+/// answered without walking the items or decoding the icons they carry.
+private struct RadialMenuProfileButton: Decodable {
+    let mouseButton: String?
+
+    private enum CodingKeys: String, CodingKey { case mouseButton }
+
+    init(from decoder: Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        mouseButton = (try? container?.decodeIfPresent(String.self, forKey: .mouseButton)) ?? nil
     }
 }
 
@@ -182,7 +201,8 @@ enum RadialMenuProfilePreset: String, CaseIterable, Identifiable {
                            color: color ?? defaultColor,
                            shortcut: shortcut,
                            mouseButton: mouseButton,
-                           items: makeItems())
+                           items: makeItems(),
+                           preset: rawValue)
     }
 }
 
@@ -421,9 +441,11 @@ extension RadialMenuSupport {
     }
 
     /// Whether the radial menu currently owns this extra button as its
-    /// summoner. Mouse navigation asks this from its own tap and lets a
-    /// claimed button through; pure defaults reads, so asking never wakes
-    /// the radial menu service.
+    /// summoner. Mouse navigation and the mouse button shortcuts both ask
+    /// this from inside their own tap callbacks, on every event of a
+    /// side-button gesture, so it reads defaults and the stored buttons only:
+    /// never the items, and never `decodeProfiles`, which decodes their
+    /// custom icons. Asking never wakes the radial menu service.
     static func claimsMouseButton(_ button: Int64) -> Bool {
         claimsMouseButton(button, defaults: .standard)
     }
@@ -431,10 +453,8 @@ extension RadialMenuSupport {
     static func claimsMouseButton(_ button: Int64, defaults: UserDefaults) -> Bool {
         guard defaults.bool(forKey: AppFeature.radialMenu.availabilityKey),
               defaults.bool(forKey: DefaultsKey.radialMenuEnabled) else { return false }
-        let profiles = decodeProfiles(defaults.data(forKey: DefaultsKey.radialMenuProfiles), defaults: defaults)
-        return profiles.contains {
-            RadialMenuMouseTrigger.sanitized($0.mouseButton).buttonNumber == button
-        }
+        return claimedMouseButtons(defaults.data(forKey: DefaultsKey.radialMenuProfiles),
+                                   defaults: defaults).contains(button)
     }
 }
 
@@ -484,11 +504,52 @@ enum RadialNowPlayingSupport {
     static let playbackRateKey = "kMRMediaRemoteNowPlayingInfoPlaybackRate"
 
     private static let forbiddenScalars = CharacterSet.controlCharacters.union(.newlines)
-    private static let maximumArtworkBytes = 12 * 1_024 * 1_024
+    /// The one artwork cap. The adapter (`Sources/NowPlayingAdapter`) drops
+    /// artwork above it before encoding, and the bridge's pipe cap is
+    /// `maximumAdapterReplyBytes`, sized so the base64 line (4/3 of the bytes,
+    /// so 16 MB) plus the other keys fits.
+    static let maximumArtworkBytes = 12 * 1_024 * 1_024
+    static let maximumAdapterReplyBytes = maximumArtworkBytes / 3 * 4 + 1_024 * 1_024
 
     static func playbackIsActive(remoteIsPlaying: Bool?, info: [String: Any]) -> Bool {
         if let remoteIsPlaying { return remoteIsPlaying }
         return (info[playbackRateKey] as? NSNumber)?.doubleValue ?? 0 > 0
+    }
+
+    /// One reply from the Now Playing adapter (`Resources/now-playing.pl`):
+    /// the MediaRemote metadata keys it forwards, plus the owning app and the
+    /// remote's own playing flag, in the shape `snapshot(info:...)` reads.
+    struct AdapterReply {
+        let info: [String: Any]
+        let pid: Int32
+        let displayID: String?
+        let isPlaying: Bool?
+    }
+
+    /// Parses the adapter's JSON line, the last non-blank line of the run's
+    /// output: stderr shares the pipe, so a perl warning (a locale it cannot
+    /// set, say) can precede it. Artwork arrives base64-encoded under
+    /// `artworkBase64` and is handed on as `artworkDataKey` bytes. An `error`
+    /// key, a non-object or unreadable bytes read as no reply.
+    static func adapterReply(from data: Data) -> AdapterReply? {
+        let blank: Set<UInt8> = [0x20, 0x09, 0x0D]
+        guard let line = data.split(separator: 0x0A).last(where: { $0.contains { !blank.contains($0) } }),
+              let object = try? JSONSerialization.jsonObject(with: line),
+              let fields = object as? [String: Any],
+              fields["error"] == nil else { return nil }
+        var info: [String: Any] = [:]
+        for key in [titleKey, artistKey, albumKey] {
+            if let value = fields[key] as? String { info[key] = value }
+        }
+        if let rate = fields[playbackRateKey] as? NSNumber { info[playbackRateKey] = rate }
+        if let artwork = fields["artworkBase64"] as? String,
+           let bytes = Data(base64Encoded: artwork), !bytes.isEmpty {
+            info[artworkDataKey] = bytes
+        }
+        return AdapterReply(info: info,
+                            pid: (fields["pid"] as? NSNumber)?.int32Value ?? 0,
+                            displayID: fields["displayID"] as? String,
+                            isPlaying: fields["isPlaying"] as? Bool)
     }
 
     static func snapshot(info: [String: Any],
@@ -698,9 +759,31 @@ enum RadialMenuSupport {
         }
     }
 
+    /// The mouse buttons the wheel is bound to right now, decoded from the
+    /// stored buttons alone.
+    ///
+    /// This is the question the event taps ask, so it must stay cheap:
+    /// `decodeProfiles` answers it too, but only by paying for every item on
+    /// every wheel. The legacy fallback is the same one it migrates from, so
+    /// the two answers cannot drift apart for a user who has not saved a
+    /// profile yet.
+    static func claimedMouseButtons(_ data: Data?, defaults: UserDefaults = .standard) -> [Int64] {
+        if let data, let decoded = try? JSONDecoder().decode([RadialMenuProfileButton].self, from: data) {
+            return decoded.compactMap { RadialMenuMouseTrigger.sanitized($0.mouseButton).buttonNumber }
+        }
+        let legacy = RadialMenuMouseTrigger.sanitized(
+            defaults.string(forKey: DefaultsKey.radialMenuMouseButton))
+        return legacy.buttonNumber.map { [$0] } ?? []
+    }
+
     /// Decodes profiles from JSON blob. If missing, checks for legacy
     /// items / shortcut / mouse button to migrate existing users, or creates
     /// the starter profile.
+    ///
+    /// Walks every item on every wheel and decodes each custom icon (up to
+    /// `RadialMenuFaviconFetcher.maxStoredIconBytes` of PNG apiece), so it
+    /// belongs to settings and session start, never to an event-tap callback.
+    /// A callback that only needs the summoner wants `claimedMouseButtons`.
     static func decodeProfiles(_ data: Data?, defaults: UserDefaults = .standard) -> [RadialMenuProfile] {
         if let data, let decoded = try? JSONDecoder().decode([FailableRadialMenuProfile].self, from: data) {
             let sanitized = sanitizedProfiles(decoded.compactMap(\.value))
@@ -720,7 +803,10 @@ enum RadialMenuSupport {
             color: .accent,
             shortcut: legacyShortcut,
             mouseButton: legacyMouseButton,
-            items: items
+            items: items,
+            // The single wheel that came before profiles started from the
+            // general starter set, whatever it was edited into since.
+            preset: RadialMenuProfilePreset.general.rawValue
         )
         return [initialProfile]
     }
@@ -822,69 +908,64 @@ enum RadialMenuGeometry {
 enum RadialMenuFaviconFetcher {
     /// Max allowable icon data storage: 64KB
     static let maxStoredIconBytes = 65536
+    /// A favicon should be tiny. Stop the transfer itself at this bound so a
+    /// hostile response cannot be buffered into unbounded memory first.
+    static let maxDownloadBytes = 2 * 1_024 * 1_024
+    static let maxSourceDimension = 4_096
+    static let maxSourcePixels = 16_777_216
 
     /// Fetches the favicon for a URL string on-demand.
     /// Runs on a background task, calls completion on main queue.
     static func fetchFavicon(for rawURL: String, completion: @escaping (Result<Data, Error>) -> Void) {
-        guard let normalized = RadialMenuSupport.normalizedURL(rawURL),
-              let url = URL(string: normalized),
-              let host = url.host, !host.isEmpty else {
+        guard let url = faviconURL(for: rawURL) else {
             DispatchQueue.main.async {
                 completion(.failure(FaviconError.invalidURL))
             }
             return
         }
-
-        let scheme = url.scheme ?? "https"
-        var candidateURLs: [URL] = []
-
-        // 1. Direct /favicon.ico on host
-        if let rootFavicon = URL(string: "\(scheme)://\(host)/favicon.ico") {
-            candidateURLs.append(rootFavicon)
-        }
-        // 2. High-res favicon fallback service (Google)
-        if let googleFavicon = URL(string: "https://www.google.com/s2/favicons?domain=\(host)&sz=128") {
-            candidateURLs.append(googleFavicon)
-        }
-        // 3. DuckDuckGo favicon service
-        if let ddgFavicon = URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico") {
-            candidateURLs.append(ddgFavicon)
-        }
-
-        tryFetchCandidates(candidates: candidateURLs, index: 0, completion: completion)
+        FaviconDownload(url: url, byteLimit: maxDownloadBytes) { result in
+            DispatchQueue.main.async {
+                guard case let .success(data) = result,
+                      sourceDimensionsAreSafe(data),
+                      let image = NSImage(data: data),
+                      image.size.width > 0, image.size.height > 0,
+                      let pngData = scaledPNGData(from: image)
+                else {
+                    completion(.failure(FaviconError.notFound))
+                    return
+                }
+                completion(.success(pngData))
+            }
+        }.start()
     }
 
-    private static func tryFetchCandidates(candidates: [URL], index: Int, completion: @escaping (Result<Data, Error>) -> Void) {
-        guard index < candidates.count else {
-            DispatchQueue.main.async {
-                completion(.failure(FaviconError.notFound))
-            }
-            return
-        }
+    static func faviconURL(for rawURL: String) -> URL? {
+        guard let normalized = RadialMenuSupport.normalizedURL(rawURL),
+              let url = URL(string: normalized),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false,
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        components.user = nil
+        components.password = nil
+        components.path = "/favicon.ico"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
 
-        let candidate = candidates[index]
-        var request = URLRequest(url: candidate, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5.0)
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)", forHTTPHeaderField: "User-Agent")
-
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 5.0
-        config.timeoutIntervalForResource = 5.0
-        let session = URLSession(configuration: config)
-
-        session.dataTask(with: request) { data, response, _ in
-            if let data,
-               let http = response as? HTTPURLResponse,
-               (200...299).contains(http.statusCode),
-               let image = NSImage(data: data),
-               image.size.width > 0, image.size.height > 0,
-               let pngData = scaledPNGData(from: image) {
-                DispatchQueue.main.async {
-                    completion(.success(pngData))
-                }
-                return
-            }
-            tryFetchCandidates(candidates: candidates, index: index + 1, completion: completion)
-        }.resume()
+    static func sourceDimensionsAreSafe(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+              let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+              let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue,
+              width > 0, height > 0,
+              width <= maxSourceDimension, height <= maxSourceDimension,
+              width <= maxSourcePixels / height
+        else { return false }
+        return true
     }
 
     static func scaledPNGData(from image: NSImage, targetSize: CGFloat = 64) -> Data? {
@@ -909,5 +990,109 @@ enum RadialMenuFaviconFetcher {
     enum FaviconError: Error {
         case invalidURL
         case notFound
+    }
+
+    private struct Origin: Equatable {
+        let scheme: String
+        let host: String
+        let port: Int
+
+        init?(_ url: URL) {
+            guard let scheme = url.scheme?.lowercased(),
+                  let host = url.host?.lowercased() else { return nil }
+            self.scheme = scheme
+            self.host = host
+            port = url.port ?? (scheme == "https" ? 443 : 80)
+        }
+    }
+
+    private final class FaviconDownload: NSObject, URLSessionDataDelegate {
+        private let url: URL
+        private let byteLimit: Int
+        private let completion: (Result<Data, Error>) -> Void
+        private let origin: Origin
+        private var session: URLSession?
+        private var data = Data()
+        private var finished = false
+
+        init(url: URL, byteLimit: Int, completion: @escaping (Result<Data, Error>) -> Void) {
+            self.url = url
+            self.byteLimit = byteLimit
+            self.completion = completion
+            origin = Origin(url)!
+        }
+
+        func start() {
+            var request = URLRequest(url: url,
+                                     cachePolicy: .reloadIgnoringLocalCacheData,
+                                     timeoutInterval: 5)
+            request.setValue("image/*", forHTTPHeaderField: "Accept")
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 5
+            configuration.timeoutIntervalForResource = 5
+            let session = URLSession(configuration: configuration,
+                                     delegate: self,
+                                     delegateQueue: nil)
+            self.session = session
+            session.dataTask(with: request).resume()
+        }
+
+        func urlSession(_ session: URLSession,
+                        dataTask: URLSessionDataTask,
+                        didReceive response: URLResponse,
+                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            guard let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  response.expectedContentLength <= 0
+                    || response.expectedContentLength <= Int64(byteLimit)
+            else {
+                completionHandler(.cancel)
+                finish(.failure(FaviconError.notFound))
+                return
+            }
+            completionHandler(.allow)
+        }
+
+        func urlSession(_ session: URLSession,
+                        dataTask: URLSessionDataTask,
+                        didReceive chunk: Data) {
+            guard data.count + chunk.count <= byteLimit else {
+                dataTask.cancel()
+                finish(.failure(FaviconError.notFound))
+                return
+            }
+            data.append(chunk)
+        }
+
+        func urlSession(_ session: URLSession,
+                        task: URLSessionTask,
+                        willPerformHTTPRedirection newResponse: HTTPURLResponse,
+                        newRequest request: URLRequest,
+                        completionHandler: @escaping (URLRequest?) -> Void) {
+            guard let redirectURL = request.url,
+                  Origin(redirectURL) == origin else {
+                completionHandler(nil)
+                return
+            }
+            completionHandler(request)
+        }
+
+        func urlSession(_ session: URLSession,
+                        task: URLSessionTask,
+                        didCompleteWithError error: Error?) {
+            if let error {
+                finish(.failure(error))
+            } else {
+                finish(.success(data))
+            }
+        }
+
+        private func finish(_ result: Result<Data, Error>) {
+            guard !finished else { return }
+            finished = true
+            session?.finishTasksAndInvalidate()
+            session = nil
+            completion(result)
+        }
     }
 }

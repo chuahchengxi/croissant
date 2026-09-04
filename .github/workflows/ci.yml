@@ -56,6 +56,16 @@ jobs:
       - name: Unit tests
         run: ./build.sh --test --allow-adhoc
 
+      - name: Signing policy regression tests
+        run: ./Tools/test-signing-guard.sh
+
+      - name: Updater integration tests
+        run: |
+          swiftc Sources/Croissaint/Services/DetachedProcess.swift \
+            Sources/Croissaint/Services/Update/UpdateInstallerSupport.swift \
+            Tools/TestUpdateInstaller.swift -o "$RUNNER_TEMP/update-installer-tests"
+          "$RUNNER_TEMP/update-installer-tests"
+
       - name: Build
         run: ./build.sh --allow-adhoc
 

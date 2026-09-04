@@ -23,6 +23,7 @@ struct ScreenshotCaptureSettings: View {
     @AppStorage(DefaultsKey.screenshotFileNumberNext) private var nextNumber = 1
     @AppStorage(DefaultsKey.screenshotIncludePointer) private var includePointer = false
     @AppStorage(DefaultsKey.screenshotShowLastRegion) private var showLastRegion = true
+    @AppStorage(DefaultsKey.screenshotLoupeStartsOn) private var loupeStartsOn = false
     @AppStorage(DefaultsKey.screenshotDownscale) private var downscale = false
     @AppStorage(DefaultsKey.screenshotDelay) private var delay = 0
     @AppStorage(DefaultsKey.screenshotDefaultAction) private var defaultActionRaw = ""
@@ -58,7 +59,6 @@ struct ScreenshotCaptureSettings: View {
                 Text(strings.panelCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                ToolShortcutRows(tool: .screenshot)
                 Toggle(strings.fullScreenShortcutTitle, isOn: $fullScreenShortcutEnabled)
                     .onChange(of: fullScreenShortcutEnabled) { _, _ in
                         ScreenshotService.shared.syncWithPreferences()
@@ -125,6 +125,7 @@ struct ScreenshotCaptureSettings: View {
                 .pickerStyle(.segmented)
                 Toggle(strings.pointerToggle, isOn: $includePointer)
                 Toggle(strings.lastRegionToggle, isOn: $showLastRegion)
+                Toggle(strings.loupeStartsOnToggle, isOn: $loupeStartsOn)
                 previewPositionRow
                 defaultActionRow
             }

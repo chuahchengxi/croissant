@@ -28,6 +28,7 @@ struct ShelfView: View {
     /// Shared Liquid Glass space for the header chips; on macOS 26 they melt
     /// into each other as the pointer crosses between them.
     @Namespace private var headerGlass
+    @State private var shareAnchor = ShelfSharePickerAnchor.Anchor()
 
     private static let dropTypes: [UTType] = [.fileURL, .image, .url, .text, .plainText]
     private static let panelWidth: CGFloat = 304
@@ -153,7 +154,7 @@ struct ShelfView: View {
                         iconSize: 13,
                         glassID: "shelf-close",
                         glassNamespace: headerGlass) {
-            (onDismiss ?? { shelf.hide() })()
+            (onDismiss ?? { shelf.close() })()
         }
     }
 
@@ -169,30 +170,24 @@ struct ShelfView: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            if canAirDrop { airDropButton }
+            shareButton
             clearButton
         }
         .frame(minHeight: 30)
     }
 
-    /// Sends the shelf straight on: park a few files here, then hand the whole
-    /// pile to someone without a detour through Finder. Scoped to the
-    /// selection when there is one, otherwise everything on the shelf. Hidden
-    /// rather than disabled when nothing on the shelf is a file, since text and
-    /// link tiles have nothing AirDrop can carry.
-    private var airDropButton: some View {
+    /// The system share sheet includes AirDrop and the Mac's other services.
+    private var shareButton: some View {
         GlassIconButton(systemImage: "square.and.arrow.up",
-                        helpText: l10n.s.shelfActionAirDrop,
+                        helpText: l10n.s.shelfActionShare,
                         width: 42,
                         height: 28,
                         iconSize: 12,
                         shape: .rounded(6)) {
-            airDropAction()
+            shareAction()
         }
-    }
-
-    private var canAirDrop: Bool {
-        shelf.hasFileItems && NSSharingService(named: .sendViaAirDrop) != nil
+        .background(ShelfSharePickerAnchor(anchor: shareAnchor))
+        .disabled(!shelf.hasFilesForActions)
     }
 
     private var clearButton: some View {
@@ -205,6 +200,22 @@ struct ShelfView: View {
                         shape: .rounded(6)) {
             trashAction()
         }
+    }
+
+    /// The shared face of the footer's two buttons.
+    private func footerButtonFace(systemImage: String, tint: Color, hovered: Bool) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 12, weight: .semibold))
+            .frame(width: 42, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(tint.opacity(hovered ? 0.20 : 0.07))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(tint.opacity(hovered ? 0.34 : 0.12), lineWidth: 0.8)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var title: String {
@@ -248,14 +259,10 @@ struct ShelfView: View {
             .overlay(WindowMoveHandle(acceptsDrops: true))
     }
 
-    private func airDropAction() {
-        let urls = shelf.fileURLsForShelfActions()
-        guard !urls.isEmpty, let service = NSSharingService(named: .sendViaAirDrop) else { return }
-        shelf.noteInteraction()
-        // The picker is an ordinary window of ours, so the app has to be front
-        // for it to come up in front of whatever the user was looking at.
-        NSApp.activate(ignoringOtherApps: true)
-        service.perform(withItems: urls)
+    private func shareAction() {
+        let urls = shelf.fileURLsForActions()
+        guard !urls.isEmpty else { return }
+        shareAnchor.present(urls)
     }
 
     private func trashAction() {
@@ -264,5 +271,32 @@ struct ShelfView: View {
         } else {
             shelf.removeItems(Array(shelf.selection))
         }
+    }
+}
+
+/// Hosts the invisible view the system share sheet is anchored to. SwiftUI
+/// creates and owns that view, so the button reaches whichever one is on
+/// screen right now through the box below.
+private struct ShelfSharePickerAnchor: NSViewRepresentable {
+    final class Anchor {
+        fileprivate weak var view: NSView?
+        private let presenter = ShelfSharePresenter()
+
+        func present(_ urls: [URL]) {
+            guard let view else { return }
+            presenter.present(for: urls, from: view)
+        }
+    }
+
+    let anchor: Anchor
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        anchor.view = view
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        anchor.view = nsView
     }
 }

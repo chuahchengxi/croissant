@@ -37,11 +37,9 @@ final class FeatureRuntime: ObservableObject {
     /// Opening the bundle by path rather than by id survives a stale
     /// LaunchServices record, which a just-replaced bundle can still have.
     func relaunchApp() {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
-        task.arguments = ["-c", "sleep 0.6; /usr/bin/open \"$1\"",
-                          "croissaint-relaunch", Bundle.main.bundlePath]
-        try? task.run()
+        _ = try? DetachedProcess.spawn("/bin/sh",
+            ["-c", "sleep 0.6; /usr/bin/open \"$1\"",
+             "croissaint-relaunch", Bundle.main.bundlePath])
         NSApp.terminate(nil)
     }
 
@@ -177,10 +175,13 @@ final class FeatureRuntime: ObservableObject {
         .scrollInverter: { ScrollInverter.shared.syncWithPreferences() },
         .focusFollowsMouse: { FocusFollowsMouseService.shared.syncWithPreferences() },
         .smoothScroll: { SmoothScrollService.shared.syncWithPreferences() },
+        .mouseAcceleration: { MouseAccelerationService.shared.syncWithPreferences() },
         .mouseNavigation: { MouseNavigationService.shared.syncWithPreferences() },
         .mouseButtonShortcuts: { MouseButtonShortcutService.shared.syncWithPreferences() },
         .middleClick: { MiddleClickService.shared.syncWithPreferences() },
+        .mouseClickDebounce: { MouseClickDebounceService.shared.syncWithPreferences() },
         .keyboardDebounce: { KeyboardDebounceService.shared.syncWithPreferences() },
+        .quitWindowProtection: { QuitProtectionService.shared.syncWithPreferences() },
         .superKey: { SuperKeyService.shared.syncWithPreferences() },
         .textSnippets: {
             TextSnippetService.shared.syncWithPreferences()

@@ -32,16 +32,19 @@ deliberate. An ad hoc signature's designated requirement is the binary's own
 code hash, so it changes on every build and every permission you granted goes
 stale with it — macOS keeps showing a ticked box in Accessibility while the app
 sees `AXIsProcessTrusted()` as false, which reads as a bug in the app rather
-than a signing problem. Run this once
+than a signing problem. Developer builds (`--dev`) create a local identity if
+none is available; plain builds ask you to run this once:
 
 ```sh
 ./Tools/setup-signing.sh
 ```
 
-to create a free, self signed identity called `Croissaint Utils Signing` in a
-dedicated keychain. `build.sh` then signs local builds with it and gives them a
+Either way `build.sh` then signs local builds with it and gives them a
 constant designated requirement, so granted permissions stick across rebuilds.
-It is a local convenience only and never shows up outside the keychain.
+If a permission was granted to an earlier ad-hoc build, clear the stale grant
+once (`tccutil reset Accessibility com.croissaint.utils.dev`) and grant it
+again. The identity is a local convenience only and never shows up outside
+the keychain.
 
 If you already ran that and the build still refuses, the login keychain is
 probably locked — `security find-identity` returns nothing either way, which is
@@ -54,14 +57,19 @@ security unlock-keychain ~/Library/Keychains/login.keychain-db
 `./build.sh --allow-adhoc` builds without an identity anyway. Use it for a
 throwaway build or on CI, not for anything you plan to grant permissions to.
 
-Official releases use the same stable self-signed identity from 0.1.6 onward,
-imported from protected CI secrets so its designated requirement stays constant
-for every user. This preserves permissions but does not satisfy Gatekeeper:
-downloads still need the documented quarantine removal because the project has
-no Apple Developer ID or notarization credentials. 0.1.5 is the deliberate
-exception, built with `--force-adhoc` as a bridge the 0.1.4 updater can accept.
-The release workflow verifies both sides of that transition and refuses an
-ad-hoc build for any later tag.
+Released versions 0.1.5 and 0.1.6 were ad-hoc signed. Future release builds use
+`SIGNING_CERT_P12` (base64 PKCS#12) and `SIGNING_CERT_PASSWORD` when configured;
+otherwise they explicitly build ad-hoc. Partial or unusable credentials fail
+the release instead of silently changing its identity. Reuse the same private
+key across releases. A local self-signed identity preserves identity between
+builds but does not make a download trusted by Gatekeeper.
+
+For Apple notarization, supply a **Developer ID Application** certificate and
+all three secrets: `NOTARY_API_KEY_P8` (base64), `NOTARY_KEY_ID`, and
+`NOTARY_ISSUER_ID`. Apple Development and self-signed certificates cannot be
+notarized. The workflow verifies and staples the app before packaging, then
+notarizes and validates the DMG. Keep these credentials in GitHub secrets,
+never in the repository. See [Apple's notarization requirements](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
 ## Project layout
 
@@ -136,6 +144,6 @@ For general help and every support channel, see [support](SUPPORT.md).
 git tag v2.1.0 && git push origin v2.1.0
 ```
 
-Only an owner-created protected version tag can enter the `release-signing`
-environment. After owner approval, the workflow builds, signs, notarizes and
-publishes the DMG as an immutable GitHub release.
+A version tag starts the release workflow, which checks the version, builds,
+applies the configured signing/notarization policy and publishes the DMG.
+Configure tag protection and secret access in the repository's GitHub settings.

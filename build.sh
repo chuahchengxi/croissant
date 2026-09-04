@@ -10,6 +10,22 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# The icon catalog and the bundle are staged in temp dirs; sweep both however
+# the script ends.
+ICON_TMP=""
+STAGE_TMP=""
+
+cleanup() {
+    [[ -n "$ICON_TMP" ]] && rm -rf "$ICON_TMP"
+    [[ -n "$STAGE_TMP" ]] && rm -rf "$STAGE_TMP"
+    return 0
+}
+trap cleanup EXIT
+# zsh runs the EXIT trap when the script is hung up, but not when it is
+# interrupted or terminated; route those through exit so a Ctrl-C partway
+# into the build sweeps like any other ending.
+trap 'exit 1' INT TERM HUP
+
 # Flags: --dev builds the local-only "Croissaint (Developer)" variant (its own
 # bundle id, so it coexists with the official app); --install puts it in /Applications;
 # --allow-adhoc permits signing without an identity; --force-adhoc deliberately
@@ -45,6 +61,10 @@ else
     BUILD_CONFIGURATION="release"
 fi
 FAN_HELPER_ID="$APP_BUNDLE_ID.fan-control"
+# Now Playing is read through /usr/bin/perl loading this library; see
+# Sources/NowPlayingAdapter. Staged under Contents/Frameworks, signed on its own.
+NOW_PLAYING_ADAPTER_ID="$APP_BUNDLE_ID.now-playing"
+NOW_PLAYING_ADAPTER="libCroissaintNowPlaying.dylib"
 TARGET="arm64-apple-macosx14.0"
 ENTITLEMENTS="Resources/Croissaint.entitlements"
 LEGACY_IDENTITY="Croissaint Utils Signing"
@@ -60,7 +80,25 @@ developer_id_identity() {
     { grep 'Developer ID Application' <<< "$ids" \
         || grep '"Apple Development' <<< "$ids"; } \
         | head -1 \
-        | sed -E 's/.*"(.*)".*/\1/' || true
+        | sed -nE 's/.* ([A-Fa-f0-9]{40}) .*/\1/p' || true
+}
+
+# A find-identity listing also names certificates codesign then rejects (an
+# expired one fails the build with errSecInternalComponent), and -v excludes
+# every self-signed one; ask codesign itself with a throwaway copy of /bin/echo.
+legacy_identity_installed() {
+    local probe signed=1
+    # A locked keychain still lists its identities but cannot sign with them,
+    # and this one is locked after every reboot; unlock it before asking.
+    security unlock-keychain -p croissaint-signing \
+        "$HOME/Library/Keychains/croissaint-signing.keychain-db" 2>/dev/null || true
+    security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY" || return 1
+    probe="$(mktemp)"
+    cp /bin/echo "$probe"
+    /usr/bin/codesign --force --strip-disallowed-xattrs --sign "$LEGACY_IDENTITY" "$probe" \
+        >/dev/null 2>&1 && signed=0
+    rm -f "$probe"
+    return $signed
 }
 
 # Resolve the signing identity once, before anything is built, and reuse the
@@ -78,10 +116,14 @@ DEVID=""
 if (( FORCE_ADHOC )); then
     SIGN_MODE=adhoc
 else
-    DEVID="$(developer_id_identity)"
+    DEVID="${CODESIGN_IDENTITY:-$(developer_id_identity)}"
     if [[ -n "$DEVID" ]]; then
         SIGN_MODE=devid
-    elif security find-identity -p codesigning 2>/dev/null | grep -q "$LEGACY_IDENTITY"; then
+    elif legacy_identity_installed; then
+        SIGN_MODE=legacy
+    elif (( DEV && ! ALLOW_ADHOC )); then
+        ./Tools/setup-signing.sh
+        legacy_identity_installed || { echo "error: local signing identity is unusable" >&2; exit 1; }
         SIGN_MODE=legacy
     elif (( ALLOW_ADHOC )); then
         SIGN_MODE=adhoc
@@ -137,24 +179,32 @@ write_swift_output_file_map() {
 finalize_installed_bundle_after_child() {
     local bundle="$1"
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
+    local adapter="$bundle/Contents/Frameworks/$NOW_PLAYING_ADAPTER"
 
     echo "▸ Finalizing installed signature…"
     sleep 3
     if [[ "$SIGN_MODE" == devid ]]; then
         [[ -f "$helper" ]] && codesign_with_timestamp_retry --force --strip-disallowed-xattrs \
             --options runtime --timestamp --identifier "$FAN_HELPER_ID" --sign "$DEVID" "$helper"
+        [[ -f "$adapter" ]] && codesign_with_timestamp_retry --force --strip-disallowed-xattrs \
+            --options runtime --timestamp --identifier "$NOW_PLAYING_ADAPTER_ID" --sign "$DEVID" "$adapter"
         codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
             --entitlements "$ENTITLEMENTS" --sign "$DEVID" "$bundle"
     elif [[ "$SIGN_MODE" == legacy ]]; then
         [[ -f "$helper" ]] && /usr/bin/codesign --force --strip-disallowed-xattrs \
             --identifier "$FAN_HELPER_ID" --sign "$LEGACY_IDENTITY" "$helper"
+        [[ -f "$adapter" ]] && /usr/bin/codesign --force --strip-disallowed-xattrs \
+            --identifier "$NOW_PLAYING_ADAPTER_ID" --sign "$LEGACY_IDENTITY" "$adapter"
         /usr/bin/codesign --force --strip-disallowed-xattrs --sign "$LEGACY_IDENTITY" "$bundle"
     else
         [[ -f "$helper" ]] && /usr/bin/codesign --force --strip-disallowed-xattrs \
             --identifier "$FAN_HELPER_ID" --sign - "$helper"
+        [[ -f "$adapter" ]] && /usr/bin/codesign --force --strip-disallowed-xattrs \
+            --identifier "$NOW_PLAYING_ADAPTER_ID" --sign - "$adapter"
         /usr/bin/codesign --force --strip-disallowed-xattrs --sign - "$bundle"
     fi
     [[ -f "$helper" ]] && /usr/bin/codesign --verify --strict "$helper"
+    [[ -f "$adapter" ]] && /usr/bin/codesign --verify --strict "$adapter"
     /usr/bin/codesign --verify --deep --strict "$bundle"
     echo "✓ Signature ready: $bundle"
 }
@@ -180,6 +230,7 @@ else
     SDK="$(xcrun --show-sdk-path)"
 fi
 SDK_COMPAT_FLAGS=()
+HID_EVENT_SYSTEM_FLAGS=(-I Sources/HIDEventSystem)
 if [[ "$SDK" == "$PINNED_SDK" ]]; then
     # Swift 6.4 can read the SDK 26 interfaces when given their compiler version.
     SDK_COMPAT_FLAGS=(-Xfrontend -interface-compiler-version -Xfrontend 6.3.2)
@@ -224,6 +275,8 @@ if (( TEST )); then
     swiftc -Onone -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" \
         "${VM_STATISTICS_COMPAT_FLAGS[@]}" \
         Sources/Croissaint/Services/Media/MediaSupport.swift \
+        Sources/Croissaint/Core/QuitProtectionSupport.swift \
+        Sources/Croissaint/Core/QuitProtectionStrings.swift \
         Sources/Croissaint/Core/Defaults.swift \
         Sources/Croissaint/Core/FeatureCatalog.swift \
         Sources/Croissaint/Core/FeaturePresets.swift \
@@ -264,6 +317,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Recorder/RecorderTypingTrack.swift \
         Sources/Croissaint/Services/Recorder/RecorderTimeline.swift \
         Sources/Croissaint/Services/Recorder/RecorderTextOverlay.swift \
+        Sources/Croissaint/Services/Recorder/RecorderBlurRegion.swift \
         Sources/Croissaint/Services/Recorder/RecorderEditDocument.swift \
         Sources/Croissaint/Core/AppInfo.swift \
         Sources/Croissaint/Core/GlobalShortcut.swift \
@@ -306,11 +360,16 @@ if (( TEST )); then
         Sources/Croissaint/Services/MiddleClick/MiddleClickSupport.swift \
         Sources/Croissaint/Services/MouseNavigation/MouseNavigationSupport.swift \
         Sources/Croissaint/Services/MouseButtons/MouseButtonShortcutSupport.swift \
+        Sources/Croissaint/Services/MouseButtons/MouseSpacesGestureSupport.swift \
+        Sources/Croissaint/Services/MouseClickDebounce/MouseClickDebounceSupport.swift \
         Sources/Croissaint/Services/MouseExceptions/MouseAppExceptionSupport.swift \
+        Sources/Croissaint/Services/WindowServerSupport.swift \
         Sources/Croissaint/Core/MouseButtonStrings.swift \
+        Sources/Croissaint/Core/MouseClickDebounceStrings.swift \
         Sources/Croissaint/Core/MouseExceptionStrings.swift \
         Sources/Croissaint/Core/ClipboardIgnoredAppsStrings.swift \
         Sources/Croissaint/Core/WindowPreviewExclusionStrings.swift \
+        Sources/Croissaint/Core/DiskExclusionStrings.swift \
         Sources/Croissaint/Core/SwitcherAppRulesStrings.swift \
         Sources/Croissaint/Services/QuickTools/QuickToolsSupport.swift \
         Sources/Croissaint/Services/CommandBar/CommandBarSupport.swift \
@@ -332,9 +391,13 @@ if (( TEST )); then
         Sources/Croissaint/Services/QuickTools/WindowActivationPolicy.swift \
         Sources/Croissaint/Services/KeyboardDebounce/KeyboardDebounceSupport.swift \
         Sources/Croissaint/Services/SuperKey/SuperKeySupport.swift \
+        Sources/Croissaint/Services/SuperKey/SuperKeyMappingGuard.swift \
         Sources/Croissaint/Core/SuperKeyStrings.swift \
+        Sources/Croissaint/Services/SessionActivity.swift \
+        Sources/Croissaint/Services/SessionActivitySupport.swift \
         Sources/Croissaint/Services/ScrollWheelSupport.swift \
         Sources/Croissaint/Services/SmoothScrollSupport.swift \
+        Sources/Croissaint/Services/MouseAcceleration/MouseAccelerationSupport.swift \
         Sources/Croissaint/Services/FocusFollowsMouse/FocusFollowsMouseSupport.swift \
         Sources/Croissaint/Services/Switcher/SwitcherModels.swift \
         Sources/Croissaint/Services/Switcher/SwitcherSupport.swift \
@@ -345,6 +408,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/SudoersSupport.swift \
         Sources/Croissaint/Services/Metrics/BatteryTimeSupport.swift \
         Sources/Croissaint/Services/BoundedProcessRunner.swift \
+        Sources/Croissaint/Services/DetachedProcess.swift \
         Sources/Croissaint/Services/ShellSupport.swift \
         Sources/Croissaint/Services/Metrics/NetworkProcessSupport.swift \
         Sources/Croissaint/Services/Metrics/NetworkSampler.swift \
@@ -400,14 +464,14 @@ if (( DEV )); then
     write_swift_output_file_map "$APP_OUTPUT_FILE_MAP" "$APP_OBJECT_DIR" "${APP_SOURCES[@]}"
     swiftc "${APP_OPTIMIZATION_FLAGS[@]}" -incremental -j "$(sysctl -n hw.logicalcpu)" \
         -output-file-map "$APP_OUTPUT_FILE_MAP" \
-        -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${VM_STATISTICS_COMPAT_FLAGS[@]}" \
+        -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${HID_EVENT_SYSTEM_FLAGS[@]}" \
         "${BUILD_VARIANT_FLAGS[@]}" \
         "${APP_SOURCES[@]}" -o "build/$EXECUTABLE"
 else
     rm -rf build
     mkdir -p build
     swiftc "${APP_OPTIMIZATION_FLAGS[@]}" -target "$TARGET" -sdk "$SDK" \
-        "${SDK_COMPAT_FLAGS[@]}" "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${BUILD_VARIANT_FLAGS[@]}" \
+        "${SDK_COMPAT_FLAGS[@]}" "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${HID_EVENT_SYSTEM_FLAGS[@]}" "${BUILD_VARIANT_FLAGS[@]}" \
         "${APP_SOURCES[@]}" -o "build/$EXECUTABLE"
 fi
 
@@ -421,6 +485,12 @@ swiftc -O -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${BUILD_VARIAN
     Sources/FanControlHelper/main.swift \
     -o "build/$FAN_HELPER_ID"
 "build/$FAN_HELPER_ID" --selftest
+
+echo "▸ Compiling Now Playing adapter…"
+swiftc -O -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" -emit-library \
+    -module-name CroissaintNowPlaying \
+    Sources/NowPlayingAdapter/NowPlayingAdapter.swift \
+    -o "build/$NOW_PLAYING_ADAPTER"
 
 echo "▸ Generating app icon…"
 swift Tools/MakeIcon.swift build/AppIcon.iconset
@@ -454,14 +524,16 @@ if [[ -n "$ADAPTIVE_SKIP" ]]; then
     cp "$ICON_TMP/actool.log" build/actool-failure.log 2>/dev/null || true
     echo "  adaptive icon skipped: $ADAPTIVE_SKIP (Dock falls back to AppIcon.icns)"
 fi
-rm -rf "$ICON_TMP"
-
 echo "▸ Assembling and signing bundle…"
-STAGE="$(mktemp -d)/$APP_NAME.app"
+STAGE_TMP="$(mktemp -d)"
+STAGE="$STAGE_TMP/$APP_NAME.app"
 mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources" \
     "$STAGE/Contents/Library/LaunchDaemons" "$STAGE/Contents/Library/LaunchServices"
 cp "build/$EXECUTABLE" "$STAGE/Contents/MacOS/$EXECUTABLE"
 cp "build/$FAN_HELPER_ID" "$STAGE/Contents/Library/LaunchServices/$FAN_HELPER_ID"
+mkdir -p "$STAGE/Contents/Frameworks"
+cp "build/$NOW_PLAYING_ADAPTER" "$STAGE/Contents/Frameworks/$NOW_PLAYING_ADAPTER"
+cp Resources/now-playing.pl "$STAGE/Contents/Resources/now-playing.pl"
 cp Resources/com.croissaint.utils.fan-control.plist \
     "$STAGE/Contents/Library/LaunchDaemons/$FAN_HELPER_ID.plist"
 cp Resources/Info.plist "$STAGE/Contents/Info.plist"
@@ -555,10 +627,24 @@ codesign_fan_helper() {
     fi
 }
 
+codesign_now_playing_adapter() {
+    local target="$1"
+    if [[ "$SIGN_MODE" == devid ]]; then
+        codesign_with_timestamp_retry --force --strip-disallowed-xattrs --options runtime --timestamp \
+            --identifier "$NOW_PLAYING_ADAPTER_ID" --sign "$DEVID" "$target"
+    elif [[ "$SIGN_MODE" == legacy ]]; then
+        codesign --force --strip-disallowed-xattrs --identifier "$NOW_PLAYING_ADAPTER_ID" \
+            --sign "$LEGACY_IDENTITY" "$target"
+    else
+        codesign --force --strip-disallowed-xattrs --identifier "$NOW_PLAYING_ADAPTER_ID" --sign - "$target"
+    fi
+}
+
 sign_bundle() {
     local bundle="$1"
     local executable="$bundle/Contents/MacOS/$EXECUTABLE"
     local helper="$bundle/Contents/Library/LaunchServices/$FAN_HELPER_ID"
+    local adapter="$bundle/Contents/Frameworks/$NOW_PLAYING_ADAPTER"
 
     if [[ "$SIGN_MODE" == devid ]]; then
         echo "  signing with Apple-issued identity (hardened runtime): $DEVID"
@@ -568,6 +654,7 @@ sign_bundle() {
         echo "  signing ad-hoc — permissions reset on every rebuild"
     fi
     [[ -f "$helper" ]] && codesign_fan_helper "$helper"
+    [[ -f "$adapter" ]] && codesign_now_playing_adapter "$adapter"
     codesign_app "$bundle"
 
     # If local filesystem metadata invalidates the first signature, sign once
@@ -576,10 +663,12 @@ sign_bundle() {
         echo "  re-signing after filesystem metadata settled"
         xattr -c -r "$bundle" 2>/dev/null || true
         [[ -f "$helper" ]] && codesign_fan_helper "$helper"
+        [[ -f "$adapter" ]] && codesign_now_playing_adapter "$adapter"
         codesign_app "$bundle"
     fi
     [[ -f "$executable" ]] && codesign --verify --strict "$executable"
     [[ -f "$helper" ]] && codesign --verify --strict "$helper"
+    [[ -f "$adapter" ]] && codesign --verify --strict "$adapter"
     codesign --verify --deep --strict "$bundle"
 }
 

@@ -65,7 +65,7 @@ final class UpdateShowcaseMediaLoader: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
-    private var task: URLSessionDownloadTask?
+    private var session: URLSession?
 
     func load() {
         if case .ready = state { return }
@@ -96,8 +96,21 @@ final class UpdateShowcaseMediaLoader: ObservableObject {
     }
 
     func cancel() {
-        task?.cancel()
-        task = nil
+        session?.invalidateAndCancel()
+        session = nil
+    }
+
+    /// `.onDisappear` is the only caller of `cancel()`, and SwiftUI can drop the
+    /// `@StateObject` without it ever running. A session that is never
+    /// invalidated holds its delegate for the life of the process, and the
+    /// delegate's own `deinit` is what closes the scratch file and deletes it —
+    /// so every exit path that leaves a scratch file behind ends here.
+    /// `invalidateAndCancel()`, not `finishTasksAndInvalidate()`, which would let
+    /// an abandoned download run to completion first. The completion closure
+    /// captures `self` weakly and that reference is already nil by now, so the
+    /// teardown cannot resurrect the loader.
+    deinit {
+        session?.invalidateAndCancel()
     }
 
     func cleanupCache() {

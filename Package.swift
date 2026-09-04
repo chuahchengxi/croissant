@@ -9,12 +9,16 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         .systemLibrary(
+            name: "HIDEventSystem",
+            path: "Sources/HIDEventSystem"
+        ),
+        .systemLibrary(
             name: "VMStatisticsCompat",
             path: "Sources/VMStatisticsCompat"
         ),
         .executableTarget(
             name: "Croissaint",
-            dependencies: ["VMStatisticsCompat"],
+            dependencies: ["VMStatisticsCompat", "HIDEventSystem"],
             path: "Sources/Croissaint"
         )
     ]

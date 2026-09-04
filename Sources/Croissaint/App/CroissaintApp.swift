@@ -47,7 +47,10 @@ enum CroissaintEntryPoint {
     /// launching — the same point in startup the old top-level main.swift
     /// code executed at.
     fileprivate static func registerDefaultsAndRouteEarlyExits() {
+        SuperKeyMappingGuard.runIfRequestedAndExit()
         Defaults.register()
+        MouseAccelerationGuard.runIfRequestedAndExit()
+        MouseAccelerationService.recoverPendingAtLaunch()
         if CommandLine.arguments.contains("--selftest") {
             SelfTest.runAndExit()
         }

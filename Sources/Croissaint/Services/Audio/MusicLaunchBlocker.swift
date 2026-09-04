@@ -37,6 +37,9 @@ final class MusicLaunchBlocker: ObservableObject {
     private func start() {
         guard observers.isEmpty, !eventTap.isRunning else { return }
         installMediaKeyTap()
+        // Without the tap there is no evidence that a launch followed a media
+        // key. Fail open so an ordinary launch is never terminated on a guess.
+        guard eventTap.isRunning else { return }
         let center = NSWorkspace.shared.notificationCenter
         // Will-launch usually wins the race before any window shows;
         // did-launch catches the rare launch that slips past it.
@@ -61,12 +64,10 @@ final class MusicLaunchBlocker: ObservableObject {
         guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               let bundleID = app.bundleIdentifier,
               Self.blockedBundleIDs.contains(bundleID) else { return }
-        if eventTap.isRunning {
-            guard MusicLaunchSupport.shouldBlockLaunch(
-                now: ProcessInfo.processInfo.systemUptime,
-                lastTriggerAt: lastMediaKeyAt
-            ) else { return }
-        }
+        guard MusicLaunchSupport.shouldBlockLaunch(
+            now: ProcessInfo.processInfo.systemUptime,
+            lastTriggerAt: lastMediaKeyAt
+        ) else { return }
         if !app.forceTerminate() {
             app.terminate()
         }

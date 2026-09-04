@@ -68,6 +68,7 @@ final class ClipboardHistoryService: ObservableObject {
     private static let persistQueue = DispatchQueue(label: "com.croissaint.utils.clipboard-persist",
                                                     qos: .utility)
     private var persistScheduled = false
+    private var persistenceGeneration = 0
     /// True while the history still lives in the legacy UserDefaults blob;
     /// only a store-file write that really landed retires that blob, so a
     /// crash mid-migration never loses entries.
@@ -437,13 +438,27 @@ final class ClipboardHistoryService: ObservableObject {
         quickSelectionIndex = clampedQuickSelectionIndex(for: filteredQuickEntries.count)
     }
 
-    func removeSelectedQuickEntry() {
-        guard let entry = selectedQuickEntry else { return }
-        remove(entry)
+    func removeSelectedQuickEntries() {
+        let selectedEntries = quickEntriesForPrimaryAction()
+        guard !selectedEntries.isEmpty else { return }
+        let idsToRemove = Set(selectedEntries.map(\.id))
+        entries.removeAll { idsToRemove.contains($0.id) }
+        var selected = quickBatchEntryIDs
+        selected.subtract(idsToRemove)
+        quickBatchEntryIDs = selected
         quickSelectionIndex = clampedQuickSelectionIndex(for: filteredQuickEntries.count)
+        save()
     }
 
+    /// Where the pointer sat when the keyboard last moved the selection. Rows
+    /// scrolling under a still pointer report hover, and hover would otherwise
+    /// take the preview back from the row the arrow keys chose.
+    private(set) var keyboardSelectionPointer: NSPoint?
+
     func moveQuickSelection(_ delta: Int) {
+        // Out of the way while the keys drive, back at the first real move.
+        NSCursor.setHiddenUntilMouseMoves(true)
+        keyboardSelectionPointer = NSEvent.mouseLocation
         let count = filteredQuickEntries.count
         guard count > 0 else {
             quickSelectionIndex = 0
@@ -755,11 +770,15 @@ final class ClipboardHistoryService: ObservableObject {
         save()
     }
 
-    private func trimToLimit() {
+    func trimToLimit() {
         let limit = Defaults.sanitizedClipboardHistoryLimit(
             UserDefaults.standard.integer(forKey: DefaultsKey.clipboardHistoryLimit)
         )
-        entries = ClipboardHistoryEditing.retainedEntries(entries, recentLimit: limit)
+        let trimmed = ClipboardHistoryEditing.retainedEntries(entries, recentLimit: limit)
+        if trimmed != entries {
+            entries = trimmed
+            save()
+        }
     }
 
     private var firstRecentIndex: Int {
@@ -855,6 +874,7 @@ final class ClipboardHistoryService: ObservableObject {
 
     /// Coalesces the saves of one mutation cycle into a single persist.
     private func save() {
+        persistenceGeneration &+= 1
         guard !persistScheduled else { return }
         persistScheduled = true
         DispatchQueue.main.async { [weak self] in
@@ -866,31 +886,37 @@ final class ClipboardHistoryService: ObservableObject {
 
     private func persist() {
         let snapshot = entries
+        let generation = persistenceGeneration
         let retireLegacyBlob = migrateLegacyBlob
         Self.persistQueue.async { [weak self] in
-            guard let data = try? JSONEncoder().encode(snapshot) else { return }
+            guard let encoded = ClipboardHistoryEditing.encodedHistory(snapshot) else { return }
+            let data = encoded.data
             // The PNG sweep waits for the JSON to land and runs back on the
             // main thread against the list as it is then. Sweeping first
             // could strand an entry whose PNG died if the process fell in
             // between; the reverse at worst leaves an orphaned PNG that the
             // launch sweep heals. The main thread also keeps it from racing
             // a just-stored PNG whose entry has not landed in the list yet.
-            func sweepAfterPersist() {
+            func finishPersist() {
                 DispatchQueue.main.async {
                     guard let self else { return }
+                    if self.persistenceGeneration == generation,
+                       encoded.entries != snapshot {
+                        self.entries = encoded.entries
+                    }
                     ClipboardImageStore.cleanup(keeping: Set(self.entries.compactMap(\.imageFile)))
                 }
             }
             guard let url = Self.storeURL else {
                 UserDefaults.standard.set(data, forKey: DefaultsKey.clipboardHistoryEntries)
-                sweepAfterPersist()
+                finishPersist()
                 return
             }
             PrivateFileStore.createDirectory(at: url.deletingLastPathComponent())
             // Only a write that really landed retires the legacy blob, so a
             // failed save leaves the history readable from somewhere.
             guard PrivateFileStore.write(data, to: url) else { return }
-            sweepAfterPersist()
+            finishPersist()
             if retireLegacyBlob {
                 UserDefaults.standard.removeObject(forKey: DefaultsKey.clipboardHistoryEntries)
                 DispatchQueue.main.async { self?.migrateLegacyBlob = false }
@@ -1117,10 +1143,15 @@ final class ClipboardHistoryService: ObservableObject {
         removeKeyMonitor()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak panel] event in
             guard let self, let panel, event.window === panel else { return event }
-            // A multiline editor owns its normal editing keys. The search box
-            // uses a field editor, so its existing list shortcuts stay intact.
+            // A multiline editor owns its normal editing keys, and any field
+            // still composing owns them too. Outside composition the search
+            // box keeps the list's shortcuts, as does the read-only preview:
+            // only ⌘C and ⌘A, which the list declines below when nothing is
+            // batch-selected, reach it.
             if let textView = panel.firstResponder as? NSTextView,
-               !textView.isFieldEditor {
+               ClipboardHistoryFocus.textViewOwnsKeys(isComposing: textView.hasMarkedText(),
+                                                      isFieldEditor: textView.isFieldEditor,
+                                                      isEditable: textView.isEditable) {
                 return event
             }
             let modifiers = event.modifierFlags.intersection([.command, .option, .shift, .control])
@@ -1175,9 +1206,10 @@ final class ClipboardHistoryService: ObservableObject {
                 self.togglePinSelectedQuickEntry()
                 return nil
             }
-            if modifiers == [.option],
+            if (modifiers == [.option]
+                || (modifiers == [.command] && ClipboardHistoryBatch.listOwnsDeleteShortcut(batchCount: self.quickBatchCount))),
                event.keyCode == UInt16(kVK_Delete) || event.keyCode == UInt16(kVK_ForwardDelete) {
-                self.removeSelectedQuickEntry()
+                self.removeSelectedQuickEntries()
                 return nil
             }
             if event.keyCode == UInt16(kVK_DownArrow) {
@@ -1297,6 +1329,17 @@ enum ClipboardImageStore {
                              cost: cgImage.bytesPerRow * cgImage.height)
         return image
     }
+
+    /// The Finder icon for a path, cached: the workspace lookup is a round
+    /// trip, and a list row asks for it every time it is drawn.
+    static func fileIcon(atPath path: String) -> NSImage {
+        if let cached = fileIcons.object(forKey: path as NSString) { return cached }
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        fileIcons.setObject(icon, forKey: path as NSString)
+        return icon
+    }
+
+    private static let fileIcons = NSCache<NSString, NSImage>()
 
     static func isImageFile(atPath path: String) -> Bool {
         ClipboardHistoryImageSupport.isImageFilePath(path)

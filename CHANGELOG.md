@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- Merged upstream through `4560cf6`, including quit protection, mouse acceleration and click filtering, recording blur, system Shelf sharing, and input/session fixes. Croissaint branding, desktop pets and the fork's removed online services remain unchanged.
+
+### Fixed
+- Update installers run in their own process session so they survive the app exiting, including administrator-assisted installs.
+- Signing checks the local identity by actually signing, unlocks the dedicated keychain before use, and never replaces an existing identity just because signing fails.
+- Apple signing identities are selected by certificate fingerprint, fixing ambiguous-name errors when multiple Apple Development certificates have the same name.
+- Release signing uses configured credentials consistently instead of forcing an ad-hoc build through notarization.
+
 ## [0.1.6] - 2026-09-04
 
 ### Changed
