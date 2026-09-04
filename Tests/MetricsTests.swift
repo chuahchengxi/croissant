@@ -15462,27 +15462,35 @@ struct MetricsTests {
             transitionDefaults.set(true, forKey: DefaultsKey.hasOnboarded)
             transitionDefaults.set(true, forKey: DefaultsKey.switcherEnabled)
             expect(PermissionTransitionInfo.prepareIfNeeded(
-                appVersion: "0.1.5", defaults: transitionDefaults
+                appVersion: "0.1.5", defaults: transitionDefaults,
+                domainName: permissionTransitionSuite
             ) == false,
             "the ad-hoc bridge release leaves completed setup alone")
             expect(PermissionTransitionInfo.prepareIfNeeded(
-                appVersion: "0.1.6", defaults: transitionDefaults
+                appVersion: "0.1.6", defaults: transitionDefaults,
+                domainName: permissionTransitionSuite
             ) == true,
-            "the stable-signature release schedules one fresh permission setup")
+            "the stable-signature release schedules one fresh install")
             expect(!transitionDefaults.bool(forKey: DefaultsKey.hasOnboarded)
-                    && transitionDefaults.integer(forKey: DefaultsKey.onboardingStep) == 2,
-                   "the 0.1.6 transition reopens the permission step")
-            expect(transitionDefaults.bool(forKey: DefaultsKey.switcherEnabled),
-                   "the permission transition preserves ordinary settings")
-            transitionDefaults.set(true, forKey: DefaultsKey.hasOnboarded)
-            transitionDefaults.set(0, forKey: DefaultsKey.onboardingStep)
-            expect(PermissionTransitionInfo.prepareIfNeeded(
-                appVersion: "0.1.6", defaults: transitionDefaults
-            ) == false,
-            "the permission setup is not replayed after it has been scheduled once")
-            expect(transitionDefaults.bool(forKey: DefaultsKey.hasOnboarded)
                     && transitionDefaults.integer(forKey: DefaultsKey.onboardingStep) == 0,
-                   "a later 0.1.6 launch keeps completed setup complete")
+                   "the 0.1.6 transition restarts full onboarding")
+            expect(!transitionDefaults.bool(forKey: DefaultsKey.switcherEnabled),
+                   "the fresh-install transition clears ordinary settings")
+            let resetDomain = transitionDefaults.persistentDomain(
+                forName: permissionTransitionSuite
+            ) ?? [:]
+            expect(resetDomain.keys.sorted() == [DefaultsKey.permissionTransitionVersion],
+                   "the fresh-install transition leaves only its one-shot marker")
+            transitionDefaults.set(true, forKey: DefaultsKey.hasOnboarded)
+            transitionDefaults.set(true, forKey: DefaultsKey.switcherEnabled)
+            expect(PermissionTransitionInfo.prepareIfNeeded(
+                appVersion: "0.1.6", defaults: transitionDefaults,
+                domainName: permissionTransitionSuite
+            ) == false,
+            "the fresh install is not replayed after it has been scheduled once")
+            expect(transitionDefaults.bool(forKey: DefaultsKey.hasOnboarded)
+                    && transitionDefaults.bool(forKey: DefaultsKey.switcherEnabled),
+                   "a later 0.1.6 launch keeps new setup progress")
             transitionDefaults.removePersistentDomain(forName: permissionTransitionSuite)
         } else {
             expect(false, "permission-transition defaults suite can be created")

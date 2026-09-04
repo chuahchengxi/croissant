@@ -41,6 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
+
+        // Reset before any service reads preferences. The marker survives so
+        // setup progress made after this launch is never cleared again.
+        PermissionTransitionInfo.prepareIfNeeded(
+            appVersion: AppInfo.version,
+            domainName: Bundle.main.bundleIdentifier ?? "com.croissaint.utils"
+        )
+
         NSApp.setActivationPolicy(.accessory)
         // Before any window exists, so nothing is ever built with the wrong
         // appearance and then repainted.
@@ -57,12 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         // build, or retire a leftover old-named bundle. Returns true when we are
         // quitting to relaunch under the new name, so skip the rest of startup.
         if BundleMigration.run() { return }
-
-        // 0.1.6 intentionally changes from the ad-hoc bridge signature to the
-        // stable release identity. macOS drops the old TCC grants once, so put
-        // updated installs directly back on the permission step while leaving
-        // their feature choices and ordinary settings untouched.
-        PermissionTransitionInfo.prepareIfNeeded(appVersion: AppInfo.version)
 
         // Shape a clean install before any feature can create a listener,
         // timer or shortcut. The onboarding can replace this set after the

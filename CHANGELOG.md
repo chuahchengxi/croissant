@@ -7,12 +7,12 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.6] - 2026-09-04
 
 ### Changed
-- Releases now use Croissaint's stable self-signed identity. Moving from the 0.1.5 ad-hoc bridge invalidates Accessibility and Screen Recording once, so 0.1.6 automatically reopens the permission step for existing users while preserving their feature choices, preferences and data. Grants made after this transition survive later consistently signed updates. The identity is not Apple-notarized, so a manually downloaded build still needs the Gatekeeper bypass shown in the release notes.
+- Releases now use Croissaint's stable self-signed identity. Every 0.1.6 install starts fresh: on first launch it clears Croissaint's saved preferences and in-app progress, then opens full onboarding. User-created files outside Croissaint's settings remain untouched. Grants made after this transition survive later consistently signed updates. The identity is not Apple-notarized, so a manually downloaded build still needs the Gatekeeper bypass shown in the release notes.
 
 ## [0.1.5] - 2026-09-03
 
 ### Changed
-- 0.1.5 deliberately remains ad-hoc signed so the updater already installed in 0.1.4 can accept it. 0.1.6 will make the one-time move to Croissaint's stable self-signed identity: it will reopen the permission setup automatically, and grants made after that transition will survive later updates. Neither signature is Apple-notarized, so downloaded builds still need the one-line Gatekeeper bypass in the release notes.
+- 0.1.5 deliberately remains ad-hoc signed so the updater already installed in 0.1.4 can accept it. 0.1.6 makes the one-time move to Croissaint's stable self-signed identity and starts every install from clean app settings and full onboarding. Grants made after that transition survive later updates. Neither signature is Apple-notarized, so downloaded builds still need the one-line Gatekeeper bypass in the release notes.
 
 ### Fixed
 - In-app updates from 0.1.4 can install 0.1.5. The first 0.1.5 artifact switched to the stable self-signed identity one release too early, which the old updater rejected before it could install the newer verification logic. The rebuilt 0.1.5 is the ad-hoc bridge; CI now asserts that exact signing mode and refuses ad-hoc releases after it.
