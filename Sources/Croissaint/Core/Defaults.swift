@@ -602,9 +602,8 @@ enum OnboardingInfo {
     static let currentFeatureSet = 4
 }
 
-/// Moves every install through the one signing-identity transition. The 0.1.5
-/// ad-hoc bridge can be installed by the old updater; 0.1.6 then adopts the
-/// stable self-signed identity and starts from clean app settings.
+/// Starts every 0.1.6 install from clean app settings. The marker keeps setup
+/// progress made after that first launch from being cleared again.
 enum PermissionTransitionInfo {
     static let releaseVersion = "0.1.6"
 

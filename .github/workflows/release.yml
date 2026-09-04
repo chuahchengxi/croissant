@@ -33,18 +33,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Unit tests already gate this exact commit in CI on main; the release
-      # run goes straight to building so the tag reaches users faster. 0.1.5
-      # is the sole ad-hoc bridge; later tags require the stable signing secret.
+      # run goes straight to building so the tag reaches users faster. Public
+      # releases stay ad-hoc because the project has no Apple-issued certificate.
       # Apple notarization remains optional and is skipped without its secrets.
 
       - name: Set up signing
         env:
           SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
           SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
-          # 0.1.5 is the ad-hoc bridge accepted by the updater in 0.1.4.
-          # Every later release must use the stable identity so permissions
-          # survive after the one deliberate reset in 0.1.6.
-          REQUIRE_SIGNING: ${{ github.ref_name == 'v0.1.5' && '0' || '1' }}
+          REQUIRE_SIGNING: 0
         run: ./Tools/ci-setup-signing.sh
 
       - name: Verify release version
@@ -60,28 +57,17 @@ jobs:
 
       - name: Build
         run: |
-          if [[ "$GITHUB_REF_NAME" == "v0.1.5" ]]; then
-            ./build.sh --force-adhoc
-          else
-            ./build.sh --allow-adhoc
-          fi
+          ./build.sh --force-adhoc
 
-      - name: Verify release signing transition
+      - name: Verify release signing policy
         id: signing_policy
         run: |
           SIGNATURE="$(codesign -dv build/stage/Croissaint.app 2>&1)"
-          if [[ "$GITHUB_REF_NAME" == "v0.1.5" ]]; then
-            grep -q 'Signature=adhoc' <<< "$SIGNATURE" || {
-              echo "v0.1.5 must be the ad-hoc updater bridge" >&2
-              exit 1
-            }
-            echo "MODE=adhoc" >> "$GITHUB_OUTPUT"
-          elif grep -q 'Signature=adhoc' <<< "$SIGNATURE"; then
-            echo "$GITHUB_REF_NAME must use the stable release identity" >&2
+          if ! grep -q 'Signature=adhoc' <<< "$SIGNATURE"; then
+            echo "$GITHUB_REF_NAME must be ad-hoc signed" >&2
             exit 1
-          else
-            echo "MODE=stable" >> "$GITHUB_OUTPUT"
           fi
+          echo "MODE=adhoc" >> "$GITHUB_OUTPUT"
 
       - name: Selftest
         run: ./build/Croissaint --selftest
