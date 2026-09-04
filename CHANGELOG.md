@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-09-04
+
+### Changed
+- Releases now use Croissaint's stable self-signed identity. Moving from the 0.1.5 ad-hoc bridge invalidates Accessibility and Screen Recording once, so 0.1.6 automatically reopens the permission step for existing users while preserving their feature choices, preferences and data. Grants made after this transition survive later consistently signed updates. The identity is not Apple-notarized, so a manually downloaded build still needs the Gatekeeper bypass shown in the release notes.
+
 ## [0.1.5] - 2026-09-03
 
 ### Changed
