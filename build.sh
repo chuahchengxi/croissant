@@ -105,8 +105,8 @@ legacy_identity_installed() {
 # create the local identity when no Apple or Croissaint identity is usable. The
 # explicit ad-hoc flags are the supported no-identity path and must never touch
 # the keychain.
-if (( DEV || INSTALL )) && [[ -z "$(developer_id_identity)" ]] \
-    && (( ! FORCE_ADHOC && ! ALLOW_ADHOC )) && ! legacy_identity_installed; then
+if (( DEV || INSTALL )) && (( ! FORCE_ADHOC && ! ALLOW_ADHOC )) && [[ -z "$(developer_id_identity)" ]] \
+    && ! legacy_identity_installed; then
     ./Tools/setup-signing.sh
 fi
 
