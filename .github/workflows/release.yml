@@ -23,13 +23,13 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     env:
-      # v0.2.0 is deliberately ad-hoc, matching the locally tested build.
+      # v0.2.1 is deliberately ad-hoc, matching the locally tested build.
       # Leave stored credentials untouched for later signed releases.
-      SIGNING_CERT_P12: ${{ github.ref_name != 'v0.2.0' && secrets.SIGNING_CERT_P12 || '' }}
-      SIGNING_CERT_PASSWORD: ${{ github.ref_name != 'v0.2.0' && secrets.SIGNING_CERT_PASSWORD || '' }}
-      NOTARY_API_KEY_P8: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_API_KEY_P8 || '' }}
-      NOTARY_KEY_ID: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_KEY_ID || '' }}
-      NOTARY_ISSUER_ID: ${{ github.ref_name != 'v0.2.0' && secrets.NOTARY_ISSUER_ID || '' }}
+      SIGNING_CERT_P12: ${{ github.ref_name != 'v0.2.1' && secrets.SIGNING_CERT_P12 || '' }}
+      SIGNING_CERT_PASSWORD: ${{ github.ref_name != 'v0.2.1' && secrets.SIGNING_CERT_PASSWORD || '' }}
+      NOTARY_API_KEY_P8: ${{ github.ref_name != 'v0.2.1' && secrets.NOTARY_API_KEY_P8 || '' }}
+      NOTARY_KEY_ID: ${{ github.ref_name != 'v0.2.1' && secrets.NOTARY_KEY_ID || '' }}
+      NOTARY_ISSUER_ID: ${{ github.ref_name != 'v0.2.1' && secrets.NOTARY_ISSUER_ID || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

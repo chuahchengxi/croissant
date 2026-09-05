@@ -155,6 +155,9 @@ enum DefaultsKey {
     static let brightnessControlEnabled = "brightnessControlEnabled" // sliders for every display
     static let brightnessKeysEnabled = "brightnessKeysEnabled" // brightness keys act on the display under the pointer
     static let brightnessOSDEnabled = "brightnessOSDEnabled" // brightness adjustment overlay
+    static let keyboardBrightnessShortcutsEnabled = "keyboardBrightnessShortcutsEnabled"
+    static let keyboardBrightnessDecreaseShortcut = "keyboardBrightnessDecreaseShortcut"
+    static let keyboardBrightnessIncreaseShortcut = "keyboardBrightnessIncreaseShortcut"
     // Per-monitor connection paths that accept brightness writes but never
     // answer reads. Kept local so wake handling does not repeatedly probe a
     // sensitive display path.
@@ -531,6 +534,8 @@ enum DefaultsKey {
     static let screenshotFullScreenShortcut = "screenshotFullScreenShortcut"
     static let screenshotLastCaptureShortcutEnabled = "screenshotLastCaptureShortcutEnabled"
     static let screenshotLastCaptureShortcut = "screenshotLastCaptureShortcut"
+    static let recentCapturesShortcutEnabled = "recentCapturesShortcutEnabled"
+    static let recentCapturesShortcut = "recentCapturesShortcut"
     static let screenshotClipboardShortcutEnabled = "screenshotClipboardShortcutEnabled"
     static let screenshotClipboardShortcut = "screenshotClipboardShortcut"
     static let screenshotFreeze = "screenshotFreeze"
@@ -585,6 +590,7 @@ enum DefaultsKey {
     static let windowDirectionalEnabled = "windowDirectionalEnabled"
     static let windowDirectionalShortcut = "windowDirectionalShortcut"
     static let windowEdgeSnapEnabled = "windowEdgeSnapEnabled"
+    static let windowEdgeSnapDisabledZones = "windowEdgeSnapDisabledZones" // comma-separated visual zone ids
     static let windowGestureEnabled = "windowGestureEnabled"
     static let windowGestureModifiers = "windowGestureModifiers"
     static let windowGestureRaiseWindow = "windowGestureRaiseWindow"
@@ -940,6 +946,9 @@ enum Defaults {
         DefaultsKey.brightnessControlEnabled: false,
         DefaultsKey.brightnessKeysEnabled: false,
         DefaultsKey.brightnessOSDEnabled: false,
+        DefaultsKey.keyboardBrightnessShortcutsEnabled: false,
+        DefaultsKey.keyboardBrightnessDecreaseShortcut: "option+command:27",
+        DefaultsKey.keyboardBrightnessIncreaseShortcut: "option+command:24",
         DefaultsKey.bluetoothSleepEnabled: false,
         DefaultsKey.bluetoothSleepRestoreOnWake: true,
         DefaultsKey.bluetoothSleepRestorePending: false,
@@ -1276,6 +1285,8 @@ enum Defaults {
         DefaultsKey.screenshotFullScreenShortcut: GlobalShortcut.screenshotFullScreenDefault.storageValue,
         DefaultsKey.screenshotLastCaptureShortcutEnabled: false,
         DefaultsKey.screenshotLastCaptureShortcut: GlobalShortcut.screenshotLastCaptureDefault.storageValue,
+        DefaultsKey.recentCapturesShortcutEnabled: false,
+        DefaultsKey.recentCapturesShortcut: GlobalShortcut.recentCapturesDefault.storageValue,
         DefaultsKey.screenshotClipboardShortcutEnabled: false,
         DefaultsKey.screenshotClipboardShortcut: GlobalShortcut.screenshotClipboardDefault.storageValue,
         DefaultsKey.screenshotFreeze: true,
@@ -1308,6 +1319,7 @@ enum Defaults {
         DefaultsKey.windowDirectionalEnabled: false,
         DefaultsKey.windowDirectionalShortcut: GlobalShortcut.windowDirectionalDefault.storageValue,
         DefaultsKey.windowEdgeSnapEnabled: false,
+        DefaultsKey.windowEdgeSnapDisabledZones: "",
         DefaultsKey.windowGestureEnabled: false,
         DefaultsKey.windowGestureModifiers: WindowGestureSupport.defaultModifierStorageValue,
         DefaultsKey.windowGestureRaiseWindow: false,

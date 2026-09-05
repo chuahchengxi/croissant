@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-05
+
+Croissaint 0.2.1 merges upstream through `30cc597` while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- Optional keyboard-backlight shortcuts adjust brightness one step at a time.
+- Recent captures can open from their own assignable shortcut.
+- Window Layout has a visual map for enabling individual edge and corner snap areas.
+- Mouse-button Space gestures can follow the pointer like a trackpad swipe.
+
+### Changed
+- Radial-menu actions use refined staggered movement, highlighting, and guides.
+- Panel outlines now follow the system's Increase Contrast setting.
+- App and window names are clearer in the App Switcher and Dock Preview.
+
+### Fixed
+- App Switcher restores the correct native shortcuts, including after a crash.
+- Shortcut recording detects factory system-shortcut conflicts.
+- Mouse acceleration remains disabled after reconnecting a mouse.
+- Supported alternate app icons no longer flicker during App Switcher navigation.
+- Color picking preserves the sampled pixel's color profile.
+- Click and scroll taps run on a dedicated input thread to avoid lag in full-screen apps and games.
+- Super-key Escape events no longer inherit stale modifiers.
+- Additional localization, number formatting, layout, scratchpad, disk-monitor, recording-editor, and media-preview issues are corrected.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.0] - 2026-09-04
 
 Croissaint 0.2.0 brings the latest upstream improvements to the fork, with more reliable update installation, new input controls, and a smoother everyday workflow. Croissaint's branding, desktop pets, and fork-specific customizations remain intact.

@@ -101,6 +101,15 @@ legacy_identity_installed() {
     return $signed
 }
 
+# A normal install should keep macOS permission grants stable across updates, so
+# create the local identity when no Apple or Croissaint identity is usable. The
+# explicit ad-hoc flags are the supported no-identity path and must never touch
+# the keychain.
+if (( DEV || INSTALL )) && [[ -z "$(developer_id_identity)" ]] \
+    && (( ! FORCE_ADHOC && ! ALLOW_ADHOC )) && ! legacy_identity_installed; then
+    ./Tools/setup-signing.sh
+fi
+
 # Resolve the signing identity once, before anything is built, and reuse the
 # answer everywhere below — asking twice can give two answers if the keychain
 # locks mid-build, which is how a bundle ends up half signed.
@@ -321,6 +330,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Recorder/RecorderEditDocument.swift \
         Sources/Croissaint/Core/AppInfo.swift \
         Sources/Croissaint/Core/GlobalShortcut.swift \
+        Sources/Croissaint/Core/SymbolicHotKeys.swift \
         Sources/Croissaint/Core/Localization.swift \
         Sources/Croissaint/Core/Localizations/Strings+*.swift \
         Sources/Croissaint/Core/FeatureStrings.swift \
