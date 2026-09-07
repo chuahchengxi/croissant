@@ -29,7 +29,7 @@ trap 'exit 1' INT TERM HUP
 # Flags: --dev builds the local-only "Croissaint (Developer)" variant (its own
 # bundle id, so it coexists with the official app); --install puts it in /Applications;
 # --allow-adhoc permits signing without an identity; --force-adhoc deliberately
-# ignores every identity for the one bridge release that older updaters require.
+# ignores every identity for releases that deliberately use ad-hoc signing.
 DEV=0
 INSTALL=0
 TEST=0

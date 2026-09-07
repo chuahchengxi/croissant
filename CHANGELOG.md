@@ -6,6 +6,37 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-07
+
+Croissaint 0.2.2 merges upstream through `4b12b976` (upstream v3.3.5) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- A searchable App Shortcut Center manages shortcuts, aliases, and pinned favorites in one place.
+- Keep Awake and Super Key can pause automatically while selected apps are running.
+- Window Layout adds centered half-width placement.
+- Screen recordings can include picture overlays, and editor presets preserve their position, size, and opacity.
+- Extra brightness can be toggled directly from the Displays panel.
+
+### Changed
+- App Updates checks more publisher feeds and public catalog sources, preserves partial results, and identifies apps it could not fully inspect.
+- Command Bar learns selected results and tolerates short typing mistakes.
+- Scratchpad notes and recent captures use safer dedicated storage instead of preferences.
+- Dock Preview opens and switches faster while doing less repeated background work.
+
+### Fixed
+- Dock actions and Focus Follows Mouse keep working through input-transparent screen-recording overlays.
+- CPU temperature readings return on affected Apple Silicon Macs, including A18 Pro models.
+- The menu bar icon remains visible and keeps its arranged position after updating.
+- Failed reads or saves no longer discard scratchpad notes, recent captures, recordings, or picture-overlay presets.
+- Protected-folder cut and paste can request system approval without losing unfinished moves.
+- Shortcut takeover, protected quit and close, mouse exceptions, Wi-Fi commands, and update detection are more reliable.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.1] - 2026-09-05
 
 Croissaint 0.2.1 merges upstream through `30cc597` while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.

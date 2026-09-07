@@ -3422,14 +3422,14 @@ struct MetricsTests {
         // decision above is made consciously, never by omission.
         let releasePlist = NSDictionary(contentsOfFile: "Resources/Info.plist")
         let plistVersion = (releasePlist?["CFBundleShortVersionString"] as? String) ?? ""
-        expect(plistVersion == "0.2.1",
+        expect(plistVersion == "0.2.2",
                "bumping the app version requires re-deciding the support prompt pin above")
         let plistBuild = (releasePlist?["CFBundleVersion"] as? String) ?? ""
-        expect(plistBuild == "91",
+        expect(plistBuild == "92",
                "every app version needs its own incremented bundle build")
         expect(SupportUpdateIntroInfo.releaseVersion == "0.0.8",
-               "0.2.1 deliberately does not repeat the older release's support prompt")
-        // 0.2.1 uses What's New for its notes, not the old curated highlights tour.
+               "0.2.2 deliberately does not repeat the older release's support prompt")
+        // 0.2.2 uses What's New for its notes, not the old curated highlights tour.
         expect(UpdateHighlightsInfo.releaseVersion == "0.1.2",
                "re-decide the highlights tour on a feature release: re-curate its rows and move the pin to the shipping version")
         expect(UpdateHighlightsInfo.shouldShow(appVersion: "0.1.2", lastSeenVersion: "0.1.1")
