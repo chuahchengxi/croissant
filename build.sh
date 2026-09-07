@@ -250,25 +250,36 @@ VM_STATISTICS_COMPAT_FLAGS=(-I Sources/VMStatisticsCompat)
 # suite leaves an empty plist in ~/Library/Preferences. The tests already clear
 # the domains, but cfprefsd writes the emptied file back out around the time the
 # process that owned it exits, so only a caller that outlives the run can remove
-# them. `MetricsTests` keeps every suite name inside the single namespace swept
-# here, which is what makes this sweep complete rather than a list to keep in
-# step by hand. Adding a suite outside `com.croissaint.tests.` leaks a plist
+# them. `MetricsTests` keeps every suite name inside the namespaces swept here,
+# which is what makes this complete rather than a list to keep in step by hand.
+# Adding a suite outside `com.croissaint.tests.` (or the legacy `vorss.tests.`)
+# leaks a plist
 # into the user's Preferences on every run — that is exactly how the previous
 # namespaces drifted out of this sweep and left hundreds of stray files behind.
 discard_test_preferences() {
-    local preferences="$HOME/Library/Preferences"
-    find "$preferences" -maxdepth 1 -name "com.croissaint.tests.*.plist" -delete 2>/dev/null || true
-    # The harness has no bundle identifier, so `UserDefaults.standard` writes
-    # a file named after the executable.
-    rm -f "$preferences/metrics-tests.plist"
-    local survivors
-    survivors=$(find "$preferences" -maxdepth 1 \
-        \( -name "com.croissaint.tests.*.plist" -o -name "metrics-tests.plist" \) \
-        2>/dev/null | wc -l | tr -d ' ')
-    if [[ "$survivors" != "0" ]]; then
-        echo "✗ the test run left $survivors preference file(s) in $preferences" >&2
-        return 1
-    fi
+    local preferences="${1:-$HOME/Library/Preferences}" name attempt
+    local survivors=0 quiet_passes=0
+    # cfprefsd can recreate an emptied domain after the first removal. Require
+    # two quiet checks, but keep a hard limit so persistent failures still fail CI.
+    for attempt in {1..10}; do
+        for name in "vorss.tests." "com.croissaint.tests."; do
+            rm -f "$preferences"/$name*.plist(N)
+        done
+        rm -f "$preferences/metrics-tests.plist"
+        sleep 0.2
+        survivors=$(find "$preferences" -maxdepth 1 \
+            \( -name "vorss.tests.*.plist" -o -name "com.croissaint.tests.*.plist" \
+               -o -name "metrics-tests.plist" \) \
+            2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$survivors" == "0" ]]; then
+            quiet_passes=$((quiet_passes + 1))
+            if (( quiet_passes == 2 )); then return 0; fi
+        else
+            quiet_passes=0
+        fi
+    done
+    echo "✗ test preferences did not settle in $preferences ($survivors remaining)" >&2
+    return 1
 }
 
 # --test: compile and run the standalone unit tests (pure helpers only: metrics,
@@ -317,6 +328,8 @@ if (( TEST )); then
         Sources/Croissaint/Services/Snippets/TextSnippetSupport.swift \
         Sources/Croissaint/Services/RadialMenu/RadialMenuSupport.swift \
         Sources/Croissaint/Services/QuickTools/ScratchpadSupport.swift \
+        Sources/Croissaint/Services/QuickTools/ScratchpadStore.swift \
+        Sources/Croissaint/Services/QuickTools/RecentCaptureStore.swift \
         Sources/Croissaint/Services/KillProcess/KillProcessSupport.swift \
         Sources/Croissaint/Services/Recorder/RecorderSupport.swift \
         Sources/Croissaint/Services/PrivateFileStore.swift \
@@ -328,6 +341,8 @@ if (( TEST )); then
         Sources/Croissaint/Services/Recorder/RecorderTextOverlay.swift \
         Sources/Croissaint/Services/Recorder/RecorderBlurRegion.swift \
         Sources/Croissaint/Services/Recorder/RecorderEditDocument.swift \
+        Sources/Croissaint/Services/Recorder/RecorderImageOverlay.swift \
+        Sources/Croissaint/Services/Recorder/RecorderPresetImageStore.swift \
         Sources/Croissaint/Core/AppInfo.swift \
         Sources/Croissaint/Core/GlobalShortcut.swift \
         Sources/Croissaint/Core/SymbolicHotKeys.swift \
@@ -348,6 +363,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/DockPreview/DockPreviewSupport.swift \
         Sources/Croissaint/Services/Homebrew/HomebrewSupport.swift \
         Sources/Croissaint/Services/AppUpdates/AppUpdatesSupport.swift \
+        Sources/Croissaint/Services/AppUpdates/AppUpdateFeedSupport.swift \
         Sources/Croissaint/Core/AppUpdateStrings.swift \
         Sources/Croissaint/Core/DiskImageInstallerStrings.swift \
         Sources/Croissaint/Services/DiskImageInstaller/DiskImageInstallerSupport.swift \
@@ -366,6 +382,7 @@ if (( TEST )); then
         Sources/Croissaint/App/StatusItemAnchorSupport.swift \
         Sources/Croissaint/Services/DockClick/DockClickSupport.swift \
         Sources/Croissaint/Services/Finder/CutPasteProgressSupport.swift \
+        Sources/Croissaint/Services/Finder/CutPastePrivilegeSupport.swift \
         Sources/Croissaint/Services/Finder/FinderPasteImageSupport.swift \
         Sources/Croissaint/Services/MiddleClick/MiddleClickSupport.swift \
         Sources/Croissaint/Services/MouseNavigation/MouseNavigationSupport.swift \
@@ -373,6 +390,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/MouseButtons/MouseSpacesGestureSupport.swift \
         Sources/Croissaint/Services/MouseClickDebounce/MouseClickDebounceSupport.swift \
         Sources/Croissaint/Services/MouseExceptions/MouseAppExceptionSupport.swift \
+        Sources/Croissaint/Services/MouseExceptions/MouseAppExceptions.swift \
         Sources/Croissaint/Services/WindowServerSupport.swift \
         Sources/Croissaint/Core/MouseButtonStrings.swift \
         Sources/Croissaint/Core/MouseClickDebounceStrings.swift \
@@ -407,6 +425,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/SessionActivitySupport.swift \
         Sources/Croissaint/Services/ScrollWheelSupport.swift \
         Sources/Croissaint/Services/SmoothScrollSupport.swift \
+        Sources/Croissaint/Services/SystemShortcutTakeoverSupport.swift \
         Sources/Croissaint/Services/MouseAcceleration/MouseAccelerationSupport.swift \
         Sources/Croissaint/Services/FocusFollowsMouse/FocusFollowsMouseSupport.swift \
         Sources/Croissaint/Services/Switcher/SwitcherModels.swift \
@@ -422,6 +441,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/ShellSupport.swift \
         Sources/Croissaint/Services/Metrics/NetworkProcessSupport.swift \
         Sources/Croissaint/Services/Metrics/NetworkSampler.swift \
+        Sources/Croissaint/Services/Metrics/SpeedTest.swift \
         Sources/Croissaint/Services/Metrics/PeripheralBatterySupport.swift \
         Sources/Croissaint/Services/Metrics/DiskSupport.swift \
         Sources/Croissaint/Services/Metrics/MonitorSamplingPolicy.swift \
@@ -457,10 +477,14 @@ if (( TEST )); then
         Sources/Croissaint/Services/DesktopPet/PetCatchDifficulty.swift \
         Sources/Croissaint/Services/DesktopPet/PetLevelCurve.swift \
         Tests/MetricsTests.swift \
+        Tests/RecentCaptureStoreTests.swift \
+        Tests/RecorderPresetImageStoreTests.swift \
+        Tests/SpeedTestTests.swift \
         -o build/metrics-tests
     # `set -e` would end the script on a failing run before the sweep below.
     test_status=0
     ./build/metrics-tests || test_status=$?
+    ./Tests/PreferenceCleanupTests.sh || test_status=1
     discard_test_preferences || test_status=1
     exit $test_status
 fi

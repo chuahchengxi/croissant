@@ -49,7 +49,7 @@ public func vorssaintNowPlayingGet() {
         emit(["error": "MRMediaRemoteGetNowPlayingInfo unavailable"])
         return
     }
-    let queue = DispatchQueue(label: "com.vorssaint.now-playing-adapter")
+    let queue = DispatchQueue(label: "com.croissaint.now-playing-adapter")
     let group = DispatchGroup()
     let lock = NSLock()
     var reply: [String: Any] = [:]

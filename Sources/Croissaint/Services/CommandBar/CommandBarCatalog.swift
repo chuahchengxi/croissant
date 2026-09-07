@@ -50,6 +50,7 @@ struct CommandBarEntry: Identifiable {
     let answerValue: String?
     /// The calculator's row: pinned above everything and styled as a result.
     let isAnswer: Bool
+    /// Only durable identities may retain habits; window IDs and PIDs are reused.
     let countsUsage: Bool
     /// The text the ranking reads instead of the title, for the rows whose
     /// title carries something that is not a word. An emoji row shows the
@@ -749,9 +750,7 @@ enum CommandBarCatalog {
                 keywords: "wifi wi-fi",
                 icon: .symbol(wifiOn ? "wifi.slash" : "wifi"),
                 isActive: wifiOn,
-                run: { _ in
-                    if !CommandBarExtras.setWiFiPower(!wifiOn) { NSSound.beep() }
-                }))
+                run: { _ in CommandBarExtras.setWiFiPower(!wifiOn) }))
         }
 
         // The folders every Mac has. A fixed set of destinations, never a
@@ -990,6 +989,7 @@ enum CommandBarCatalog {
                 keywords: name,
                 icon: app.bundleURL.map { .appIcon(path: $0.path) } ?? .symbol("xmark.circle"),
                 confirmationPrompt: String(format: bar.quitConfirmFormat, name),
+                countsUsage: app.bundleIdentifier != nil,
                 run: { _ in
                     guard let running = NSRunningApplication(processIdentifier: pid),
                           !running.isTerminated else {
@@ -1020,6 +1020,7 @@ enum CommandBarCatalog {
                 keywords: process.path,
                 icon: process.bundleURL.map { .appIcon(path: $0.path) } ?? .symbol("xmark.octagon"),
                 confirmationPrompt: String(format: killStrings.confirmKillFormat, process.name),
+                countsUsage: false,
                 run: { _ in
                     KillProcessService.shared.kill(process, force: false)
                 })
@@ -1047,6 +1048,7 @@ enum CommandBarCatalog {
                 keywords: bar.kindWindow + " " + appName,
                 icon: NSRunningApplication(processIdentifier: pid)?.bundleURL
                     .map { .appIcon(path: $0.path) } ?? .symbol("macwindow"),
+                countsUsage: false,
                 run: { _ in
                     afterBeat(0.1) {
                         WindowActivator.activate(pid: pid, windowID: windowID, appName: appName)
@@ -1195,10 +1197,10 @@ enum CommandBarCatalog {
     static func emojiEntries(bar: CommandBarFeatureStrings) -> [CommandBarEntry] {
         CommandBarEmoji.emoji.map { emoji in
             CommandBarEntry(
-                id: "emoji.\(emoji.character)",
+                id: "emoji.\(emoji.identity)",
                 title: emoji.character + "  " + emoji.name,
                 subtitle: bar.kindEmoji,
-                keywords: emoji.name + " " + bar.kindEmoji,
+                keywords: emoji.name + " " + emoji.keywords + " " + bar.kindEmoji,
                 icon: .symbol("face.smiling"),
                 trouble: Permissions.shared.accessibility ? nil : .needsPermission,
                 matchTitle: emoji.name,

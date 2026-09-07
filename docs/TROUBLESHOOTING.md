@@ -69,7 +69,7 @@ To wipe Croissaint's granted permissions and let macOS ask again from scratch, p
   ```
 
   A self-built Developer variant has its own grants under
-  `com.vorssaint.utils.dev`. Resetting is the way out when System Settings
+  `com.croissaint.utils.dev`. Resetting is the way out when System Settings
   shows the permission as granted but the app disagrees — that happens when a
   grant was given to an earlier ad-hoc build whose signature no longer matches.
 
