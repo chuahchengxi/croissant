@@ -46,6 +46,12 @@ extension ShortcutSettingsStrings {
         superKeyAlternativeFormat: "o %@"
     )
 
+    static let sk = ShortcutSettingsStrings(
+        active: "Aktívna",
+        inactive: "Neaktívna",
+        superKeyAlternativeFormat: "alebo %@"
+    )
+
     static let de = ShortcutSettingsStrings(
         active: "Aktiv",
         inactive: "Inaktiv",
@@ -92,5 +98,10 @@ extension ShortcutSettingsStrings {
         active: "已啟用",
         inactive: "未啟用",
         superKeyAlternativeFormat: "或 %@"
+    )
+    static let uk = ShortcutSettingsStrings(
+        active: "Активно",
+        inactive: "Неактивно",
+        superKeyAlternativeFormat: "або %@"
     )
 }

@@ -81,14 +81,54 @@ enum InstalledApps {
         return systemPathPrefixes.contains { path.hasPrefix($0) }
     }
 
+    /// Whether `url` sits somewhere under one of the folders installed apps
+    /// live in - /Applications or ~/Applications - at any depth, not just
+    /// directly inside them. Matches `installedApplications`'s own walk of
+    /// these same two roots, which recurses into subfolders (an installer
+    /// that drops its app inside a vendor subfolder, such as
+    /// /Applications/Vendor/App.app, is exactly what that walk already
+    /// treats as installed) - this used to require the app sit directly in
+    /// one of the roots, which meant a bundle `installedApplications` would
+    /// list could still be refused here.
+    static func isInApplicationsFolder(_ url: URL) -> Bool {
+        let containingDirectory = url.deletingLastPathComponent()
+            .resolvingSymlinksInPath().standardizedFileURL.path
+        let roots = [
+            URL(fileURLWithPath: "/Applications").standardizedFileURL.path,
+            URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications")
+                .standardizedFileURL.path,
+        ]
+        return roots.contains { containingDirectory == $0 || containingDirectory.hasPrefix($0 + "/") }
+    }
+
+    /// The apps an app ships for people to open, in its own
+    /// Contents/Applications folder, where Xcode keeps Instruments, FileMerge
+    /// and its other tools, and in Contents/Developer/Applications, where it
+    /// keeps Simulator. Helpers anywhere else in a bundle, such as login
+    /// items or a browser's renderer apps, are not apps a person opens.
+    static func bundledApplications(in appURL: URL, fileManager fm: FileManager = .default) -> [URL] {
+        ["Contents/Applications", "Contents/Developer/Applications"].flatMap { relativePath -> [URL] in
+            let folder = appURL.appendingPathComponent(relativePath, isDirectory: true)
+            guard let names = try? fm.contentsOfDirectory(atPath: folder.path) else { return [] }
+            return names.filter { $0.lowercased().hasSuffix(".app") }.sorted()
+                .map { folder.appendingPathComponent($0, isDirectory: true) }
+        }
+    }
+
+    /// `includeBundledApplications` adds the tools apps ship for people, for
+    /// a search that should find them. Pickers that act on whole apps, such as
+    /// the uninstaller's, leave them out. `roots` replaces the application
+    /// folders, so a test can walk a fixture instead of this Mac.
     static func installedApplications(includeSystemApplications: Bool = false,
-                                      spotlightPaths: [String] = []) -> [InstalledApp] {
+                                      includeBundledApplications: Bool = false,
+                                      spotlightPaths: [String] = [],
+                                      roots folders: [URL]? = nil) -> [InstalledApp] {
         let fm = FileManager.default
-        var roots = [
+        var roots = folders ?? [
             URL(fileURLWithPath: "/Applications", isDirectory: true),
             URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Applications", isDirectory: true),
         ]
-        if includeSystemApplications {
+        if includeSystemApplications, folders == nil {
             roots.append(URL(fileURLWithPath: "/System/Applications", isDirectory: true))
         }
         let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey]
@@ -105,15 +145,18 @@ enum InstalledApps {
                                                 options: [.skipsPackageDescendants]) else {
                 continue
             }
-            for case let url as URL in enumerator {
-                guard url.pathExtension == "app" else { continue }
-                // A link's target decides whether the app is the system's:
-                // the path inside the application folder says nothing.
-                let resolved = url.resolvingSymlinksInPath()
-                let isSystemApp = isSystemApplication(at: url)
-                guard includeSystemApplications || !isSystemApp else { continue }
-                guard seen.insert(resolved.standardizedFileURL.path).inserted else { continue }
-                apps.append(app(at: url, fileManager: fm))
+            for case let found as URL in enumerator {
+                guard found.pathExtension == "app" else { continue }
+                let shipped = includeBundledApplications ? bundledApplications(in: found, fileManager: fm) : []
+                for url in [found] + shipped {
+                    // A link's target decides whether the app is the system's:
+                    // the path inside the application folder says nothing.
+                    let resolved = url.resolvingSymlinksInPath()
+                    let isSystemApp = isSystemApplication(at: url)
+                    guard includeSystemApplications || !isSystemApp else { continue }
+                    guard seen.insert(resolved.standardizedFileURL.path).inserted else { continue }
+                    apps.append(app(at: url, fileManager: fm))
+                }
             }
         }
 
@@ -134,6 +177,13 @@ enum InstalledApps {
             guard fm.fileExists(atPath: path),
                   seen.insert(url.standardizedFileURL.path).inserted else { continue }
             apps.append(app(at: url, fileManager: fm))
+            // A copy of Xcode kept in the home folder ships the same tools as
+            // one in an application folder.
+            guard includeBundledApplications else { continue }
+            for tool in bundledApplications(in: url, fileManager: fm)
+            where seen.insert(tool.resolvingSymlinksInPath().standardizedFileURL.path).inserted {
+                apps.append(app(at: tool, fileManager: fm))
+            }
         }
 
         return apps.sorted {

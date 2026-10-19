@@ -6,8 +6,9 @@ import Carbon.HIToolbox
 
 /// A floating panel that can take the keyboard. `NSPanel` refuses key status
 /// while borderless, which is what every text field and arrow-key list in the
-/// app needs back.
-class KeyablePanel: NSPanel {
+/// app needs back. It is an `OverlayPanel` so tiling window managers leave it
+/// alone like the other floating overlays.
+class KeyablePanel: OverlayPanel {
     override var canBecomeKey: Bool { true }
 }
 
@@ -77,7 +78,12 @@ final class PanelDismissMonitors {
         })
         add(NSEvent.addGlobalMonitorForEvents(matching: clicks) { [weak panel] event in
             guard let panel, panel.isVisible, isArmed() else { return }
-            if event.windowNumber != panel.windowNumber, !panel.containsPointer { onOutsideClick() }
+            if event.windowNumber != panel.windowNumber, !panel.containsPointer,
+               // Every key on the Accessibility Keyboard is a click outside this
+               // panel. Dismissing on those makes the panel impossible to type into.
+               !AssistiveKeyboard.ownsCocoaPoint(NSEvent.mouseLocation) {
+                onOutsideClick()
+            }
         })
 
         guard let onOtherAppActivated else { return }
@@ -88,7 +94,8 @@ final class PanelDismissMonitors {
         ) { notification in
             guard isArmed(),
                   let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier != Bundle.main.bundleIdentifier
+                  app.bundleIdentifier != Bundle.main.bundleIdentifier,
+                  app.bundleIdentifier != AssistiveKeyboard.bundleID
             else { return }
             onOtherAppActivated()
         }
@@ -118,15 +125,15 @@ enum PanelKeys {
     /// position. Returns the zero-based index, or nil for any other key.
     static func digitIndex(for keyCode: UInt16) -> Int? {
         switch Int(keyCode) {
-        case kVK_ANSI_1: return 0
-        case kVK_ANSI_2: return 1
-        case kVK_ANSI_3: return 2
-        case kVK_ANSI_4: return 3
-        case kVK_ANSI_5: return 4
-        case kVK_ANSI_6: return 5
-        case kVK_ANSI_7: return 6
-        case kVK_ANSI_8: return 7
-        case kVK_ANSI_9: return 8
+        case kVK_ANSI_1, kVK_ANSI_Keypad1: return 0
+        case kVK_ANSI_2, kVK_ANSI_Keypad2: return 1
+        case kVK_ANSI_3, kVK_ANSI_Keypad3: return 2
+        case kVK_ANSI_4, kVK_ANSI_Keypad4: return 3
+        case kVK_ANSI_5, kVK_ANSI_Keypad5: return 4
+        case kVK_ANSI_6, kVK_ANSI_Keypad6: return 5
+        case kVK_ANSI_7, kVK_ANSI_Keypad7: return 6
+        case kVK_ANSI_8, kVK_ANSI_Keypad8: return 7
+        case kVK_ANSI_9, kVK_ANSI_Keypad9: return 8
         default: return nil
         }
     }

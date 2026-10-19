@@ -211,6 +211,39 @@ extension KillProcessFeatureStrings {
         adminPromptFormat: "Croissaint necesita acceso de administrador para finalizar “%@”."
     )
 
+    static let sk = KillProcessFeatureStrings(
+        pageTitle: "Ukončiť proces",
+        browseSubtitle: "Prehľadávať a ukončiť",
+        hubDescription: "Hľadajte bežiace procesy a vynútene ich ukončite, reštartujte alebo ukončite celé stromy procesov",
+        searchPlaceholder: "Filtrovať podľa názvu",
+        columnProcess: "Proces",
+        columnCPU: "CPU",
+        columnMemory: "Pamäť",
+        columnPID: "PID",
+        groupToggle: "Zoskupiť súvisiace procesy",
+        groupCaption: "Zoskupí pomocné procesy pod aplikáciu, ktorá je za ne zodpovedná.",
+        commandBarToggle: "Zobraziť v príkazovej lište",
+        commandBarCaption: "Pridá bežiace procesy do príkazovej lišty, aby ste ich mohli nájsť a ukončiť bez otvárania Nastavení.",
+        refreshTooltip: "Obnoviť",
+        pidLabelFormat: "PID %d",
+        processCountFormat: "Procesy: %d",
+        killButton: "Ukončiť",
+        forceKillButton: "Vynútene ukončiť",
+        killAllFormat: "Ukončiť všetky „%@“",
+        killTreeButton: "Ukončiť strom procesu",
+        restartButton: "Reštartovať",
+        copyPID: "Kopírovať PID",
+        copyPath: "Kopírovať cestu",
+        emptyStateTitle: "Nenašli sa žiadne procesy",
+        confirmKillFormat: "Ukončiť %@?",
+        confirmForceKillFormat: "Vynútene ukončiť %@?",
+        confirmKillAllFormat: "Ukončiť všetky procesy „%@“?",
+        confirmKillTreeFormat: "Ukončiť %@ a všetky jeho podradené procesy?",
+        killFailedTitle: "Proces sa nepodarilo ukončiť",
+        killFailedMessage: "Proces už možno skončil alebo vyžaduje ďalšie oprávnenia.",
+        adminPromptFormat: "Croissaint potrebuje prístup správcu na ukončenie „%@“."
+    )
+
     static let de = KillProcessFeatureStrings(
         pageTitle: "Prozess beenden",
         browseSubtitle: "Anzeigen & Beenden",
@@ -473,5 +506,37 @@ extension KillProcessFeatureStrings {
         killFailedTitle: "無法結束處理程序",
         killFailedMessage: "該處理程序可能已經結束，或需要額外的權限。",
         adminPromptFormat: "Croissaint 需要管理員權限才能結束「%@」。"
+    )
+    static let uk = KillProcessFeatureStrings(
+        pageTitle: "Завершити процес",
+        browseSubtitle: "Огляд та завершення",
+        hubDescription: "Шукайте запущені процеси та примусово завершуйте, перезапускайте або вбивайте дерева процесів",
+        searchPlaceholder: "Фільтр за ім’ям",
+        columnProcess: "Процес",
+        columnCPU: "CPU",
+        columnMemory: "Пам’ять",
+        columnPID: "PID",
+        groupToggle: "Групувати пов’язані процеси",
+        groupCaption: "Групує допоміжні процеси під програмою, яка відповідає за них.",
+        commandBarToggle: "Показувати в Панелі команд",
+        commandBarCaption: "Додає запущені процеси в Панель команд, щоб ви могли знаходити та завершувати їх без відкриття Налаштувань.",
+        refreshTooltip: "Оновити",
+        pidLabelFormat: "PID %d",
+        processCountFormat: "Процесів: %d",
+        killButton: "Завершити",
+        forceKillButton: "Примусово завершити",
+        killAllFormat: "Завершити всі «%@»",
+        killTreeButton: "Завершити дерево процесів",
+        restartButton: "Почати заново",
+        copyPID: "Скопіювати PID",
+        copyPath: "Скопіювати шлях",
+        emptyStateTitle: "Процеси не знайдені",
+        confirmKillFormat: "Завершити %@?",
+        confirmForceKillFormat: "Примусово завершити %@?",
+        confirmKillAllFormat: "Завершити всі процеси «%@»?",
+        confirmKillTreeFormat: "Завершити %@ та всі його дочірні процеси?",
+        killFailedTitle: "Не вдалося завершити процес",
+        killFailedMessage: "Процес, можливо, вже завершився або потребує додаткових привілеїв.",
+        adminPromptFormat: "Croissaint потрібен адміністративний доступ для завершення «%@»."
     )
 }

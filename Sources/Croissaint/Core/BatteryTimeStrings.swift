@@ -46,6 +46,12 @@ extension BatteryTimeFeatureStrings {
         calculating: "Calculando…"
     )
 
+    static let sk = BatteryTimeFeatureStrings(
+        title: "Zostávajúci čas batérie",
+        systemEstimate: "Odhad systému",
+        calculating: "Počíta sa…"
+    )
+
     static let de = BatteryTimeFeatureStrings(
         title: "Verbleibende Batterielaufzeit",
         systemEstimate: "Systemschätzung",
@@ -92,5 +98,10 @@ extension BatteryTimeFeatureStrings {
         title: "電池剩餘時間",
         systemEstimate: "系統估算",
         calculating: "正在計算…"
+    )
+    static let uk = BatteryTimeFeatureStrings(
+        title: "Залишок часу роботи від акумулятора",
+        systemEstimate: "Системна оцінка",
+        calculating: "Обчислення…"
     )
 }

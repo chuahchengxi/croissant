@@ -237,22 +237,28 @@ final class KeyboardDebounceService: ObservableObject {
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            // stop() switches the tap off itself, and that can still be
+            // reported here like a disable by the system. A stop under way
+            // has nothing to recover: syncing would start the tap again under
+            // a suspend(), which Cleaning Mode counts on.
             let currentTap = lifecycleLock.withLock { shouldStopTapThread ? nil : tap }
             if SessionActivity.shared.isActive, AXIsProcessTrusted(), let currentTap {
                 CGEvent.tapEnable(tap: currentTap, enable: true)
-            } else {
+            } else if currentTap != nil {
                 DispatchQueue.main.async { [weak self] in self?.syncWithPreferences() }
             }
             return Unmanaged.passUnretained(event)
         }
 
-        guard type == .keyDown || type == .keyUp else {
+        // Keys this app posts (a Quit Protection confirmation, text a snippet
+        // retypes) follow a real press on purpose and are not chatter.
+        guard type == .keyDown || type == .keyUp, !OwnKeyEvent.isPosted(event) else {
             return Unmanaged.passUnretained(event)
         }
 
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        let timestamp = UInt64(event.timestamp)
+        let timestamp = EventTimestamp.nanoseconds(of: event)
         let eventKind: KeyboardDebounceState.EventKind = type == .keyDown ? .keyDown : .keyUp
         let shouldSuppress = eventLock.withLock {
             state.shouldSuppress(keyCode: keyCode,

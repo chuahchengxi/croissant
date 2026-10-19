@@ -52,6 +52,13 @@ extension ClipboardIgnoredAppsStrings {
         caption: "Nada de lo que copies en estas apps se guarda en el historial."
     )
 
+    static let sk = ClipboardIgnoredAppsStrings(
+        listTitle: "Apky, ktoré preskočiť",
+        addButton: "Pridať aplikáciu…",
+        removeButton: "Odstrániť",
+        caption: "Nič, čo skopírujete v týchto aplikáciách, sa neukladá do histórie."
+    )
+
     static let de = ClipboardIgnoredAppsStrings(
         listTitle: "Apps, die übersprungen werden",
         addButton: "App hinzufügen…",
@@ -106,5 +113,11 @@ extension ClipboardIgnoredAppsStrings {
         addButton: "加入 App…",
         removeButton: "移除",
         caption: "在這些 App 裡複製的內容都不會存進歷史。"
+    )
+    static let uk = ClipboardIgnoredAppsStrings(
+        listTitle: "Програми для пропуску",
+        addButton: "Додати програму…",
+        removeButton: "Видалити",
+        caption: "Все, що ви копіюєте в цих програмах, не зберігається в історії."
     )
 }

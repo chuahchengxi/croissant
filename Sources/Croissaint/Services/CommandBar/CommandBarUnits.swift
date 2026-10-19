@@ -25,7 +25,7 @@ enum CommandBarUnits {
     /// is the classic trap, and it is why the parser only accepts "in" as a
     /// keyword when a real unit follows it and a number with a unit precedes
     /// it: "5 in to cm" reads the first as inches and the second as the verb.
-    private static let conversionWords: Set<String> = [
+    static let conversionWords: Set<String> = [
         "to", "in", "into", "as", "em", "para", "pra", "en", "a", "nach", "zu",
         "à", "su", "->", ">", "→",
     ]
@@ -156,16 +156,41 @@ enum CommandBarUnits {
         return (value, unit)
     }
 
-    /// Reads the number with the separators of this Mac, the same way the
-    /// calculator does.
+    /// Like the calculator, accepts an alternate decimal separator unless it
+    /// forms grouped thousands. When both separators occur, the last is decimal.
+    /// The tokenizer never keeps a space or an apostrophe inside a number, so
+    /// where thousands are grouped with one of those the alternate is whichever
+    /// of "." and "," is not the decimal, as in the calculator.
     private static func number(_ token: String,
                                decimalSeparator: String,
                                groupingSeparator: String) -> Double? {
+        let groupsWithPunctuation = (groupingSeparator == "." || groupingSeparator == ",")
+            && groupingSeparator != decimalSeparator
+        let alternate = groupsWithPunctuation ? groupingSeparator : (decimalSeparator == "," ? "." : ",")
         var normalized = token
-        if decimalSeparator != groupingSeparator {
-            normalized = normalized.replacingOccurrences(of: groupingSeparator, with: "")
+        let hasDecimal = token.contains(decimalSeparator)
+        let hasAlternate = token.contains(alternate)
+        if hasDecimal, hasAlternate {
+            let decimalRange = token.range(of: decimalSeparator, options: .backwards)
+            let alternateRange = token.range(of: alternate, options: .backwards)
+            if let decimalRange, let alternateRange, alternateRange.lowerBound > decimalRange.lowerBound {
+                normalized = token.replacingOccurrences(of: decimalSeparator, with: "")
+                    .replacingOccurrences(of: alternate, with: ".")
+            } else {
+                normalized = token.replacingOccurrences(of: alternate, with: "")
+                    .replacingOccurrences(of: decimalSeparator, with: ".")
+            }
+        } else if hasAlternate {
+            // No grouped number opens with a 0 group, so "0,250" is a decimal.
+            let unsigned = token.hasPrefix("-") ? String(token.dropFirst()) : token
+            let groups = unsigned.components(separatedBy: alternate)
+            let isGrouping = groups.count >= 2 && (1...3).contains(groups[0].count)
+                && !groups[0].hasPrefix("0")
+                && groups.dropFirst().allSatisfy { $0.count == 3 }
+            normalized = token.replacingOccurrences(of: alternate, with: isGrouping ? "" : ".")
+        } else if hasDecimal {
+            normalized = token.replacingOccurrences(of: decimalSeparator, with: ".")
         }
-        normalized = normalized.replacingOccurrences(of: decimalSeparator, with: ".")
         guard !normalized.isEmpty, normalized.filter({ $0 == "." }).count <= 1,
               normalized.allSatisfy({ $0.isNumber || $0 == "." || $0 == "-" })
         else { return nil }

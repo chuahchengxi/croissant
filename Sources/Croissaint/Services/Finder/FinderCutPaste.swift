@@ -256,10 +256,13 @@ final class FinderCutPaste: ObservableObject {
     /// the main thread where the service's UI and pasteboard state live.
     private func route(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            // removeTap() switches the tap off itself, and that is reported
+            // here like a disable by the system. A stop under way has nothing
+            // to recover: syncing would start the tap again under a suspend().
             let currentTap = tapLifecycleLock.withLock { shouldStopTapThread ? nil : tap }
             if SessionActivity.shared.isActive, AXIsProcessTrusted(), let currentTap {
                 CGEvent.tapEnable(tap: currentTap, enable: true)
-            } else {
+            } else if currentTap != nil {
                 DispatchQueue.main.async { [weak self] in self?.syncWithPreferences() }
             }
             return Unmanaged.passUnretained(event)
@@ -758,9 +761,9 @@ final class FinderCutPaste: ObservableObject {
 
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
-        let panel = NSPanel(contentRect: .zero,
-                            styleMask: [.borderless, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
+        let panel = OverlayPanel(contentRect: .zero,
+                                 styleMask: [.borderless, .nonactivatingPanel],
+                                 backing: .buffered, defer: false)
         panel.configureAsOverlay(level: .statusBar, hasShadow: false)
         let host = NSHostingController(rootView: CutFeedbackView().environmentObject(self))
         host.sizingOptions = .preferredContentSize
@@ -777,11 +780,14 @@ final class FinderCutPaste: ObservableObject {
 /// for some users. Same Finder Automation permission as before; nothing new.
 /// Callers run this off the main thread so a slow Finder never blocks the UI or
 /// the event taps.
-private enum FinderBridge {
+enum FinderBridge {
     private static let finderBundleID = "com.apple.finder"
 
-    static func selectionURLs() -> [URL] {
-        guard AppleScriptRunner.consentToAutomate(bundleID: finderBundleID) else { return [] }
+    static func selectionURLs(requestPermission: Bool = true) -> [URL] {
+        let allowed = requestPermission
+            ? AppleScriptRunner.consentToAutomate(bundleID: finderBundleID)
+            : Permissions.automationStatus(for: .finder) == .granted
+        guard allowed else { return [] }
         let script = """
         tell application "Finder"
             set out to ""

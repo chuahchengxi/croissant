@@ -29,6 +29,11 @@ extension FeatureStrings {
 }
 
 extension DesktopPetFeatureStrings {
+    // Slovak and Ukrainian arrived with the upstream merge; the pet has no
+    // translation in either yet, so both read English until one lands.
+    static var sk: Self { enUS }
+    static var uk: Self { enUS }
+
     static let enUS = DesktopPetFeatureStrings(
         pageTitle: "Desktop Pet",
         hubDescription: "A pocket buddy that wanders your desktop, with wild spawns to catch",
@@ -111,7 +116,7 @@ extension DesktopPetFeatureStrings {
 
     static let de = DesktopPetFeatureStrings(
         pageTitle: "Desktop-Haustier",
-        hubDescription: "Ein Taschenfreund, der über deinen Desktop wandert — mit wilden Spawns zum Fangen",
+        hubDescription: "Ein Taschenfreund, der über deinen Desktop wandert, mit wilden Spawns zum Fangen",
         showOnDesktopToggle: "Freund auf dem Desktop zeigen",
         showOnDesktopCaption: "Der Freund läuft am unteren Bildschirmrand entlang, macht müde in einer Ecke ein Nickerchen und reagiert auf Klicks. Ziehe ihn beliebig hin.",
         blinkToggle: "Blinzel-Animation",

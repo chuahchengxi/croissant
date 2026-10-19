@@ -9,7 +9,7 @@
 
 <p align="center">
   One menu bar icon doing the job of a dozen paid Mac apps.<br>
-  Free, open source, and everything runs on your Mac.
+  Install only what you use.
 </p>
 
 <p align="center">
@@ -63,25 +63,23 @@ brew install --cask chuahchengxi/tap/croissaint
 
 ## Install only what you use
 
-Nobody needs all of it, and Croissaint is built around that. The Features page installs and uninstalls whole features: what you uninstall disappears from the entire app and stops loading, so it spends no CPU, memory or energy. Nothing is deleted, and installing again brings your old settings back.
-
-First setup offers three one click bundles, Essentials, Windows, and Battery and quiet, plus a visual picker for choosing individual features. Only the permissions those choices need are requested next, and everything can be changed later in Settings. Every feature also wears an honest energy badge saying what it keeps alive while on.
+Choose individual features or start with a preset. Uninstalled features stop loading and disappear from the interface; reinstalling restores their settings. Setup asks only for the permissions your choices need.
 
 <p align="center">
   <img src="docs/assets/readme/features-hub.png" width="720" alt="The Features hub in Settings, installing and uninstalling whole features">
 </p>
 
-The rest bends the same way: panel sections reorder and hide, the compact layout trades sections for tabs, settings export to a file and import on a new Mac, the app can stay light or dark apart from the Mac, and the whole app speaks more than a dozen languages.
+Reorder or hide panel sections, choose a compact layout, and export settings to another Mac. The app supports more than a dozen languages.
 
 ## Everything it does
 
 ### Sound
 
-- **Volume mixer.** Adjust the Mac's overall volume or slide any single app up or down, enter an exact percentage, and push a quiet one past 100 percent when a video is just too low. Send system sounds through another output, or hide the apps you never adjust to keep the list short. No audio driver, no setup.
-- **Per app output.** Send your music to the speakers and a call to your headset at the same time.
-- **Output switcher.** Cycle between chosen outputs with one shortcut, and drop the volume automatically when headphones disconnect.
-- **Microphone tools.** Pin your favorite input so the Mac stops guessing, and mute every microphone at once with a click or shortcut, whichever one an app is using.
-- **Music app blocker.** Stops the Music app from bursting in when headphones connect. You can still open it yourself.
+- **Volume mixer.** Set volume per app, boost quiet audio past 100%, and pin or reorder favorites. No audio driver required.
+- **Per app output.** Play music through speakers while a call uses your headset.
+- **Output switcher.** Switch audio outputs with a shortcut and lower the volume when headphones disconnect.
+- **Microphone tools.** Choose a preferred input, adjust its level on supported devices, and mute all microphones with one shortcut.
+- **Music app blocker.** Prevent unwanted Music launches after detected playback-button presses. Requires Accessibility.
 
 ### Know what your Mac is doing
 
@@ -125,13 +123,13 @@ The rest bends the same way: panel sections reorder and hide, the compact layout
 
 ### Clipboard, files and links
 
-- **Clipboard history.** Local history of text, images and files with pinned favorites, search, quick paste shortcuts and an on-demand preview where text can be selected or edited.
-- **Auto clear clipboard.** Empty the system clipboard a set time after you copy, and when the Mac sleeps, the display sleeps or the screen locks. Each trigger is optional, works with history off, and leaves your saved items untouched.
-- **Paste as plain text.** One shortcut pastes without fonts, colors or links, and the original stays on the clipboard.
-- **Shelf.** Park files, text and links near your cursor mid drag, or open it from a screen edge, then drop them where they belong later. Share the files you parked anywhere the Mac can send them. Choose whether its close button clears every item or keeps them for later.
-- **Finder shortcuts.** ⌘X and ⌘V move files, an optional F2 shortcut renames the selection, and copied images can become PNG files with ⌘V.
-- **Clean URL.** Strips tracking parameters and extra names you choose from copied links, on demand or automatically.
-- **Disk image installer.** When a mounted disk image contains one app, install it into Applications with one click and eject the image. Choose whether to move its download to Trash and show the installed app in Finder.
+- **Clipboard history.** Search local text, image and file history, pin favorites, preview entries and paste with shortcuts.
+- **Auto clear clipboard.** Clear the system clipboard after a delay, sleep or lock, while keeping saved history.
+- **Paste as plain text.** Paste without formatting while preserving the original clipboard content.
+- **Shelf.** Park files, text and links near your cursor while dragging, then drop or share them later.
+- **Finder shortcuts.** Move files with ⌘X and ⌘V, rename with F2, or paste copied images as PNG files.
+- **Clean URL.** Remove tracking parameters from links, manually or automatically.
+- **Disk image installer.** Install an app from a mounted disk image and eject it, with optional download cleanup.
 
 ### Everyday tools
 
@@ -152,7 +150,7 @@ The rest bends the same way: panel sections reorder and hide, the compact layout
 - **Uninstaller.** Drop an app in and take its caches, preferences, helpers, plugins, containers and other leftovers to the Trash with it. Related finds start unchecked so you can review them first.
 - **Media tools.** Compress videos or open any one in the editor to trim, cut and crop it, convert images one at a time or in batches with resizing, watermarks and reusable profiles, make GIFs and extract text, all locally.
 - **Homebrew manager.** Search, install and remove formulae and casks without opening a terminal.
-- **Cleaning Mode.** Locks the keyboard while you clean and either blacks out every display or leaves the screen visible with a discreet corner indicator.
+- **Port manager.** Find processes listening on network ports and stop them with Kill Process when installed.
 
 ### Energy and display
 
@@ -218,15 +216,15 @@ The shelf and almost every quick toggle need no permission at all. Finder cut an
 ```sh
 git clone https://github.com/chuahchengxi/croissant.git
 cd croissant
-./build.sh            # compile, generate the icon, assemble the signed bundle
-./build.sh --install  # the same, then install into Applications and launch
+./build.sh --dev            # build the separate Developer variant
+./build.sh --dev --install  # install and launch it
 ```
 
 Xcode Command Line Tools are the only requirement. The [contributing guide](CONTRIBUTING.md) covers the layout and conventions. The GPL covers the source; the name and look are covered separately in [TRADEMARKS.md](TRADEMARKS.md).
 
 ## When something misbehaves
 
-The [troubleshooting guide](docs/TROUBLESHOOTING.md) walks through the common cases: the app blocked on first launch, a permission that will not stick, thumbnails showing as icons. To remove Croissaint completely, `./Tools/uninstall.sh` quits the app, drops the login item, resets its privacy grants and deletes every trace.
+See [troubleshooting](docs/TROUBLESHOOTING.md) for launch problems, permissions and missing previews, or [support](SUPPORT.md) for help.
 
 ## Documentation
 

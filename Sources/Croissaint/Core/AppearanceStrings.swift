@@ -58,6 +58,14 @@ extension AppearanceStrings {
         liquidGlass: "Liquid Glass"
     )
 
+    static let sk = AppearanceStrings(
+        label: "Vzhľad",
+        system: "Systémový",
+        light: "Svetlý",
+        dark: "Tmavý",
+        liquidGlass: "Liquid Glass"
+    )
+
     static let de = AppearanceStrings(
         label: "Erscheinungsbild",
         system: "System",
@@ -119,6 +127,13 @@ extension AppearanceStrings {
         system: "跟隨系統",
         light: "淺色",
         dark: "深色",
+        liquidGlass: "Liquid Glass"
+    )
+    static let uk = AppearanceStrings(
+        label: "Вигляд",
+        system: "Система",
+        light: "Світлий",
+        dark: "Темний",
         liquidGlass: "Liquid Glass"
     )
 }

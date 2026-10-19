@@ -3,7 +3,6 @@
 
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Contents of the floating shelf panel: a header (a move handle plus actions)
 /// and the item tiles. Dropping onto the card adds items; the tiles themselves
@@ -14,9 +13,6 @@ struct ShelfView: View {
     var dismissSystemImage: String = "xmark"
     var dismissHelp: String? = nil
     var onDismiss: (() -> Void)? = nil
-    /// Called with the provider count after a drop is accepted, so the docked
-    /// shelf can flash and settle back to its pill.
-    var onAccept: ((Int) -> Void)? = nil
     /// The docked shelf shows the brand mark as a quiet watermark, so it reads
     /// as the app's own tray rather than a plain floating card.
     var brandWatermark: Bool = false
@@ -24,13 +20,11 @@ struct ShelfView: View {
     @EnvironmentObject private var shelf: ShelfService
     @ObservedObject private var l10n = L10n.shared
     @Environment(\.colorScheme) private var colorScheme
-    @State private var targeted = false
     /// Shared Liquid Glass space for the header chips; on macOS 26 they melt
     /// into each other as the pointer crosses between them.
     @Namespace private var headerGlass
     @State private var shareAnchor = ShelfSharePickerAnchor.Anchor()
 
-    private static let dropTypes: [UTType] = [.fileURL, .image, .url, .text, .plainText]
     private static let panelWidth: CGFloat = 304
     private static let tileAreaHeight: CGFloat = 188
 
@@ -64,21 +58,11 @@ struct ShelfView: View {
         .onHover { inside in
             shelf.setPointerInsidePanel(inside)
         }
-        .onChange(of: targeted) { _, isTargeted in
-            shelf.setDropTargeted(isTargeted)
-        }
-        .onDrop(of: Self.dropTypes, isTargeted: $targeted) { providers in
-            let accepted = shelf.accept(providers: providers)
-            if accepted {
-                shelf.noteInteraction()
-                onAccept?(providers.count)
-            }
-            return accepted
-        }
+
     }
 
     private var isDropTargeted: Bool {
-        targeted || shelf.dropTargeted
+        shelf.dropTargeted
     }
 
     /// The official mark, large and faint in the corner: unmistakably ours,
@@ -233,6 +217,7 @@ struct ShelfView: View {
                            contentRevision: shelf.contentRevision,
                            selection: shelf.selection,
                            expandedBatches: shelf.expandedBatches,
+                           pinnedIDs: shelf.pinnedIDs,
                            revealID: shelf.revealTargetID,
                            revealSerial: shelf.addSerial)
                 .frame(height: Self.tileAreaHeight)
@@ -277,14 +262,15 @@ struct ShelfView: View {
 /// Hosts the invisible view the system share sheet is anchored to. SwiftUI
 /// creates and owns that view, so the button reaches whichever one is on
 /// screen right now through the box below.
-private struct ShelfSharePickerAnchor: NSViewRepresentable {
+struct ShelfSharePickerAnchor: NSViewRepresentable {
     final class Anchor {
         fileprivate weak var view: NSView?
         private let presenter = ShelfSharePresenter()
 
-        func present(_ urls: [URL]) {
-            guard let view else { return }
-            presenter.present(for: urls, from: view)
+        @discardableResult
+        func present(_ urls: [URL], completion: ((Bool) -> Void)? = nil) -> Bool {
+            guard let view else { return false }
+            return presenter.present(for: urls, from: view, completion: completion)
         }
     }
 

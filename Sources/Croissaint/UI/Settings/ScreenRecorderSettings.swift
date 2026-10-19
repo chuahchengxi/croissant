@@ -56,7 +56,7 @@ struct ScreenRecordingCaptureSettings: View {
             } header: {
                 Text(strings.pageTitle)
             }
-            .settingsSectionAnchor(.screenRecorder)
+            .settingsFormSectionAnchor(.screenRecorder)
 
             Section {
                 Picker(strings.countdownLabel, selection: $countdown) {

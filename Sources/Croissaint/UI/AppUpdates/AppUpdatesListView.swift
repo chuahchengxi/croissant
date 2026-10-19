@@ -3,6 +3,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The app update list, shared by the Settings page and the menu bar panel so
 /// both look and behave the same. `compact` shrinks it for the panel.
@@ -10,6 +11,7 @@ struct AppUpdatesListView: View {
     @ObservedObject private var l10n = L10n.shared
     @ObservedObject private var updates = AppUpdatesService.shared
     @ObservedObject private var homebrew = HomebrewManager.shared
+    @Environment(\.notchPresentation) private var inNotch
     @AppStorage(DefaultsKey.appUpdatesIncludeOnlineCatalog)
     private var includeOnlineCatalog = true
     @AppStorage(DefaultsKey.appUpdatesIncludeAppStore)
@@ -18,6 +20,8 @@ struct AppUpdatesListView: View {
     var compact = false
 
     private var text: AppUpdateStrings { FeatureStrings.appUpdates(l10n.language) }
+    /// The row menu holds both rule actions, so it is named for neither.
+    private var moreOptions: String { FeatureStrings.mouseClickDebounce(l10n.language).moreOptions }
     private var isBusy: Bool { updates.isChecking || homebrew.operation != nil }
     private var storeCoverageIncomplete: Bool {
         includeAppStore && !updates.appStoreAvailable
@@ -38,6 +42,7 @@ struct AppUpdatesListView: View {
                 list
                 if updates.selectableCount > 0 { updateButton }
             }
+            rulesSection
             if coverageIncomplete {
                 incompleteCheck
             }
@@ -110,10 +115,13 @@ struct AppUpdatesListView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 6) {
             if updates.hasCheckedThisSession, !updates.isChecking {
-                Label(coverageIncomplete ? text.partialUpToDate : text.upToDate,
-                      systemImage: coverageIncomplete ? "info.circle" : "checkmark.circle.fill")
+                Label(coverageIncomplete ? text.partialUpToDate
+                      : (updates.rules.isEmpty ? text.upToDate : text.noVisibleUpdates),
+                      systemImage: coverageIncomplete || !updates.rules.isEmpty
+                          ? "info.circle" : "checkmark.circle.fill")
                     .font(.system(size: compact ? 11 : 12, weight: .medium))
-                    .foregroundStyle(coverageIncomplete ? Color.secondary : Color.green)
+                    .foregroundStyle(coverageIncomplete || !updates.rules.isEmpty
+                                     ? Color.secondary : Color.green)
             }
             Text(text.coverageNote)
                 .font(.system(size: compact ? 9.5 : 11))
@@ -150,6 +158,85 @@ struct AppUpdatesListView: View {
                 Button(text.openAppStore) { updates.openAppStoreUpdates() }
                     .buttonStyle(.link)
                     .font(.system(size: compact ? 10 : 11))
+            }
+        }
+    }
+
+    // MARK: - Rules
+
+    private var rulesSection: some View {
+        DisclosureGroup(text.rulesTitle) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(text.rulesHint)
+                        .font(.system(size: compact ? 9.5 : 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button(action: chooseExceptionApp) {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(isBusy)
+                    .help(text.addException)
+                    .accessibilityLabel(text.addException)
+                }
+                if updates.rules.isEmpty {
+                    EmptyView()
+                } else if compact {
+                    ScrollView { ruleRows }
+                        .frame(height: CGFloat(min(updates.rules.count, 3)) * 54)
+                } else {
+                    ruleRows
+                }
+            }
+            .padding(.top, 4)
+        }
+        .font(.system(size: compact ? 10.5 : 12))
+    }
+
+    private func chooseExceptionApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.message = text.addException
+        // The island floats above the modal panel level, so there the picker
+        // opens on its own just above it, like the island's alerts.
+        guard !inNotch else {
+            DispatchQueue.main.async {
+                guard panel.runAboveIsland() == .OK, let url = panel.url else { return }
+                updates.addExclusion(appAt: url)
+            }
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        updates.addExclusion(appAt: url)
+    }
+
+    private var ruleRows: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(updates.rules) { rule in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rule.name).fontWeight(.medium).lineLimit(1)
+                        Text(rule.version.map { String(format: text.skippedVersionFormat, $0) }
+                             ?? text.excludedApp)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .help(rule.bundleID)
+                    Spacer(minLength: 0)
+                    Button(text.removeRule) { updates.removeRule(rule) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isBusy)
+                        .accessibilityLabel("\(text.removeRule): \(rule.name)")
+                }
+                .frame(height: compact ? 48 : nil)
             }
         }
     }
@@ -247,6 +334,25 @@ struct AppUpdatesListView: View {
             .controlSize(.small)
             .disabled(isBusy)
             .help(actionHint(for: item))
+
+            // The context menu alone was easy to miss; same actions, visible.
+            // The panel row has no width to spare for it (its badge and
+            // version would truncate), so there the context menu carries them.
+            if !compact, item.bundleID != nil {
+                Menu {
+                    ruleActions(for: item)
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                // The borderless popup ignores the label's foreground style;
+                // its tint is what greys the glyph like the header icons.
+                .tint(.secondary)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(moreOptions)
+                .accessibilityLabel("\(moreOptions): \(item.name)")
+            }
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 5)
@@ -255,6 +361,19 @@ struct AppUpdatesListView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.primary.opacity(0.035))
         )
+        .contextMenu { ruleActions(for: item) }
+    }
+
+    @ViewBuilder
+    private func ruleActions(for item: AppUpdatesSupport.Item) -> some View {
+        if item.bundleID != nil {
+            Button(String(format: text.skipVersionFormat, item.latestVersion)) {
+                updates.skipVersion(item)
+            }
+            .disabled(isBusy)
+            Button(text.excludeApp) { updates.excludeApp(item) }
+                .disabled(isBusy)
+        }
     }
 
     private func icon(for item: AppUpdatesSupport.Item) -> NSImage {

@@ -23,6 +23,7 @@
 		<string>en</string>
 		<string>pt-BR</string>
 		<string>es</string>
+		<string>sk</string>
 		<string>de</string>
 		<string>fr</string>
 		<string>it</string>
@@ -31,6 +32,7 @@
 		<string>zh-Hans</string>
 		<string>tr</string>
 		<string>ru</string>
+		<string>uk</string>
 		<string>zh-TW</string>
 		<string>zh-HK</string>
 	</array>
@@ -53,11 +55,13 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Croissaint uses Automation to move files in Finder, send items to the Trash and open Terminal commands when you ask for Homebrew actions.</string>
+	<string>Croissaint uses Automation to move files, send items to the Trash, open requested commands and control playback in your media apps.</string>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>Croissaint uses each app's audio to adjust its volume in the mixer and to include the Mac's sound in the screen recordings you start. Nothing leaves your Mac.</string>
+	<string>Croissaint uses each app's audio to adjust its volume in the mixer, to move Dynamic Island's music bars and to include the Mac's sound in the screen recordings you start. Nothing leaves your Mac.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Croissaint uses Bluetooth only to read the battery level of connected peripherals. Nothing leaves your Mac.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Show your upcoming appointments in the notch. Calendar events stay on this Mac.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Croissaint shows your camera only in the preview window you open, so you can check how you look before a call. Nothing is recorded or leaves your Mac.</string>
 	<key>NSCameraUseContinuityCameraDeviceType</key>

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Merges upstream through `98a56d27` (upstream v3.4.2-beta.1), adding the Dynamic Island and the other upstream features while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
 ## [0.2.2] - 2026-09-07
 
 Croissaint 0.2.2 merges upstream through `4b12b976` (upstream v3.3.5) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.

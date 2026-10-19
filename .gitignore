@@ -16,7 +16,6 @@ dist/
 # Local-only working notes
 AGENTS.md
 CLAUDE.md
-E2E/
 
 # macOS noise
 .DS_Store
@@ -25,7 +24,5 @@ E2E/
 *.xcodeproj
 xcuserdata/
 .swiftpm/
-.cursor/
-.gemini/
 session-*.md
 CONTEXT.md

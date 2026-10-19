@@ -96,12 +96,17 @@ enum UpdateInstallerSupport {
             # Install under the name the DMG ships, in the same folder. A rebrand
             # changes the bundle filename, so this renames it on disk too; a plain
             # update keeps the same name and replaces it in place.
-            DEST="$(/usr/bin/dirname "$APP")/$(/usr/bin/basename "$SRC")"
+            DIR="$(/usr/bin/dirname "$APP")"
+            NAME="$(/usr/bin/basename "$SRC")"
+            DEST="$DIR/$NAME"
             # Stage the full copy FIRST; the old app is only removed after the
             # copy completed, so a failure mid-copy never leaves the user with no
-            # app at all.
+            # app at all. The staging name is hidden: Spotlight recognizes the
+            # copy as an app bundle whatever its suffix, and when the swap lands
+            # while that copy is still being indexed, the installed app keeps
+            # showing up in search as "Croissaint.app.update-new".
             note fail-copy
-            STAGE="$(/usr/bin/mktemp -d "$DEST.update-new.XXXXXX")"
+            STAGE="$(/usr/bin/mktemp -d "$DIR/.$NAME.update-new.XXXXXX")"
             if [ -n "$STAGE" ] && /usr/bin/ditto "$SRC" "$STAGE"; then
                 # Clear ALL xattrs (quarantine + FinderInfo the DMG round-trip
                 # adds): FinderInfo breaks strict signature verification.

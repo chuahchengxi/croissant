@@ -335,6 +335,15 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
     }
 
     private func documentDidChange(from previous: RecorderEditDocument) {
+        // Undo, a look or a preset can take the selected zoom away. A
+        // selection left pointing at nothing turns aiming into a click that
+        // does nothing; clearing it also ends aiming and restores the preview.
+        if let selectedZoomID, zoom(selectedZoomID) == nil { self.selectedZoomID = nil }
+        // The same goes for a blur whose area is being drawn.
+        if let selectedBlurID, !document.blurs.contains(where: { $0.id == selectedBlurID }) {
+            self.selectedBlurID = nil
+            endPickingBlurArea()
+        }
         guard !suppressUndo, previous != document else { return }
         undoStack.append(previous)
         redoStack.removeAll()
@@ -355,7 +364,7 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
         previewTask?.cancel()
         // While an area is being drawn the stage shows the recording as
         // captured; whatever changed meanwhile is drawn when the drawing ends.
-        guard duration > 0, sourceSize.width > 0, !isPickingBlurArea else { return }
+        guard duration > 0, sourceSize.width > 0, !isPickingBlurArea, !isAimingZoom else { return }
         let document = document
         let track = pointerTrack
         let sourceSize = sourceSize
@@ -617,7 +626,9 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
 
     // MARK: - Zooms
 
-    @Published var selectedZoomID: UUID?
+    @Published var selectedZoomID: UUID? {
+        didSet { if selectedZoomID != oldValue { endAiming() } }
+    }
     /// A drag is one edit, not one per mouse-moved: the document changes
     /// freely while the finger is down and the whole thing lands on the undo
     /// stack once, when it is let go.
@@ -749,6 +760,7 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
     /// pointer, which is what an automatic one does.
     func setSelectedZoomFocus(_ focus: CGPoint?) {
         guard let id = selectedZoomID else { return }
+        defer { if focus == nil { endAiming() } }
         beginInteraction()
         var next = document
         next.zoomSegments = next.zoomSegments.map { segment -> RecorderTimeline.ZoomSegment in
@@ -792,18 +804,27 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
 
     /// True while the next click on the picture sets where the selected zoom
     /// looks, instead of playing or pausing.
-    @Published var isAimingZoom = false
+    @Published private(set) var isAimingZoom = false
 
     func beginAiming() {
         guard selectedZoomID != nil else { return }
         pause()
+        endPickingBlurArea()
+        previewTask?.cancel()
+        player.currentItem?.videoComposition = nil
         isAimingZoom = true
+    }
+
+    func endAiming() {
+        guard isAimingZoom else { return }
+        isAimingZoom = false
+        rebuildPreview()
     }
 
     /// A click on the stage, turned into a spot in the recorded area's own
     /// 0...1 space so a later change of shape or quality cannot invalidate it.
     func aim(at location: CGPoint, in viewSize: CGSize) {
-        defer { isAimingZoom = false }
+        defer { endAiming() }
         guard let point = RecorderSupport.unitPoint(at: location,
                                                     in: viewSize,
                                                     sourceSize: sourceSize),
@@ -1151,6 +1172,7 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
     func beginPickingBlurArea() {
         guard selectedBlurID != nil else { return }
         pause()
+        endAiming()
         previewTask?.cancel()
         player.currentItem?.videoComposition = nil
         isPickingBlurArea = true
@@ -1178,10 +1200,26 @@ final class RecorderEditorModel: ObservableObject, BackdropEditing {
         var next = document
         next.blurs = next.blurs.map { item -> RecorderBlurRegion in
             guard item.id == id else { return item }
-            return RecorderBlurRegion(id: item.id, start: item.start, end: item.end, rect: rect)
+            return RecorderBlurRegion(id: item.id, start: item.start, end: item.end, rect: rect,
+                                      strength: item.strength)
         }
         applyDuringInteraction(next)
         commitZoomEdit()
+    }
+
+    func setSelectedBlurStrength(_ strength: Int) {
+        guard let id = selectedBlurID else { return }
+        let level = ScreenshotSupport.BlurStrength.sanitized(strength)
+        guard document.blurs.first(where: { $0.id == id })?.strength != level else { return }
+        beginInteraction()
+        var next = document
+        next.blurs = next.blurs.map { item -> RecorderBlurRegion in
+            guard item.id == id else { return item }
+            var copy = item
+            copy.strength = level
+            return copy
+        }
+        applyDuringInteraction(next)
     }
 
     func removeSelectedBlur() {
@@ -1392,12 +1430,34 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
         copyVideoAndDelete(false)
     }
 
+    func copyGIF() {
+        guard let destination = copyDestination(fileExtension: "gif") else {
+            QuickToolHUD.show(icon: "record.circle", message: strings.exportFailed)
+            return
+        }
+        let strings = strings
+        run(.gif, to: destination, rememberDestination: false) { url in
+            // A long recording's GIF takes a while to check, so it goes on
+            // the pasteboard's own lane instead of the main thread.
+            GeneralPasteboardAccess.shared.async({
+                RecorderGIFClipboard.publish(fileURL: url)
+            }) { published in
+                guard published else {
+                    NSSound.beep()
+                    QuickToolHUD.show(icon: "record.circle", message: strings.exportFailed)
+                    return
+                }
+                QuickToolHUD.show(icon: "doc.on.doc", message: strings.copiedHUD)
+            }
+        }
+    }
+
     func copyAndDelete() {
         copyVideoAndDelete(true)
     }
 
     private func copyVideoAndDelete(_ deletesRecording: Bool) {
-        guard let destination = copyDestination() else {
+        guard let destination = copyDestination(fileExtension: "mp4") else {
             QuickToolHUD.show(icon: "record.circle", message: strings.exportFailed)
             return
         }
@@ -1410,6 +1470,7 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
                 QuickToolHUD.show(icon: "record.circle", message: self.strings.exportFailed)
                 return
             }
+            pasteboard.declareCroissaintSource()
             QuickToolHUD.show(icon: "doc.on.doc", message: self.strings.copiedHUD)
             if deletesRecording {
                 self.confirmedClose = true
@@ -1434,7 +1495,7 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func copyDestination() -> URL? {
+    private func copyDestination(fileExtension: String) -> URL? {
         let manager = FileManager.default
         guard let base = manager.urls(for: .cachesDirectory, in: .userDomainMask).first,
               let bundleID = Bundle.main.bundleIdentifier
@@ -1452,7 +1513,7 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
             }
         }
         let name = ScreenshotSupport.fileName(prefix: strings.fileNamePrefix,
-                                              date: Date(), fileExtension: "mp4")
+                                              date: Date(), fileExtension: fileExtension)
         let unique = ScreenshotSupport.uniqueFileName(name) { candidate in
             manager.fileExists(atPath: folder.appendingPathComponent(candidate).path)
         }
@@ -1482,11 +1543,6 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
                 }
             case .cancelled:
                 break
-            case .tooLongForGIF:
-                let seconds = Int(RecorderSupport.maximumGIFSeconds(
-                    fps: self.model.document.resolvedGIFFrameRate))
-                QuickToolHUD.show(icon: "record.circle",
-                                  message: String(format: self.strings.gifTooLongFormat, seconds))
             default:
                 NSSound.beep()
                 QuickToolHUD.show(icon: "record.circle", message: self.strings.exportFailed)
@@ -1627,7 +1683,7 @@ final class RecorderEditorController: NSObject, NSWindowDelegate {
                     return nil
                 }
                 if self.model.isAimingZoom {
-                    self.model.isAimingZoom = false
+                    self.model.endAiming()
                     return nil
                 }
                 if self.model.isPickingBlurArea {

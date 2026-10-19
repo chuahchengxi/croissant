@@ -76,6 +76,17 @@ extension SwitcherAppRulesStrings {
         caption: "Elige cómo aparece cada app. Las apps sin regla usan la opción anterior."
     )
 
+    static let sk = SwitcherAppRulesStrings(
+        listTitle: "Pravidlá podľa aplikácie",
+        addButton: "Pridať aplikáciu…",
+        removeButton: "Odstrániť",
+        behaviorLabel: "Správanie prepínača",
+        showWithoutWindows: "Zobraziť aj bez okien",
+        windowsOnly: "Len s oknami",
+        hidden: "Nikdy nezobrazovať",
+        caption: "Vyberte, ako sa má zobraziť každá aplikácia. Apky bez pravidla použijú voľbu vyššie."
+    )
+
     static let de = SwitcherAppRulesStrings(
         listTitle: "Regeln pro App",
         addButton: "App hinzufügen…",
@@ -162,5 +173,15 @@ extension SwitcherAppRulesStrings {
         windowsOnly: "僅有視窗時顯示",
         hidden: "一律不顯示",
         caption: "選擇每個 App 的顯示方式。沒有規則的 App 使用上方選項。"
+    )
+    static let uk = SwitcherAppRulesStrings(
+        listTitle: "Правила за програмами",
+        addButton: "Додати програму…",
+        removeButton: "Видалити",
+        behaviorLabel: "Поведінка перемикача",
+        showWithoutWindows: "Показувати без вікон",
+        windowsOnly: "Лише вікна",
+        hidden: "Ніколи не показувати",
+        caption: "Виберіть, як кожна програма з’являється. Програми без правила використовують вибір вище."
     )
 }

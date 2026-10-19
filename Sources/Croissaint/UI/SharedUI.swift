@@ -68,6 +68,9 @@ struct FullDiskAccessNote: View {
             .controlSize(.small)
             .font(compact ? .system(size: 10.5) : nil)
         }
+        // Take the width the host offers, so the card lines up with the cards
+        // around it instead of shrinking to its longest line.
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compact ? 9 : 11)
         .background(
             RoundedRectangle(cornerRadius: compact ? 8 : 9, style: .continuous)
@@ -118,6 +121,27 @@ struct UninstallFailureNote: View {
     }
 }
 
+/// Why the uninstaller turned down the app just dropped on it. The drop
+/// springs back, which on its own read as the drop never arriving (#1582).
+struct UninstallRefusalNote: View {
+    let refusal: UninstallerSupport.RefusedApp
+    var compact = false
+
+    @ObservedObject private var l10n = L10n.shared
+
+    var body: some View {
+        HStack(alignment: .top, spacing: compact ? 6 : 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(refusal.message(l10n.s))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(compact ? .system(size: 10) : .caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// Translucent HUD material behind floating panels (the shelf, the switcher, the
 /// cut-feedback HUD). Mirrors the switcher's backdrop so every floating surface
 /// matches.
@@ -133,7 +157,10 @@ struct UninstallFailureNote: View {
 /// `opacity` fades the material itself, for the one panel that lets the user
 /// choose how much of the screen shows through. Reduce transparency wins over
 /// it: the whole point of that setting is that panels stop being see-through,
-/// so a stored preference must not quietly undo it.
+/// so a stored preference must not quietly undo it. Liquid Glass does not take
+/// it either. The glass gets its transparency from the system's own Liquid
+/// Glass setting and has no fade of its own, so the slider that feeds
+/// `opacity` is turned off while `drawsLiquidGlass` holds.
 struct HUDBackdrop: View {
     enum Contrast {
         case standard
@@ -165,9 +192,19 @@ struct HUDBackdrop: View {
         return Self.plateOpacity(dark: colorScheme == .dark)
     }
 
+    /// Whether the backdrop is drawn as Liquid Glass instead of the classic
+    /// material. Settings asks too, to know when `opacity` has nothing to fade.
+    static func drawsLiquidGlass(enabled: Bool, reduceTransparency: Bool) -> Bool {
+#if compiler(>=6.2)
+        if #available(macOS 26.0, *) { return enabled && !reduceTransparency }
+#endif
+        return false
+    }
+
     var body: some View {
 #if compiler(>=6.2)
-        if #available(macOS 26.0, *), liquidGlassEnabled, !reduceTransparency {
+        if #available(macOS 26.0, *),
+           Self.drawsLiquidGlass(enabled: liquidGlassEnabled, reduceTransparency: reduceTransparency) {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color.clear)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

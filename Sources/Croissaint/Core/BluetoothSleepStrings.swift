@@ -73,6 +73,16 @@ extension BluetoothSleepStrings {
         unsupported: "Este Mac no tiene controlador Bluetooth."
     )
 
+    static let sk = BluetoothSleepStrings(
+        pageTitle: "Bluetooth v spánku",
+        hubDescription: "Vypne Bluetooth, kým Mac spí, aby sa slúchadlá v taške prestali k nemu pripájať.",
+        enable: "Vypnúť Bluetooth, keď Mac zaspí",
+        enableCaption: "Bluetooth, ktorý bol vypnutý už pred spánkom, sa nemení a po prebudení ostane vypnutý.",
+        restoreToggle: "Znova zapnúť Bluetooth pri prebudení Macu",
+        restoreCaption: "Iba ak ho vypol Croissaint.",
+        unsupported: "Tento Mac nemá Bluetooth radič."
+    )
+
     static let de = BluetoothSleepStrings(
         pageTitle: "Bluetooth im Ruhezustand",
         hubDescription: "Schaltet Bluetooth aus, während der Mac schläft, damit Kopfhörer in der Tasche sich nicht mehr verbinden.",
@@ -151,5 +161,14 @@ extension BluetoothSleepStrings {
         restoreToggle: "Mac 喚醒時重新開啟藍牙",
         restoreCaption: "只在藍牙是由 Croissaint 關閉時。",
         unsupported: "這部 Mac 沒有藍牙控制器。"
+    )
+    static let uk = BluetoothSleepStrings(
+        pageTitle: "Bluetooth під час сну",
+        hubDescription: "Вимикає Bluetooth, поки Mac спить, щоб навушники в сумці перестали з’єднуватися з ним.",
+        enable: "Вимикати Bluetooth, коли Mac засинає",
+        enableCaption: "Bluetooth, який уже був вимкнений до сну, залишається таким і не вмикається при пробудженні.",
+        restoreToggle: "Ввімкнути Bluetooth назад, коли Mac прокидається",
+        restoreCaption: "Лише коли Croissaint сам його вимкнув.",
+        unsupported: "На цьому Mac немає Bluetooth-контролера."
     )
 }

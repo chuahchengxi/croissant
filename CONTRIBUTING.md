@@ -1,29 +1,27 @@
 # Contributing to Croissaint
 
-Thanks for the interest. This project aims to stay small, native and readable.
-
-## License for contributions
-
-Unless it is stated otherwise, contributions to this repository are accepted
-under GPL-3.0-or-later.
+Croissaint aims to stay small, native and readable. Contributions are accepted
+under GPL-3.0-or-later unless stated otherwise.
 
 ## Getting started
+
+You need macOS 14 or newer, Apple Silicon and the Xcode Command Line Tools.
+The project builds with `build.sh`, without an Xcode project or external package
+dependencies. `Package.swift` supports editor indexing; it does not assemble or
+sign the app bundle.
 
 ```sh
 git clone https://github.com/chuahchengxi/croissant.git
 cd croissant
-./build.sh                         # build and assemble the bundle
-./build/Croissaint --selftest       # quick health check (SELFTEST OK)
-./build.sh --install               # install into /Applications and launch
+./build.sh --dev
+./build/CroissaintDeveloper --selftest
+./build.sh --test
 ```
 
-You need macOS 14 or newer, Apple Silicon and the Xcode Command Line Tools. The
-build is a plain `swiftc` invocation, see `build.sh`, with no Xcode project and
-no external dependencies, reproducible by design. `Package.swift` is there so
-SwiftPM aware editors can index the code.
-
-Hitting a build or permission snag while developing? See the
-[troubleshooting guide](docs/TROUBLESHOOTING.md).
+To install and launch the separate Developer app, use `./build.sh --dev --install`.
+It has its own preferences and permissions and does not replace the official app.
+A plain `./build.sh` builds the optimized variant used by CI; its health check is
+`./build/Croissaint --selftest`.
 
 ### Stable signing (required once)
 
@@ -116,21 +114,25 @@ look like `Tp…` and `Te…`, GPU is `Tg…`, and battery runs from `TB0T` to
 
 and open a PR with the dump and the adjusted prefixes.
 
-## Reporting bugs and requesting features
+Explain the behavior before and after, the scope and validation. Use
+`type(scope): lowercase imperative phrase` for the title and reuse an existing
+scope where possible. Open unfinished work as a draft and name what is missing.
+The [template](.github/PULL_REQUEST_TEMPLATE.md) is a prompt, not a form.
 
-You do not need to write code to help. Use the issue forms on the
-[new issue](https://github.com/chuahchengxi/croissant/issues/new/choose) page.
+Leave version bumps and `CHANGELOG.md` to the maintainer. Describe the user-visible
+effect in the PR so it can become a release note with your credit.
 
-- **Bug report.** Include your Croissaint version from Settings under About and
-  your macOS version, plus clear steps to reproduce. The
-  [troubleshooting guide](docs/TROUBLESHOOTING.md) explains what makes a report
-  useful.
-- **Feature request.** Describe the problem you are trying to solve rather than
-  only a specific solution.
+When an issue exists, include one reference per line:
 
-For general help and every support channel, see [support](SUPPORT.md).
+```text
+Refs #123
+Refs #456
+```
 
-## Pull requests
+Avoid `Closes` or `Fixes`: those close the issue at merge, before users receive
+the fix. The fix-status workflow tracks the reference, notifies the reporter when
+a stable release carries the fix, and can close the issue after two weeks without
+a response. If the PR addresses only part of an issue, say exactly which part.
 
 1. One topic per PR, with a clear description of the behavior before and after.
 2. `./build.sh` must finish without warnings and `--selftest` must pass.
@@ -140,9 +142,13 @@ For general help and every support channel, see [support](SUPPORT.md).
 
 ## Releases (maintainers)
 
-```sh
-git tag v2.1.0 && git push origin v2.1.0
-```
+Integrating into `main`, pushing a branch and opening a PR do not publish a release.
+Publication requires an explicit release decision, including beta or stable.
+
+Before sending a version tag, validate the final commit on `main`, confirm its
+verified signature, and match `Resources/Info.plist` and the release notes to the
+chosen version. Use a signed tag such as `vX.Y.Z-beta.N` or `vX.Y.Z`.
+Sending the tag starts [the release workflow](.github/workflows/release.yml).
 
 A version tag starts the release workflow, which checks the version, builds,
 applies the configured signing/notarization policy and publishes the DMG.

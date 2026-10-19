@@ -18,4 +18,10 @@ enum LiquidGlassSupport {
         guard isSupported else { return false }
         return defaults.bool(forKey: DefaultsKey.liquidGlassEnabled)
     }
+
+    /// Select the preference for the surface that owns the mixer.
+    static func isEnabled(inNotch: Bool, windows: Bool, island: Bool) -> Bool {
+        guard isSupported else { return false }
+        return inNotch ? island : windows
+    }
 }
