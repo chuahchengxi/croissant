@@ -6,8 +6,31 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-19
+
+Croissaint 0.2.3 merges upstream through `98a56d27` (upstream v3.4.2-beta.1) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- Dynamic Island: a notch panel for music, calendar, notifications, timers, files, downloads, AI agent limits and quick controls.
+- A wallpaper gallery and a port manager for listening network ports.
+- Slovak and Ukrainian translations.
+- A local system Share button for screenshots, with no upload involved.
+
 ### Changed
-- Merges upstream through `98a56d27` (upstream v3.4.2-beta.1), adding the Dynamic Island and the other upstream features while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+- What's New shows what changed in the features you use, and the release notes before updating can be turned off.
+- The screenshot editor adds a Spotlight tool, canvas expansion and pasted image layers.
+- Number keys on the keypad pick results in the Clipboard, Command Bar, Quick Launcher and Snippets panels.
+
+### Fixed
+- Floating panels stay usable with the Accessibility Keyboard and are no longer listed by tiling window managers.
+- Smooth scrolling keeps its glide on the original target, and the mixer, Dock Preview, display brightness and battery status pick up upstream's reliability fixes.
+- Updates stage the new app under a hidden name so Spotlight never lists the copy.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
 
 ## [0.2.2] - 2026-09-07
 
