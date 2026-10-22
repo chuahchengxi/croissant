@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-22
+
+Croissaint 0.2.5 merges upstream through `02a13224` (upstream v3.4.2) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- Clipboard history can remove items after a set number of days, while pinned items stay. Settings → Clipboard history → Keep items for.
+- Dynamic Island set to Hidden until hover can come into view for activities, indicators and notifications, then hide again.
+
+### Changed
+- Dynamic Island closes when a file or link is dragged out of its Shelf, so it no longer covers the drop destination. A pinned island stays open.
+- Updating from 0.2.2 now lists the Dynamic Island, wallpaper gallery and port manager as new in What's New, and never the desktop pets.
+
+### Fixed
+- The window switcher gives ⌘Tab back to macOS while another app has secure input on, and settings explain why.
+- Quit Protection lets macOS ⌘Tab handle its quit shortcut and passes a confirmed ⌘Q through to remote desktop and virtual machine apps.
+- Smooth scrolling keeps its glide in the window where it started, and Quit on close no longer quits an app when a window is minimized.
+- The window switcher, Dock Preview and Watch pause window captures while macOS is slow to check screen access, which could log you out under heavy load.
+- Extra Brightness keeps windows in Mission Control's desktop thumbnails, and mirrored displays keep their own brightness controls.
+- App Updates stops showing false updates for apps numbered differently in the public catalog.
+- The Monitor settings page no longer freezes while scrolling, the volume mixer publishes current volumes, and Wallpaper's file pickers open in front.
+- What's New no longer lists the installation and signing notes as changes.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.4] - 2026-10-19
 
 ### Fixed
