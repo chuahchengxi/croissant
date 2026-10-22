@@ -172,7 +172,8 @@ struct ReleaseNotes {
 
     private static func shouldDisplaySection(_ title: String) -> Bool {
         let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized != "website" && normalized != "links"
+        // The fork's signing notes are for the release page, not a change list.
+        return normalized != "website" && normalized != "links" && normalized != "installation and signing"
     }
 
     private static func isDistributionFooter(_ line: String) -> Bool {

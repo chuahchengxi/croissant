@@ -259,6 +259,9 @@ enum ReleaseDigestTests {
         let untracked = AppFeature.allCases.filter { !WhatsNewInfo.featuresBeforeTracking.contains($0.rawValue) }
         suite.expect(WhatsNewInfo.newFeatures(known: nil, isSupported: { _ in true }) == untracked,
                      "without a record, features added after tracking began are new")
+        let fromFork022 = WhatsNewInfo.newFeatures(known: nil, isSupported: { _ in true })
+        suite.expect(!fromFork022.contains(.desktopPet) && fromFork022.contains(.notch),
+                     "updating from fork 0.2.2 shows the Dynamic Island as new, never the desktop pet it already had")
     }
 
     private static func checkSections(_ suite: TestSuite) {

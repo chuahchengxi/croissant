@@ -192,26 +192,24 @@ enum WhatsNewInfo {
         return old > new ? stored : current
     }
 
-    /// Every feature that existed when this window began telling new features
-    /// apart. Frozen on purpose: a feature added later is new to anyone who
-    /// updates from a version that never recorded what it knew.
+    /// Every feature the fork had in 0.2.2, the last version before this
+    /// window began telling new features apart. Frozen on purpose: a feature
+    /// added later is new to anyone who updates from a version that never
+    /// recorded what it knew.
     static let featuresBeforeTracking: Set<String> = [
-        "switcher", "dockPreview", "dockClick", "windowMaximizer", "windowLayout", "autoQuit", "spacesOrder",
-        "scrollInverter", "scrollHorizontal", "focusFollowsMouse", "smoothScroll", "linearScroll",
+        "switcher", "dockPreview", "dockClick", "windowMaximizer", "windowLayout", "autoQuit",
+        "scrollInverter", "focusFollowsMouse", "smoothScroll",
         "mouseAcceleration", "mouseNavigation", "mouseButtonShortcuts", "middleClick", "mouseClickDebounce",
         "keyboardDebounce", "textSnippets", "superKey", "quitWindowProtection",
         "clipboardHistory", "pastePlain", "finderCutPaste", "finderRename", "shelf", "urlCleaner",
         "diskImageInstaller",
-        "mixer", "soundOutputSwitcher", "audioPriority", "micMute", "musicBlock",
+        "mixer", "soundOutputSwitcher", "micMute", "musicBlock",
         "keepAwake", "brightness", "extraBrightness", "bluetoothSleep",
         "quickLauncher", "quickToggles", "colorPicker", "screenOCR", "cleaningMode", "mediaTools",
         "cleaner", "uninstaller", "homebrew", "appUpdates", "screenshot", "cameraPreview", "radialMenu",
-        "scratchpad", "commandBar", "screenRecorder", "wallpaper", "killProcess", "portManager",
-        "notch", "notchCalendar", "notchNotifications", "notchGestures", "notchTimer", "notchAccessories",
-        "notchLyrics", "notchQueue", "notchLiveEqualizer", "notchDownloads", "notchAgents", "notchWatch",
-        "notchMascot",
+        "scratchpad", "commandBar", "screenRecorder", "killProcess", "desktopPet",
         "monitorCPU", "monitorGPU", "monitorMemory", "monitorNetwork", "monitorDisk", "monitorPower",
-        "connectedDevices", "fanControl",
+        "fanControl",
     ]
 
     /// What to store once the window is done: every feature this version has.
