@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-19
+
+### Fixed
+- The Dynamic Island music panel follows track changes again. In 0.2.3 it stopped updating, so a new song in Spotify or another player never replaced the one shown.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.3] - 2026-10-19
 
 Croissaint 0.2.3 merges upstream through `98a56d27` (upstream v3.4.2-beta.1) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.

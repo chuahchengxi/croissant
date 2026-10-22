@@ -266,13 +266,13 @@ public func vorssaintNowPlayingGet() {
 
 /// One adapter process while a music surface is subscribed. Native change
 /// notifications replace polling; closing stdin also ends it if the app exits.
-@_cdecl("croissaint_now_playing_watch_all")
+@_cdecl("vorssaint_now_playing_watch_all")
 public func croissaintNowPlayingWatchAll() {
     NotchNativePlayback.includeOtherPlayers = true
     croissaintNowPlayingWatch()
 }
 
-@_cdecl("croissaint_now_playing_watch")
+@_cdecl("vorssaint_now_playing_watch")
 public func croissaintNowPlayingWatch() {
     typealias Register = @convention(c) (DispatchQueue) -> Void
     let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY)
