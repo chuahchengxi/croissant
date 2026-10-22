@@ -616,6 +616,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Uninstall/UninstallerSupport.swift
         Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift
         Sources/Croissaint/Core/SecureInputSupport.swift
+        Sources/Croissaint/Core/ClipboardRetentionStrings.swift
         Tests/*.swift
         build/generated-tests/*.swift
     )

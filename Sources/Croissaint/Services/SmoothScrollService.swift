@@ -94,6 +94,7 @@ final class SmoothScrollService: ObservableObject {
     func suspend() { stop() }
 
     private func start() {
+        ScrollWheelHIDStage.shared.setWatching(true, for: .smoothScroll)
         guard !eventTap.isRunning else {
             eventTap.reArm()
             installScreenObserver()
@@ -114,6 +115,7 @@ final class SmoothScrollService: ObservableObject {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             MouseAppExceptions.shared.setSourceTracking(false, for: .smoothScroll)
+            ScrollWheelHIDStage.shared.setWatching(false, for: .smoothScroll)
             isRunning = false
             // A create that fails during the session handoff gets one more look once the switch settles.
             guard !tapCreationRetryUsed else { return }
@@ -142,6 +144,7 @@ final class SmoothScrollService: ObservableObject {
         tapCreationRetryWork = nil
         tapCreationRetryUsed = false
         MouseAppExceptions.shared.setSourceTracking(false, for: .smoothScroll)
+        ScrollWheelHIDStage.shared.setWatching(false, for: .smoothScroll)
         removeScreenObserver()
         removeSleepObserver()
         eventTap.stop()
@@ -173,6 +176,12 @@ final class SmoothScrollService: ObservableObject {
             return Unmanaged.passUnretained(event)
         }
         guard type == .scrollWheel else { return Unmanaged.passUnretained(event) }
+        // A remote screen's scroll, posted below the HID stage, was already
+        // scrolled the controlling computer's way. It leaves a local glide
+        // running, as it did when this tap sat at the HID stage.
+        guard ScrollWheelHIDStage.shared.passed(event) else {
+            return Unmanaged.passUnretained(event)
+        }
         if AppSwitcher.shared.scrollNavigationActive {
             stopGlide()
             return Unmanaged.passUnretained(event)
@@ -211,28 +220,6 @@ final class SmoothScrollService: ObservableObject {
         guard ScrollWheelSupport.isMouseWheel(traits,
                                               secondsSinceLastGesturePhase: secondsSinceGesturePhase)
         else {
-            stopGlide()
-            return Unmanaged.passUnretained(event)
-        }
-        if MouseButtonShortcutService.hasActiveSideWheelInterest,
-           let input = MouseButtonShortcutSupport.sideWheelInput(
-            isContinuous: traits.isContinuous,
-            vertical: (
-                line: Double(event.getIntegerValueField(.scrollWheelEventDeltaAxis1)),
-                fixedPoint: event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1),
-                point: Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1))
-            ),
-            horizontal: (
-                line: Double(event.getIntegerValueField(.scrollWheelEventDeltaAxis2)),
-                fixedPoint: event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2),
-                point: Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis2))
-            )),
-           MouseButtonShortcutService.claimsSideWheel(
-               input,
-               at: event.location,
-               sourceProcessID: sourceProcessID,
-               eventTimestamp: timestamp
-           ) {
             stopGlide()
             return Unmanaged.passUnretained(event)
         }

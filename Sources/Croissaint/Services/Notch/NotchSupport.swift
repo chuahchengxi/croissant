@@ -1929,10 +1929,21 @@ enum NotchSupport {
         return batteryWarning(percent: percent, externalConnected: externalConnected, in: defaults)
     }
 
-    /// The closed island stays out of sight until the pointer reaches it, and
-    /// shows no notices while it waits.
+    /// The closed island stays out of sight until the pointer reaches it.
+    /// Unless set to show activity, it shows no notices while it waits.
     static func hidesUntilHover(in defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: DefaultsKey.notchHideUntilHover) && defaults.bool(forKey: DefaultsKey.notchOpenOnHover)
+    }
+
+    /// Hidden until hover, the island can still come into sight for as long
+    /// as an activity runs or a notice shows, and then it takes notices.
+    static func hiddenShowsActivity(in defaults: UserDefaults = .standard) -> Bool {
+        hidesUntilHover(in: defaults) && defaults.bool(forKey: DefaultsKey.notchHiddenShowsActivity)
+    }
+
+    /// Hidden until hover and out of sight for everything until then.
+    static func hidesNoticesUntilHover(in defaults: UserDefaults = .standard) -> Bool {
+        hidesUntilHover(in: defaults) && !defaults.bool(forKey: DefaultsKey.notchHiddenShowsActivity)
     }
 
     static func idleContent(in defaults: UserDefaults = .standard) -> NotchIdleContent {
@@ -2142,6 +2153,19 @@ enum NotchSupport {
         case .pointer, .all: return pointer.flatMap { builtIn.indices.contains($0) ? $0 : nil } ?? fallback
         }
     }
+
+    /// Whether the island can rest on a display without a notch, where the
+    /// shape chosen for those displays shows. The pointer can take it to any
+    /// display; otherwise the chosen display decides, and one with a camera,
+    /// or a built-in screen closed under its lid, keeps it off all of them.
+    static func reachesDisplayWithoutNotch(preference: NotchDisplay, builtIn: [Bool], notched: [Bool], main: Int,
+                                           hasLid: Bool = true) -> Bool {
+        guard notched.contains(false) else { return false }
+        if preference == .pointer || preference == .all { return true }
+        guard let index = screenIndex(preference: preference, builtIn: builtIn, notched: notched, main: main,
+                                      hasLid: hasLid) else { return false }
+        return !notched[index]
+    }
 }
 
 /// A hidden menu bar retains only a measurement from the same display and mode.
@@ -2224,8 +2248,9 @@ struct NotchGeometry: Equatable {
     var requiresFullWidthHeader = false
     /// What the open page puts in the island's top row.
     var pageTop: NotchPageTop = .row
-    /// The width the open page reads best at, inside the width the person
-    /// chose, which stays the limit; nil takes all of it, as lists do.
+    /// The width the open page reads best at, inside a preset's width,
+    /// which stays the limit; nil takes all of it, as lists do. A width set
+    /// by hand is the island's on every page.
     var pageContentWidth: CGFloat? = nil
     /// Nothing floating beside the island leads to its sections, so the
     /// open page's row starts with the island's own button for them.
@@ -2623,16 +2648,18 @@ struct NotchGeometry: Equatable {
     var expanded: CGSize { expandedSize(module: .controls) }
     var expandedWidth: CGFloat {
         let chosen = NotchLayout.preferredWidth(layout, custom: customWidth)
-        // A page with a width of its own takes no more, still wrapping the
-        // camera with its row where the chosen width would have. Each side
-        // keeps its room for the page's controls past the sections button,
-        // as the camera's sides are as wide as each other. A row that ends
-        // with the button grows only when the page's controls leave it no
-        // room and the chosen width holds both; otherwise the page shows it.
+        // Under a preset, a page with a width of its own takes no more, still
+        // wrapping the camera with its row where the chosen width would have.
+        // Each side keeps its room for the page's controls past the sections
+        // button, as the camera's sides are as wide as each other. A row that
+        // ends with the button grows only when the page's controls leave it
+        // no room and the chosen width holds both; otherwise the page shows
+        // it. A width set by hand is the island's on every page, so making it
+        // wider makes the player and the home page wider too.
         var wing = pageBandSide + (rowShowsSectionsButton ? NotchBand.sectionsButtonRoom : 0)
         let ending = max(wing, trailingSectionsRoom + NotchBand.cameraClearance)
         if sectionsButtonEndsRow, cameraWidth + ending * 2 + NotchLayout.horizontalInset * 2 <= chosen { wing = ending }
-        let preferred = pageContentWidth.map { natural in
+        let preferred = layout == .custom ? chosen : pageContentWidth.map { natural in
             min(chosen, max(natural, isNotched ? cameraWidth + wing * 2 : 0) + NotchLayout.horizontalInset * 2)
         } ?? chosen
         return min(max(preferred, cameraWidth + 36), screen.width - 24 - NotchQuickAccessLayout.gutter * 2)
@@ -2956,6 +2983,115 @@ enum NotchMotion {
             return (end + (end - start) * CGFloat(swing)).rounded(.up)
         }
         return CGSize(width: side(from.width, to.width, width: true), height: side(from.height, to.height, width: false))
+    }
+}
+
+/// A resize in flight, each side a sum of the island's springs from rest: the
+/// move it began with, and one more from each moment that side's target moved
+/// on the way it was already going. The island then carries on at its speed;
+/// started again from rest it stalled halfway, as the Command Bar's island did
+/// when its rows arrived while it opened. A motion turning back on either side
+/// starts again from where it is drawn, as an interrupted island always has.
+struct NotchMotionTimeline: Equatable {
+    struct Leg: Equatable {
+        var begin: CFTimeInterval
+        var from: CGFloat
+        var to: CGFloat
+    }
+
+    private(set) var width: [Leg]
+    private(set) var height: [Leg]
+    /// When its latest move began, and the size there.
+    private(set) var begin: CFTimeInterval
+    private(set) var start: CGSize
+    /// A width easing without a swing, and how far the centre still sat from
+    /// its new one. A motion with either is never carried on.
+    let steady: Bool
+    let offset: CGFloat
+
+    init(from: CGSize, to: CGSize, begin: CFTimeInterval, steady: Bool = false, offset: CGFloat = 0) {
+        width = [Leg(begin: begin, from: from.width, to: to.width)]
+        height = [Leg(begin: begin, from: from.height, to: to.height)]
+        self.begin = begin
+        start = from
+        self.steady = steady
+        self.offset = offset
+    }
+
+    var target: CGSize { CGSize(width: width.last?.to ?? start.width, height: height.last?.to ?? start.height) }
+
+    func size(at time: CFTimeInterval) -> CGSize {
+        CGSize(width: value(of: width, at: time, width: true), height: value(of: height, at: time, width: false))
+    }
+
+    func offset(at time: CFTimeInterval) -> CGFloat {
+        NotchMotion.offset(at: time - begin, from: start, to: target, start: offset, steady: steady)
+    }
+
+    /// The same motion with its latest move beginning at `time`: Core
+    /// Animation starts a motion when it reaches the screen, not when it is made.
+    func rebased(to time: CFTimeInterval) -> NotchMotionTimeline {
+        func moved(_ legs: [Leg]) -> [Leg] {
+            legs.map { $0.begin == begin ? Leg(begin: time, from: $0.from, to: $0.to) : $0 }
+        }
+        var rebased = self
+        rebased.width = moved(width)
+        rebased.height = moved(height)
+        rebased.begin = time
+        return rebased
+    }
+
+    /// This motion headed for `size` from `time` on, or nil when a side turns
+    /// back, or the motion eases without a swing or moves its centre.
+    func continued(to size: CGSize, at time: CFTimeInterval) -> NotchMotionTimeline? {
+        guard !steady, offset == 0, let width = continued(width, to: size.width, at: time),
+              let height = continued(height, to: size.height, at: time) else { return nil }
+        var next = self
+        next.width = width
+        next.height = height
+        next.begin = time
+        next.start = self.size(at: time)
+        return next
+    }
+
+    /// Sizes at a steady rate from its latest move until every side stays
+    /// within `settledDistance` of its target, ending exactly there.
+    func frames() -> (sizes: [CGSize], keyTimes: [Double], duration: TimeInterval) {
+        let target = target
+        let step = 1.0 / 240
+        var duration = step
+        var time = step
+        while time < 2 {
+            let size = size(at: begin + time)
+            if abs(size.width - target.width) > NotchMotion.settledDistance
+                || abs(size.height - target.height) > NotchMotion.settledDistance {
+                duration = time + step
+            }
+            time += step
+        }
+        let count = max(1, Int((duration * 120).rounded(.up)))
+        let keyTimes = (0...count).map { Double($0) / Double(count) }
+        let sizes = keyTimes.map { $0 == 1 ? target : size(at: begin + duration * $0) }
+        return (sizes, keyTimes, duration)
+    }
+
+    private func value(of legs: [Leg], at time: CFTimeInterval, width: Bool) -> CGFloat {
+        guard let first = legs.first, let last = legs.last else { return 0 }
+        let value = legs.reduce(first.from) { value, leg in
+            guard leg.from != leg.to else { return value }
+            let spring = NotchMotion.spring(from: leg.from, to: leg.to, width: width, steady: steady)
+            return value + (leg.to - leg.from) * CGFloat(spring.progress(at: time - leg.begin))
+        }
+        // Swings that happen to coincide still pass the target no further
+        // than one does, so the display keeps its free margin.
+        return max(0, min(value, max(first.from, last.to) + NotchMotion.overshootLimit))
+    }
+
+    private func continued(_ legs: [Leg], to end: CGFloat, at time: CFTimeInterval) -> [Leg]? {
+        guard let last = legs.last, end != last.to else { return legs }
+        let heading = legs.first { $0.from != $0.to }.map { $0.to - $0.from } ?? 0
+        guard heading == 0 || (end > last.to) == (heading > 0) else { return nil }
+        return legs + [Leg(begin: time, from: last.to, to: end)]
     }
 }
 

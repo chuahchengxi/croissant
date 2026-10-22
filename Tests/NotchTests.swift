@@ -376,9 +376,11 @@ enum NotchTests {
         }
     }
 
-    /// Each page takes the width it needs, up to the chosen one: the player
-    /// about 380 points between its sides, still wrapping the camera, the
-    /// home page its row of shortcuts, and lists the whole chosen width.
+    /// Under a preset each page takes the width it needs, up to the preset's:
+    /// the player about 380 points between its sides, still wrapping the
+    /// camera, the home page its row of shortcuts, and lists the whole width.
+    /// A width set by hand is the island's on every page, so a wider one
+    /// makes the player, the timer and the home page wider too.
     private static func pageWidthContracts(_ suite: TestSuite) {
         let screens: [(CGFloat, CGFloat)] = [(0, 0), (156, 28), (179, 32), (185, 37.5), (210, 37.5), (224, 37.5)]
         for (camera, top) in screens {
@@ -413,6 +415,36 @@ enum NotchTests {
         custom.pageContentWidth = NotchLayout.musicContentWidth
         suite.expect(custom.expandedWidth == 360 && custom.headerCameraGap == 0,
                      "a chosen width narrower than the player still limits it, and its row then sits below the camera")
+        var handSet = true, wraps = true
+        for (camera, top) in screens {
+            let preset = NotchGeometry(screen: CGRect(x: 0, y: 0, width: 1710, height: 1112), safeAreaTop: top,
+                                       cameraWidth: camera, layout: .spacious, silhouette: camera == 0 ? .capsule : .notch)
+                .page(.music, controls: [], sectionsButton: false)
+            for width in stride(from: NotchSize.widthRange.lowerBound, through: NotchSize.widthRange.upperBound, by: 20) {
+                let base = NotchGeometry(screen: CGRect(x: 0, y: 0, width: 1710, height: 1112), safeAreaTop: top,
+                                         cameraWidth: camera, layout: .custom, customWidth: width,
+                                         silhouette: camera == 0 ? .capsule : .notch)
+                for module: NotchModule in [.music, .timer, .controls] {
+                    for sectionsButton in [false, true] {
+                        let page = base.page(module, controls: shortcuts, sectionsButton: sectionsButton)
+                        handSet = handSet && page.expandedWidth == CGFloat(width)
+                    }
+                }
+                // As wide as the preset's player or wider, it still wraps the camera.
+                let player = base.page(.music, controls: [], sectionsButton: false)
+                if CGFloat(width) >= preset.expandedWidth {
+                    wraps = wraps && player.headerCameraGap == preset.headerCameraGap
+                }
+            }
+        }
+        suite.expect(handSet, "a width set by hand is the island's on the player, the timer and the home page")
+        suite.expect(wraps, "a player set wider by hand wraps the camera as the preset's does")
+        // The Layout tab previews the home page at the width the island opens
+        // it at, never a preset's wider island around it.
+        let editor = (try? String(contentsOfFile: "Sources/Croissaint/UI/Settings/NotchLayoutEditor.swift", encoding: .utf8)) ?? ""
+        suite.expect(editor.contains("private var actualWidth: CGFloat { previewGeometry.expandedWidth }")
+                     && editor.contains("return geometry.page(.controls, controls: NotchSupport.controls(),"),
+                     "the Layout preview opens the home page as the island does")
     }
 
     /// Without a floating Explore button each page's row starts with the
@@ -532,9 +564,11 @@ enum NotchTests {
                 let music = base.page(.music, controls: home, sectionsButton: true)
                 let musicBand = NotchBand(geometry: music, contentWidth: music.contentWidth)
                 if musicBand.besideCamera {
-                    // Across from the cover the reading keeps its glyph and a meter.
+                    // Across from the cover the reading keeps its glyph and a
+                    // meter: a preset's player is only as wide as it needs, and
+                    // only a wider width set by hand leaves room for the percentage.
                     narrowestPlayer = min(narrowestPlayer, musicBand.side)
-                    player = player && musicBand.side < NotchLayout.levelReadingDetailWidth
+                    player = player && (size == .custom || musicBand.side < NotchLayout.levelReadingDetailWidth)
                         && musicBand.side - 18 - 8 >= 36
                 }
             }
@@ -1688,6 +1722,7 @@ enum NotchTests {
         NotchUpdateTests.run(suite)
         NotchCaptureKeyboardTests.run(suite)
         NotchKeyMonitorTests.run(suite)
+        NotchCommandBarHeightTests.run(suite)
         NotchDownloadProgressTests.run(suite)
         NotchSliderEditingTests.run(suite)
         NotchFileToolsTests.run(suite)
@@ -1931,6 +1966,15 @@ enum NotchTests {
         suite.expect(!NotchSupport.hidesUntilHover(in: defaults), "click to open does not hide the island until hover")
         defaults.set(true, forKey: DefaultsKey.notchOpenOnHover)
         suite.expect(NotchSupport.hidesUntilHover(in: defaults), "hidden until hover waits out of sight for the pointer")
+        suite.expect(NotchSupport.hidesNoticesUntilHover(in: defaults) && !NotchSupport.hiddenShowsActivity(in: defaults),
+               "hidden until hover keeps activity and notices out of sight by default")
+        defaults.set(true, forKey: DefaultsKey.notchHiddenShowsActivity)
+        suite.expect(NotchSupport.hiddenShowsActivity(in: defaults) && !NotchSupport.hidesNoticesUntilHover(in: defaults),
+               "a hidden island set to show activity takes notices while it waits for the pointer")
+        defaults.set(false, forKey: DefaultsKey.notchOpenOnHover)
+        suite.expect(!NotchSupport.hiddenShowsActivity(in: defaults), "showing activity only applies while hidden until hover")
+        defaults.set(true, forKey: DefaultsKey.notchOpenOnHover)
+        defaults.set(false, forKey: DefaultsKey.notchHiddenShowsActivity)
         defaults.set(false, forKey: DefaultsKey.notchOpenOnHover)
         suite.expect(!NotchSupport.hidesUntilHover(in: defaults), "an island that opens by click never waits for hover")
         defaults.set(false, forKey: DefaultsKey.notchHideUntilHover)
@@ -2989,6 +3033,72 @@ enum NotchTests {
                        "a reserved window keeps whole, equal margins so the settled island does not shift a pixel")
             }
         }
+        // The Command Bar's island opens toward its field, and its rows,
+        // measured on the way, move the target further down.
+        do {
+            let field = CGSize(width: 616, height: roomy.collapsed.height + 76)
+            let rows = CGSize(width: 616, height: 666)
+            let opening = NotchMotionTimeline(from: roomy.collapsed, to: field, begin: 10)
+            suite.expect((0...60).allSatisfy { step in
+                             let time = Double(step) / 100
+                             let size = opening.size(at: 10 + time)
+                             let expected = NotchMotion.size(at: time, from: roomy.collapsed, to: field)
+                             return abs(size.width - expected.width) < 0.001 && abs(size.height - expected.height) < 0.001
+                         },
+                         "a motion begun once moves exactly as the island's springs always have")
+            let retarget = 10.07, frame = 1.0 / 60
+            if let carried = opening.continued(to: rows, at: retarget) {
+                let before = opening.size(at: retarget - frame), at = opening.size(at: retarget)
+                let after = carried.size(at: retarget + frame)
+                let restarted = NotchMotion.size(at: frame, from: at, to: rows)
+                // What each side gained over the frame before the new target
+                // and the frame after it, carried on or started again from rest.
+                let widthBefore: CGFloat = at.width - before.width, widthAfter: CGFloat = after.width - at.width
+                let heightBefore: CGFloat = at.height - before.height, heightAfter: CGFloat = after.height - at.height
+                let restartedWidth: CGFloat = restarted.width - at.width, restartedHeight: CGFloat = restarted.height - at.height
+                suite.expect(carried.start == at && carried.size(at: retarget) == at,
+                             "a target moving on carries the island on from where it is")
+                suite.expect(abs(widthAfter - widthBefore) < widthBefore / 4 && widthAfter > restartedWidth * 2,
+                             "the width keeps its speed, where starting again from rest stalled it")
+                suite.expect((0...50).allSatisfy {
+                                 let time = retarget + Double($0) / 100
+                                 return carried.size(at: time).width == opening.size(at: time).width
+                             },
+                             "a side whose target stays put keeps its own motion")
+                suite.expect(heightAfter > restartedHeight + heightBefore / 2,
+                             "a side whose target moves further keeps its speed as the new pull starts")
+                let frames = carried.frames()
+                suite.expect(frames.sizes.first == at && frames.sizes.last == rows && frames.keyTimes.first == 0
+                             && frames.keyTimes.last == 1 && frames.keyTimes.count == frames.sizes.count,
+                             "a carried motion starts on screen and ends exactly at its new target")
+                suite.expect(frames.duration > 0.1 && frames.duration < 1,
+                             "a carried motion settles within the time its surroundings wait for it: \(frames.duration)")
+                let lowest = CGSize(width: at.width - 0.001, height: at.height - 0.001)
+                let farthest = CGSize(width: rows.width + NotchMotion.overshootLimit, height: rows.height + NotchMotion.overshootLimit)
+                suite.expect(frames.sizes.allSatisfy {
+                                 $0.width >= lowest.width && $0.height >= lowest.height
+                                     && $0.width <= farthest.width && $0.height <= farthest.height
+                             },
+                             "a carried motion never goes back and swings no farther than the room kept around the island")
+            } else {
+                suite.expect(false, "a taller target while opening carries the motion on")
+            }
+            suite.expect(opening.continued(to: roomy.collapsed, at: retarget) == nil
+                         && opening.continued(to: CGSize(width: 616, height: field.height - 20), at: retarget) == nil,
+                         "a motion turning back starts again from where it is drawn")
+            suite.expect(NotchMotionTimeline(from: idle, to: roomy.notice, begin: 0, steady: true)
+                             .continued(to: roomy.expanded, at: 0.05) == nil
+                         && NotchMotionTimeline(from: idle, to: roomy.notice, begin: 0, offset: 40)
+                             .continued(to: roomy.expanded, at: 0.05) == nil,
+                         "a width easing without a swing, or a centre on its way, starts again as it always has")
+            let late = opening.rebased(to: 10.02)
+            suite.expect(late.begin == 10.02 && (0...40).allSatisfy { step in
+                             let time = 10 + Double(step) / 100
+                             let shifted = late.size(at: time + 0.02), original = opening.size(at: time)
+                             return abs(shifted.width - original.width) < 0.001 && abs(shifted.height - original.height) < 0.001
+                         },
+                         "a motion that reached the screen late is timed from when it did")
+        }
         func near(_ value: CGFloat, _ expected: CGFloat) -> Bool { abs(value - expected) < 0.000_1 }
         let closing = NotchGlassFade.plan(from: 200, to: 32, endsInGlass: false, current: 1)
         suite.expect(near(closing.openness(atHeight: 200), 0) && near(closing.openness(atHeight: 80), 0)
@@ -3196,6 +3306,49 @@ enum NotchTests {
                              "with every display chosen, the island that responds follows the pointer")
             }
         }
+        // The shape for displays without a notch shows only where the island can rest.
+        suite.expect(!NotchSupport.reachesDisplayWithoutNotch(preference: .automatic, builtIn: [true, false],
+                                                              notched: [true, false], main: 1),
+               "automatic keeps a notched laptop's island off its monitor, even the main one")
+        suite.expect(NotchSupport.reachesDisplayWithoutNotch(preference: .automatic, builtIn: [false],
+                                                             notched: [false], main: 0),
+               "automatic reaches the monitor once the lid closes")
+        suite.expect(!NotchSupport.reachesDisplayWithoutNotch(preference: .builtIn, builtIn: [true, false],
+                                                              notched: [true, false], main: 1),
+               "the built-in choice keeps the island on its camera")
+        suite.expect(!NotchSupport.reachesDisplayWithoutNotch(preference: .builtIn, builtIn: [false],
+                                                              notched: [false], main: 0),
+               "the built-in choice reaches no monitor while the lid is closed")
+        suite.expect(NotchSupport.reachesDisplayWithoutNotch(preference: .builtIn, builtIn: [true, false],
+                                                             notched: [false, false], main: 1),
+               "a built-in screen without a notch floats the island itself")
+        suite.expect(NotchSupport.reachesDisplayWithoutNotch(preference: .builtIn, builtIn: [false, false],
+                                                             notched: [false, false], main: 1, hasLid: false),
+               "a Mac without a lid keeps the built-in choice on its main display")
+        suite.expect(NotchSupport.reachesDisplayWithoutNotch(preference: .main, builtIn: [true, false],
+                                                             notched: [true, false], main: 1)
+                     && !NotchSupport.reachesDisplayWithoutNotch(preference: .main, builtIn: [true, false],
+                                                                 notched: [true, false], main: 0),
+               "the main display choice reaches a monitor only when it has the menu bar")
+        for preference in [NotchDisplay.pointer, .all] {
+            suite.expect(NotchSupport.reachesDisplayWithoutNotch(preference: preference, builtIn: [true, false],
+                                                                 notched: [true, false], main: 0),
+                   "the pointer can take the island to a monitor: \(preference)")
+            suite.expect(!NotchSupport.reachesDisplayWithoutNotch(preference: preference, builtIn: [true],
+                                                                  notched: [true], main: 0),
+                   "no display without a notch is reached when none is connected: \(preference)")
+        }
+        // Settings asks that rule with the displays connected now, and its
+        // button switches to every display (issue #1711).
+        let notchSettings = (try? String(contentsOfFile: "Sources/Croissaint/UI/Settings/NotchSettings.swift",
+                                         encoding: .utf8)) ?? ""
+        let notchServiceSource = (try? String(contentsOfFile: "Sources/Croissaint/Services/Notch/NotchService.swift",
+                                              encoding: .utf8)) ?? ""
+        suite.expect(notchSettings.contains("if enabled, !NotchService.reachesDisplayWithoutNotch(NotchDisplay(rawValue: display) ?? .automatic) {")
+                     && notchSettings.contains("Button(text.showOnAllDisplays) { display = NotchDisplay.all.rawValue }")
+                     && notchServiceSource.contains("NotchSupport.reachesDisplayWithoutNotch(preference: preference, builtIn: layout.builtIn,")
+                     && notchServiceSource.contains("notched: layout.notched, main: layout.main, hasLid: hasLid)"),
+               "the Displays without a notch card offers All displays only while the chosen display keeps the island off them")
         suite.expect(NotchSupport.shouldReplace(.volume, with: .brightness), "continuous controls can replace each other")
         suite.expect(!NotchSupport.shouldReplace(.volume, with: .clipboard), "copy does not interrupt a volume adjustment")
         suite.expect(NotchSupport.shouldReplace(.battery, with: .capture), "a capture takes precedence over passive battery status")
