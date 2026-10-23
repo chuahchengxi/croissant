@@ -633,8 +633,6 @@ if (( TEST )); then
         ./Tests/PreferenceCleanupTests.sh || test_status=1
         ./Tests/UninstallSpacesTests.sh || test_status=1
         ./Tests/DeveloperInstallIsolationTests.sh || test_status=1
-        # Real AppKit/SwiftUI sizing, so it needs a window server (CI runners have one).
-        ./Tools/test-shelf-layout.sh || test_status=1
     fi
     discard_test_preferences || test_status=1
     exit $test_status

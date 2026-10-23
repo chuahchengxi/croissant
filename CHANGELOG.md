@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.2.6] - 2026-10-23
+## [0.2.6] - 2026-10-24
 
 ### Fixed
 - The keyboard light switch, slider and shortcuts no longer show the light as on when macOS keeps it off in bright light; the switch returns to off and says why.

@@ -1,5 +1,9 @@
 #!/bin/zsh
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Manual check, not part of ./build.sh --test: on CI's macOS 15 runner the
+# expanded docked shelf measures at pill size (82x47) with both the 0.2.5 and
+# the explicit-sizing code, and it is not yet known whether that is the VM or
+# a real macOS 14-15 bug. Confirm on a real macOS 15 Mac before relying on it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/croissaint-shelf-layout.XXXXXX")
