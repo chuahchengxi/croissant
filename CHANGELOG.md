@@ -9,7 +9,6 @@ All notable changes to this project are documented here. The format follows
 ## [0.2.6] - 2026-10-23
 
 ### Fixed
-- The Shelf sizes its panels itself instead of through automatic layout, which could loop while the Shelf resized and stall or crash the app.
 - The keyboard light switch, slider and shortcuts no longer show the light as on when macOS keeps it off in bright light; the switch returns to off and says why.
 - The panel's Settings and Quit buttons are named for VoiceOver.
 
