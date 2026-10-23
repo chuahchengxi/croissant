@@ -86,6 +86,9 @@ final class BrightnessService: ObservableObject {
     @Published private(set) var brightnessOSDSupported = false
     @Published private(set) var keyboardLightEnabled: Bool?
     @Published private(set) var displayBrightnessShortcutRegistrationFailed = false
+    /// macOS refused the last write that should have lit the keyboard (bright
+    /// room), so the switch can say why.
+    @Published private(set) var keyboardLightSuppressed = false
     @Published private(set) var keyboardBrightnessShortcutRegistrationFailed = false
     /// The display the island's brightness level shows: the one the
     /// brightness keys last moved, or the one picked there. Nil shows the
@@ -339,6 +342,7 @@ final class BrightnessService: ObservableObject {
         keyboardLightLevel = target
         keyboardLightEnabled = target > 0
         showKeyboardLightNotice(target)
+        confirmKeyboardLight(target)
     }
 
     /// Writes an absolute level, for the sliders in the panel and in Settings.
@@ -373,6 +377,25 @@ final class BrightnessService: ObservableObject {
             return
         }
         showKeyboardLightNotice(target)
+        confirmKeyboardLight(target)
+    }
+
+    /// In bright light macOS holds the backlight off yet still reports the
+    /// write as accepted. Read back once the 350 ms fade has landed so every
+    /// control shows what the keyboard is really doing. CoreBrightness's own
+    /// "suppressed" flag reads false from a long-lived client even then, so
+    /// the read-back level is the signal.
+    private func confirmKeyboardLight(_ target: Float) {
+        keyboardLightSuppressed = false
+        guard target > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            // Mid-drag the slider owns the value; the write after the drag
+            // ends is checked on its own.
+            guard let self, self.keyboardDragStart == nil,
+                  let bridge = self.keyboardLightBridge, bridge.brightness() <= 0 else { return }
+            self.keyboardLightSuppressed = true
+            self.refreshKeyboardLight()
+        }
     }
 
     /// The slider's own begin and end events bracket a drag. A pause while
@@ -412,7 +435,10 @@ final class BrightnessService: ObservableObject {
             return
         }
         keyboardLightLevel = level
-        if level > 0 { lastKeyboardLightLevel = level }
+        if level > 0 {
+            lastKeyboardLightLevel = level
+            keyboardLightSuppressed = false
+        }
         keyboardLightEnabled = level > 0
     }
 
@@ -434,6 +460,7 @@ final class BrightnessService: ObservableObject {
         if target > 0 { lastKeyboardLightLevel = target }
         keyboardLightEnabled = target > 0
         showKeyboardLightNotice(target)
+        confirmKeyboardLight(target)
     }
 
     private func showKeyboardLightNotice(_ level: Float) {

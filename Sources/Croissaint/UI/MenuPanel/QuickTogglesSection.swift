@@ -172,7 +172,9 @@ struct QuickTogglesList: View {
         case .keyboardLight:
             let brightnessStrings = FeatureStrings.brightness(l10n.language)
             PanelToggleRow(title: brightnessStrings.keyboardLight,
-                           caption: brightnessStrings.keyboardLightCaption,
+                           caption: brightness.keyboardLightSuppressed
+                               ? brightnessStrings.keyboardLightSuppressed
+                               : brightnessStrings.keyboardLightCaption,
                            systemImage: "keyboard",
                            isOn: Binding(
                                get: { brightness.keyboardLightEnabled ?? false },
@@ -180,7 +182,8 @@ struct QuickTogglesList: View {
                            ),
                            isEditing: editing,
                            showsDragHandle: true,
-                           visibility: visibilityBinding(item))
+                           visibility: visibilityBinding(item),
+                           needsAttention: brightness.keyboardLightSuppressed)
         case .micMute:
             UtilityActionButton(title: micMute.isMuted ? l10n.s.micUnmuteName : l10n.s.micMuteName,
                                 caption: l10n.s.micMuteCaption,
