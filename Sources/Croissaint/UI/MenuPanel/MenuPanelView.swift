@@ -472,7 +472,8 @@ struct MenuPanelView: View {
         HStack(spacing: 8) {
             footerButton(l10n.s.panelSettings,
                          systemImage: "gearshape",
-                         horizontalPadding: 7) {
+                         horizontalPadding: 7,
+                         identifier: "panel.settings") {
                 // The hosted utility's own page, or the general one from the
                 // panel's lists: the router is sticky, so it is set every time.
                 SettingsRouter.shared.page = PanelInteractionState.shared.hostedSettingsPage ?? .general
@@ -481,7 +482,8 @@ struct MenuPanelView: View {
 
             footerButton(l10n.s.panelQuit,
                          systemImage: "power",
-                         horizontalPadding: 7) {
+                         horizontalPadding: 7,
+                         identifier: "panel.quit") {
                 NSApp.terminate(nil)
             }
         }
@@ -492,6 +494,7 @@ struct MenuPanelView: View {
 
     private func footerButton(_ title: String, systemImage: String,
                               horizontalPadding: CGFloat = 8,
+                              identifier: String,
                               action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
@@ -514,6 +517,10 @@ struct MenuPanelView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
+        // The plain style drops the label's text from Accessibility, which
+        // left VoiceOver and Tools/ui-smoke.sh with two anonymous buttons.
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
     }
 }
 
