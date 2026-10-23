@@ -843,9 +843,7 @@ final class ShelfService: ObservableObject {
     /// visible frame, matching `revealEdgePeek`, so the peek and its later
     /// reveal never disagree about where the usable edge actually is.
     private func positionEdgePeek(_ panel: NSPanel, match: ShelfEdgeMatch, mouse: CGPoint) {
-        let view = panel.contentViewController!.view
-        view.layoutSubtreeIfNeeded()
-        let size = view.fittingSize
+        let size = shelfSize(panel)
         let visible = visibleFrame(for: match.screen)
         let onScreenWidth = (size.width / 3).rounded()
         let x: CGFloat
@@ -855,7 +853,7 @@ final class ShelfService: ObservableObject {
         }
         var y = mouse.y - size.height / 2
         y = min(max(visible.minY + 8, y), visible.maxY - size.height - 8)
-        panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
+        setShelfFrame(NSRect(x: x, y: y, width: size.width, height: size.height), for: panel)
     }
 
     /// Slides a peek that just caught a drop the rest of the way onto
@@ -874,7 +872,7 @@ final class ShelfService: ObservableObject {
         case .right: x = visible.maxX - size.width - 8
         }
         let y = min(max(visible.minY + 8, panel.frame.minY), visible.maxY - size.height - 8)
-        panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true, animate: true)
+        setShelfFrame(NSRect(x: x, y: y, width: size.width, height: size.height), for: panel, animate: true)
     }
 
     /// The visible frame (excluding the menu bar and Dock) of the screen a
@@ -972,8 +970,8 @@ final class ShelfService: ObservableObject {
         }
         let panel = ensureDockedPanel()
         if panel.contentViewController == nil {
-            let host = NSHostingController(rootView: DockedShelfView().environmentObject(self))
-            host.sizingOptions = .preferredContentSize
+            let host = NSHostingController(rootView: AnyView(DockedShelfView().environmentObject(self)))
+            host.sizingOptions = []
             panel.contentViewController = host
         }
         positionDocked(panel)
@@ -992,17 +990,15 @@ final class ShelfService: ObservableObject {
     /// animation: the panel resize and the SwiftUI content swap cannot be kept
     /// in step, and half-synced frames read as lag.
     private func positionDocked(_ panel: NSPanel) {
-        let view = panel.contentViewController!.view
-        view.layoutSubtreeIfNeeded()
-        let size = view.fittingSize
+        let size = shelfSize(panel)
         let anchor = statusItemFrameProvider?()
         let screen = anchor.flatMap { rect in
             NSScreen.screens.first { $0.frame.intersects(rect) }
         } ?? NSScreen.withMouse
         let visible = screen?.visibleFrame ?? NSScreen.pointerVisibleFrame
         let safeTop = screen.map { $0.frame.maxY - $0.safeAreaInsets.top } ?? visible.maxY
-        panel.setFrame(dockedPlacement.frame(size: size, visible: visible, safeTop: safeTop, anchor: anchor),
-                       display: true)
+        setShelfFrame(dockedPlacement.frame(size: size, visible: visible, safeTop: safeTop, anchor: anchor),
+                      for: panel)
         panel.alphaValue = 1
         panel.orderFrontRegardless()
     }
@@ -2696,27 +2692,37 @@ final class ShelfService: ObservableObject {
         DispatchQueue.main.async { [weak self] in self?.syncDockedShelf() }
     }
 
+    // ShelfService owns both panel sizes. Automatic hosting constraints and
+    // synchronous drawing during a resize can recurse through AppKit layout.
+    private func shelfSize(_ panel: NSPanel) -> NSSize {
+        let host = panel.contentViewController as! NSHostingController<AnyView>
+        // Flush pending SwiftUI updates first, or the pill/card swap measures stale.
+        host.view.layoutSubtreeIfNeeded()
+        return host.sizeThatFits(in: NSSize(width: CGFloat.infinity, height: CGFloat.infinity))
+    }
+
+    private func setShelfFrame(_ frame: NSRect, for panel: NSPanel, animate: Bool = false) {
+        guard panel.frame != frame else { return }
+        panel.setFrame(frame, display: false, animate: animate)
+    }
+
     private func refitIfVisible() {
         guard let panel, panel.isVisible else { return }
-        let view = panel.contentViewController!.view
-        view.layoutSubtreeIfNeeded()
-        let size = view.fittingSize
+        let size = shelfSize(panel)
         let top = panel.frame.maxY
-        panel.setFrame(NSRect(x: panel.frame.minX, y: top - size.height, width: size.width, height: size.height),
-                       display: true, animate: false)
+        setShelfFrame(NSRect(x: panel.frame.minX, y: top - size.height, width: size.width, height: size.height),
+                      for: panel)
     }
 
     private func position(_ panel: NSPanel) {
-        let view = panel.contentViewController!.view
-        view.layoutSubtreeIfNeeded()
-        let size = view.fittingSize
+        let size = shelfSize(panel)
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.pointerVisibleFrame
         var x = mouse.x - size.width / 2
         var y = mouse.y - size.height - 16
         x = min(max(screen.minX + 8, x), screen.maxX - size.width - 8)
         y = min(max(screen.minY + 8, y), screen.maxY - size.height - 8)
-        panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: true)
+        setShelfFrame(NSRect(x: x, y: y, width: size.width, height: size.height), for: panel)
     }
 
     private func ensurePanel() -> NSPanel {
@@ -2729,8 +2735,8 @@ final class ShelfService: ObservableObject {
         // not move the whole panel.
         panel.configureAsOverlay(hasShadow: false)
         panel.becomesKeyOnlyIfNeeded = true
-        let host = NSHostingController(rootView: ShelfView().environmentObject(self))
-        host.sizingOptions = .preferredContentSize
+        let host = NSHostingController(rootView: AnyView(ShelfView().environmentObject(self)))
+        host.sizingOptions = []
         panel.contentViewController = host
         self.panel = panel
         return panel
