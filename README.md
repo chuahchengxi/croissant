@@ -174,7 +174,7 @@ Croissaint installs with [Homebrew](https://brew.sh) and keeps its settings per 
 brew install --cask chuahchengxi/tap/croissaint
 ```
 
-Release 0.2.5, like 0.1.5, 0.1.6, 0.2.1, 0.2.2, 0.2.3 and 0.2.4, is ad-hoc signed and not Apple-notarized. macOS may block a downloaded copy. If you trust its source and integrity, follow [Apple's instructions for opening an unidentified developer's app](https://support.apple.com/en-us/102445) when Open Anyway is available. If macOS reports malware, revoked authorization, or a damaged app, stop and investigate rather than assuming the warning is harmless. Building from the reviewed source is another option. Developer ID signing plus Apple notarization is required for the normal trusted distribution path; people installing the app do not need their own signing identity.
+Release 0.2.6, like 0.1.5, 0.1.6, 0.2.1, 0.2.2, 0.2.3, 0.2.4 and 0.2.5, is ad-hoc signed and not Apple-notarized. macOS may block a downloaded copy. If you trust its source and integrity, follow [Apple's instructions for opening an unidentified developer's app](https://support.apple.com/en-us/102445) when Open Anyway is available. If macOS reports malware, revoked authorization, or a damaged app, stop and investigate rather than assuming the warning is harmless. Building from the reviewed source is another option. Developer ID signing plus Apple notarization is required for the normal trusted distribution path; people installing the app do not need their own signing identity.
 
 ## Uninstall
 

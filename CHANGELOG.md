@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-10-23
+
+### Fixed
+- The Shelf sizes its panels itself instead of through automatic layout, which could loop while the Shelf resized and stall or crash the app.
+- The keyboard light switch, slider and shortcuts no longer show the light as on when macOS keeps it off in bright light; the switch returns to off and says why.
+- The panel's Settings and Quit buttons are named for VoiceOver.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.5] - 2026-10-22
 
 Croissaint 0.2.5 merges upstream through `02a13224` (upstream v3.4.2) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
