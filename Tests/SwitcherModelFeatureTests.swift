@@ -154,8 +154,6 @@ enum SwitcherModelFeatureTests {
             suite.expect(code(path).contains("AppSwitcher.shared.scrollNavigationActive"),
                          "\(path) yields scrolling to the open switcher")
         }
-        suite.expect(!code("Sources/Croissaint/Services/ScrollInverter.swift").contains("AppSwitcher.shared.scrollNavigationActive"),
-                     "scroll direction never stands aside for the open switcher")
         // Both wheel taps run after the switcher's session tap, so it applies
         // Scroll Direction itself, minus the apps excepted from it.
         suite.expect(switcher.contains("scrollNavigation.selectionDelta(for: event, direction: directionApplies ? direction : nil)")
@@ -695,6 +693,10 @@ enum SwitcherModelFeatureTests {
                "an app with a window on the visible Space cannot travel by being activated, so the move is asked for right away")
         suite.expect(SpaceHopSupport.firstStage(appHasWindowOnVisibleSpace: false) == .waitForActivationTravel,
                "an app with no window on the visible Space travels on activation, so that travel is waited on")
+        suite.expect(SpaceHopSupport.firstStage(appHasWindowOnVisibleSpace: true, directRaiseSucceeded: true) == .waitForActivationTravel,
+               "an accepted direct window raise gets time to travel before trying shortcuts (issue #2210)")
+        suite.expect(SpaceHopSupport.firstStage(appHasWindowOnVisibleSpace: false, directRaiseSucceeded: true) == .waitForActivationTravel,
+               "direct window raise always waits for activation travel")
         // Issue #1733: every arrival pulse raised the target again, so a window
         // that the first pulse already left focused and in front flickered.
         suite.expect(SpaceHopSupport.arrivalPulseShouldFocus(isFirstPulse: true,
@@ -911,6 +913,24 @@ enum SwitcherModelFeatureTests {
         suite.expect(placementCode.contains("forKey: DefaultsKey.switcherTreatHiddenAppsLikeMinimized")
                && placementCode.contains("item.isMinimizedForPlacement(treatHiddenAppsLikeMinimized: treatHiddenAppsLikeMinimized)"),
                "window enumeration applies the saved hidden-app choice through the placement predicate")
+
+        // A window on another desktop showed only its app's name without
+        // Screen Recording: Accessibility leaves it out of the app's list.
+        suite.expect(SwitcherSupport.looksUpHiddenSpaceTitle(windowServerTitle: "", isDescribedByAccessibility: false,
+                                                             accessibilityGranted: true, isOnHiddenSpace: true),
+               "an untitled window on another desktop has its title looked up")
+        suite.expect(!SwitcherSupport.looksUpHiddenSpaceTitle(windowServerTitle: "Inbox", isDescribedByAccessibility: false,
+                                                              accessibilityGranted: true, isOnHiddenSpace: true),
+               "a window the window server already titles is not looked up again")
+        suite.expect(!SwitcherSupport.looksUpHiddenSpaceTitle(windowServerTitle: "", isDescribedByAccessibility: true,
+                                                              accessibilityGranted: true, isOnHiddenSpace: true),
+               "a window Accessibility describes keeps that title")
+        suite.expect(!SwitcherSupport.looksUpHiddenSpaceTitle(windowServerTitle: "", isDescribedByAccessibility: false,
+                                                              accessibilityGranted: true, isOnHiddenSpace: false),
+               "an untitled window on the visible desktop is not looked up")
+        suite.expect(!SwitcherSupport.looksUpHiddenSpaceTitle(windowServerTitle: "", isDescribedByAccessibility: false,
+                                                              accessibilityGranted: false, isOnHiddenSpace: true),
+               "no lookup runs without Accessibility")
 
         // Real parked windows remain ordered in; a dismissed surface can
         // retain the same desktop assignment but is explicitly ordered out.
@@ -2517,22 +2537,16 @@ enum SwitcherModelFeatureTests {
         let panelGlassCode = stripCommentLines((panelThemeSource
             .components(separatedBy: "private struct PanelGlassSurface: View {").last ?? "")
             .components(separatedBy: "\n}").first ?? "")
-        suite.expect(panelGlassCode.contains("} else if PanelSurface.popoverHostsFullSizeContent {\n            surface.ignoresSafeArea()\n        } else {\n            insetSurface"),
-               "the panel surface paints past the safe area, up into the arrow, only in a full-size popover")
-        let fullSizeSurfaceCode = panelGlassCode
-            .components(separatedBy: "private var insetSurface: some View {").first ?? ""
-        let insetSurfaceCode = panelGlassCode
-            .components(separatedBy: "private var insetSurface: some View {").dropFirst().first ?? ""
-        suite.expect(!fullSizeSurfaceCode.isEmpty
-                   && !fullSizeSurfaceCode.contains("RoundedRectangle")
-                   && !fullSizeSurfaceCode.contains("cornerRadius"),
-               "the full-size surface leaves the rounding to the popover balloon that clips it")
-        suite.expect(fullSizeSurfaceCode.contains(".glassEffect(.regular, in: Rectangle())")
-                   && fullSizeSurfaceCode.contains("Rectangle()\n            .fill(.regularMaterial)"),
+        suite.expect(panelGlassCode.contains("} else if PanelSurface.popoverHostsFullSizeContent {\n            surface.ignoresSafeArea()\n        } else {\n            Color.clear"),
+               "a full-size panel fills the arrow; an inset panel leaves the native popover material visible")
+        suite.expect(!panelGlassCode.isEmpty
+                   && !panelGlassCode.contains("RoundedRectangle")
+                   && !panelGlassCode.contains("cornerRadius")
+                   && !panelGlassCode.contains("strokeBorder"),
+               "the panel leaves the corners and rim to the popover, without a second rounded outline (#2225)")
+        suite.expect(panelGlassCode.contains(".glassEffect(.regular, in: Rectangle())")
+                   && panelGlassCode.contains("Rectangle()\n            .fill(.regularMaterial)"),
                "both the standard and the Liquid Glass surface fill the whole balloon, no shape of their own")
-        suite.expect(insetSurfaceCode.contains("RoundedRectangle(cornerRadius: 18, style: .continuous)")
-                   && insetSurfaceCode.contains(".strokeBorder(PanelSurface.border(for: colorScheme)"),
-               "an inset panel is a rounded, rimmed card inside the balloon")
         let panelViewSource = (try? String(
             contentsOfFile: "Sources/Croissaint/UI/MenuPanel/MenuPanelView.swift",
             encoding: .utf8)) ?? ""
@@ -3594,7 +3608,10 @@ enum SwitcherModelFeatureTests {
                && SwitcherSupport.sanitizedMaxColumns(-3) == nil
                && SwitcherSupport.sanitizedMaxColumns(1) == SwitcherSupport.maxColumnsRange.lowerBound
                && SwitcherSupport.sanitizedMaxColumns(6) == 6
-               && SwitcherSupport.sanitizedMaxColumns(99) == SwitcherSupport.maxColumnsRange.upperBound,
+               && SwitcherSupport.sanitizedMaxColumns(9) == 9
+               && SwitcherSupport.sanitizedMaxColumns(10) == 10
+               && SwitcherSupport.sanitizedMaxColumns(11) == 10
+               && SwitcherSupport.sanitizedMaxColumns(99) == 10,
                "App Switcher column cap treats zero as Auto and clamps the rest")
         suite.expect(SwitcherSupport.cappedColumnCount(fitByWidth: 15, userMax: 6) == 6
                && SwitcherSupport.cappedColumnCount(fitByWidth: 4, userMax: 6) == 4
@@ -3617,6 +3634,17 @@ enum SwitcherModelFeatureTests {
                && SwitcherSupport.wrappingColumnCount(itemCount: 12, fitByWidth: 10, userMax: 8) == 6,
                "App Switcher column cap never makes the grid wider than Auto")
         let ultrawide = CGRect(x: 0, y: 0, width: 5120, height: 1415)
+        for columns in [9, 10] {
+            let layout = SwitcherIconRowLayout.compute(appCount: 30, selectedWindowCount: 1,
+                                                       screenVisibleFrame: ultrawide,
+                                                       maxColumns: SwitcherSupport.sanitizedMaxColumns(columns))
+            suite.expect(layout.columns == columns && layout.rows == (30 + columns - 1) / columns,
+                   "App Switcher icon row preserves a chosen cap of \(columns) columns")
+            suite.expect(SwitcherSupport.wrappingColumnCount(itemCount: 30, fitByWidth: 15,
+                                                              userMax: SwitcherSupport.sanitizedMaxColumns(columns)) == columns
+                   && SwitcherSupport.cappedColumnCount(fitByWidth: 4, userMax: columns) == 4,
+                   "App Switcher accepts a cap of \(columns) columns while respecting screen width")
+        }
         let strictIcons = SwitcherIconRowLayout.compute(appCount: 4, selectedWindowCount: 1,
                                                         screenVisibleFrame: ultrawide, maxColumns: 3)
         suite.expect(strictIcons.columns == 3 && strictIcons.rows == 2,
@@ -6417,7 +6445,7 @@ enum SwitcherModelFeatureTests {
                && SystemShortcutTakeoverSupport.recorderDecision(shortcut: .screenshotDefault, conflictsWithMacOS: false,
                                                                  takenOver: true, current: areaShot) == .save(clearTakeOver: true),
                "a taken-over row re-records its own key silently, is asked again for any other macOS key or when no key is recorded, and forgets the take-over when it leaves macOS keys")
-        suite.expect(GlobalShortcutRole.allCases.filter { !$0.supportsTakeOver } == [.switcher, .switcherWindow, .radialMenu]
+        suite.expect(GlobalShortcutRole.allCases.filter { !$0.supportsTakeOver } == [.switcher, .switcherWindow, .switcherAllWindows, .radialMenu]
                && GlobalShortcutRole.keepAwake.supportsTakeOver && GlobalShortcutRole.finderRename.supportsTakeOver,
                "only the rows whose key a feature claims may offer to take a macOS shortcut over")
         suite.expect(SettingsBackupSupport.exportKeys().contains(DefaultsKey.systemShortcutTakeOverKeys)

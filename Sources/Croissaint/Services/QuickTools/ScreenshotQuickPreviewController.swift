@@ -114,6 +114,7 @@ final class ScreenshotQuickPreviewController {
                 self.show(inNotch: false)
             },
             close: { [weak self] in self?.close() },
+            dismiss: { [weak self] in self?.dismissForClickElsewhere() },
             hover: { [weak self] inside in self?.hoverChanged(inside) }) {
             shownInNotch = true
             if let window = NotchService.shared.presentationWindow { installKeyMonitor(for: window) }
@@ -159,6 +160,10 @@ final class ScreenshotQuickPreviewController {
             scanForQR()
         }
         scheduleAutoDismiss()
+    }
+
+    private func dismissForClickElsewhere() {
+        close()
     }
 
     private func hoverChanged(_ inside: Bool) {

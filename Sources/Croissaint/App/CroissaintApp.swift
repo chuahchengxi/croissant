@@ -47,6 +47,12 @@ enum CroissaintEntryPoint {
     /// launching — the same point in startup the old top-level main.swift
     /// code executed at.
     fileprivate static func registerDefaultsAndRouteEarlyExits() {
+        // Select backup mode before cleanup and diagnostic arguments can act. Invalid
+        // backup commands must leave files, input mappings and recovery journals alone.
+        if let command = SettingsBackupSupport.command(in: CommandLine.arguments) {
+            SettingsBackup.runCommandAndExit(command)
+        }
+
         SuperKeyMappingGuard.runIfRequestedAndExit()
         Defaults.register()
         NotchControlItem.keyboardLightIsSupported = { BrightnessService.keyboardLightIsSupported }

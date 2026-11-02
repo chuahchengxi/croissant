@@ -17,6 +17,7 @@ final class WindowMaximizer: ObservableObject {
     private let eventTap = EventTap()
     private var pendingClick: ClickTarget?
     private var originalFrames: [CGWindowID: AXFrame] = [:]
+    private var maximizedFrames: [CGWindowID: AXFrame] = [:]
     private var frameAnimations: [CGWindowID: Timer] = [:]
     private var assistiveModeSuspensions: [CGWindowID: EnhancedUserInterfaceSuspension] = [:]
 
@@ -48,6 +49,7 @@ final class WindowMaximizer: ObservableObject {
         for suspension in assistiveModeSuspensions.values { suspension.resume() }
         assistiveModeSuspensions.removeAll()
         originalFrames.removeAll()
+        maximizedFrames.removeAll()
         isRunning = false
     }
 
@@ -158,20 +160,34 @@ final class WindowMaximizer: ObservableObject {
               let screen = bestScreen(for: current)
         else { return false }
 
-        let maximized = axFrame(fromAppKit: screen.visibleFrame)
-        if current.isClose(to: maximized, tolerance: frameTolerance),
+        let maximized = axFrame(fromAppKit: screen.windowLayoutVisibleFrame)
+        // Revealing the strip may change its measured width before the second
+        // click. Restore from the frame actually applied, not only today's size.
+        let previousMaximized = maximizedFrames[target.windowID] ?? maximized
+        if (current.isClose(to: previousMaximized, tolerance: frameTolerance)
+            || current.isClose(to: maximized, tolerance: frameTolerance)),
            let original = originalFrames[target.windowID],
            original.size.width > 80,
            original.size.height > 80 {
             return changeFrame(to: original, of: target) { [weak self] success in
-                if success { self?.originalFrames.removeValue(forKey: target.windowID) }
+                if success {
+                    self?.originalFrames.removeValue(forKey: target.windowID)
+                    self?.maximizedFrames.removeValue(forKey: target.windowID)
+                }
             }
         } else {
             originalFrames[target.windowID] = current
-            if changeFrame(to: maximized, of: target, completion: { _ in }) {
+            maximizedFrames[target.windowID] = maximized
+            if changeFrame(to: maximized, of: target, completion: { [weak self] success in
+                if !success {
+                    self?.originalFrames.removeValue(forKey: target.windowID)
+                    self?.maximizedFrames.removeValue(forKey: target.windowID)
+                }
+            }) {
                 return true
             }
             originalFrames.removeValue(forKey: target.windowID)
+            maximizedFrames.removeValue(forKey: target.windowID)
             return false
         }
     }

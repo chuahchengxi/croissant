@@ -617,6 +617,17 @@ if (( TEST )); then
         Sources/Croissaint/Services/ManagedDownloads/WhatsAppDownloadSupport.swift
         Sources/Croissaint/Core/SecureInputSupport.swift
         Sources/Croissaint/Core/ClipboardRetentionStrings.swift
+        Sources/Croissaint/Services/Notch/NotchAppFullscreen.swift
+        Sources/Croissaint/Services/Notch/NotchAccessoryConnectionMonitor.swift
+        Sources/Croissaint/Core/ClaudeAccountStrings.swift
+        Sources/Croissaint/Services/AgentUsage/ClaudeAccountProfile.swift
+        Sources/Croissaint/Core/MixerScreenSharingStrings.swift
+        Sources/Croissaint/Core/SwitcherShortcutStrings.swift
+        Sources/Croissaint/UI/MenuPanel/WallpaperThumbnailView.swift
+        Sources/Croissaint/Services/URLCleanerLinkMetadata.swift
+        Sources/Croissaint/Core/AutoQuitDockAppsStrings.swift
+        Sources/Croissaint/Services/WindowLayout/WindowStageManagerSupport.swift
+        Sources/Croissaint/Core/WindowStageManagerStrings.swift
         Tests/*.swift
         build/generated-tests/*.swift
     )
