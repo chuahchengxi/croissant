@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-02
+
+Croissaint 0.2.7 merges upstream through `a5da7633` (upstream v3.4.3) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- The window switcher has an optional All windows shortcut that cycles through individual windows across apps. Settings → Window switcher → All windows.
+- AI Agents can select an existing Claude Code account profile and show the monitored account. Settings → Dynamic Island → Content → AI Agents → Claude account.
+- An optional Quit apps panel can request normal quits for one app, all apps or all except the current app, with a saved list of apps to keep running.
+- An optional Pinch Zoom feature turns a modifier and mouse-wheel movement into pinch gestures in supported apps.
+- Settings backups can be exported or imported with `--export-settings FILE` and `--import-settings FILE`; importing requires the app to be closed.
+- Dynamic Island can show a volume row below the music player, start event countdowns earlier, and adjust its level controls with a mouse wheel or trackpad.
+- Clipboard history can show source app icons in list view, and screenshots can copy the image without a file URL.
+- Quit on close can handle selected menu bar apps that keep a Dock icon. Settings → Quit on close → Menu bar apps to quit.
+- Window layout can reserve space for Stage Manager, and Switch Spaces by dragging a button accepts the middle mouse button.
+- Command Bar converts days, weeks and fixed 365-day years.
+
+### Changed
+- Homebrew opens installation, setup and password-required commands in your default terminal, without Terminal Automation permission.
+- Snippet lists use alphabetical order, the window switcher allows up to 10 columns, and clipboard history keeps fewer decoded thumbnails in memory.
+
+### Fixed
+- The window switcher reaches fullscreen windows and windows on other Spaces more reliably, opens faster with many windows open, and avoids duplicate close requests.
+- Volume mixer leaves Discord and Teams audio untouched by default to prevent call echo, recognizes more headphones, and avoids cutouts after brief interruptions.
+- Display controls keep manually disabled monitors off after wake, and network readings no longer double-count mirrored virtual interfaces.
+- Quit Protection follows changes to macOS app-switcher shortcuts, and Super key modifiers work regardless of startup order.
+- Dynamic Island moves between displays without stretching or losing mouse input, and dismisses screenshot previews when you click outside it.
+- The uninstaller pauses removal when Homebrew status cannot be verified, and Shelf copies files dragged from inside app packages.
+- URL Cleaner handles Safari links with rich previews and rules added from links with ports or login details. Previously saved rules containing login details or ports need to be added again.
+- Fan Control attempts to restore System control after hardware failures, and low disk-space alerts use refreshed readings.
+- Scrolling screenshots keep alignment on long pages, and screen recordings avoid loud noise from 16-bit USB microphones.
+- The menu bar panel recovers from interrupted closes and no longer draws a mismatched second background on macOS Sonoma and Sequoia.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
+
 ## [0.2.6] - 2026-10-24
 
 ### Fixed
