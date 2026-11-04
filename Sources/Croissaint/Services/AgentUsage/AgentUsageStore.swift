@@ -121,6 +121,13 @@ final class AgentUsageStore {
                 turn.lastActivity = max(turn.lastActivity, date)
                 turns[file] = turn
                 settled[file] = date
+            case .turnAsking(let asking):
+                guard tracksTurns, var turn = turns[file] ?? waiting.removeValue(forKey: file) else { continue }
+                turn.asking = asking
+                turns[file] = turn
+                if asking, reportsTransitions, now.timeIntervalSince(modified) <= Self.lateEnd {
+                    events.append(.needsInput(provider: provider, project: turn.project))
+                }
             case .turnEnded(let date, let completed, let duration):
                 guard tracksTurns else { continue }
                 settled[file] = nil
@@ -294,7 +301,8 @@ final class AgentUsageStore {
     /// It waits aside for a while, since work can resume after an approval
     /// or a long command.
     func closeIdleTurns(now: Date, after idle: TimeInterval) {
-        for (file, turn) in turns where now.timeIntervalSince(turn.lastActivity) >= idle {
+        // A question stays up however long the person takes to answer.
+        for (file, turn) in turns where !turn.asking && now.timeIntervalSince(turn.lastActivity) >= idle {
             turns[file] = nil
             waiting[file] = turn
         }
@@ -341,6 +349,28 @@ final class AgentUsageStore {
         return closed
     }
 
+    /// Flags the Claude turns whose session waits on the person, as Claude
+    /// Code records it, and announces each new wait. True when a flag changed.
+    func syncAsking(_ processes: AgentSessionRegistry, events: inout [AgentUsageEvent]) -> Bool {
+        var changed = false
+        func session(_ file: String) -> String {
+            ((file as NSString).lastPathComponent as NSString).deletingPathExtension
+        }
+        // A turn gone quiet while the question waited shows again.
+        for (file, turn) in waiting where turn.provider == .claude && processes.asking.contains(session(file)) {
+            waiting[file] = nil
+            turns[file] = turn
+        }
+        for (file, turn) in turns where turn.provider == .claude {
+            let asking = processes.asking.contains(session(file))
+            guard asking != turn.asking else { continue }
+            turns[file]?.asking = asking
+            changed = true
+            if asking, reportsTransitions { events.append(.needsInput(provider: .claude, project: turn.project)) }
+        }
+        return changed
+    }
+
     /// Claude Code retries for minutes without a word while the Mac is
     /// offline, then gives up; until it does, its turn would count on. Once
     /// the Mac, offline since `offline`, has been awake that way for
@@ -357,7 +387,7 @@ final class AgentUsageStore {
         guard elapsed >= Self.offlineGrace else { return false }
         let commands = running()
         func ends(_ entry: (key: String, value: AgentLiveSession)) -> Bool {
-            entry.value.provider == .claude && !commands.contains(entry.key)
+            entry.value.provider == .claude && !entry.value.asking && !commands.contains(entry.key)
                 && (replies[entry.key] ?? .distantPast) < offline
         }
         let closed = turns.contains(where: ends)
@@ -512,6 +542,9 @@ struct AgentLogRoot: Equatable {
 struct AgentSessionRegistry: Equatable {
     /// Session ids, which name their log files, with a running process.
     var running: Set<String> = []
+    /// Running session ids waiting on the person: a question, a plan or a
+    /// permission prompt.
+    var asking: Set<String> = []
     /// Session ids whose recorded process no longer runs.
     var ended: Set<String> = []
     /// False when a record could not be read, as while it is being written,
@@ -536,7 +569,12 @@ struct AgentSessionRegistry: Equatable {
                 // A session run in a container or virtual machine that shares
                 // this folder names a process this Mac cannot see.
                 if let domain = json["pidDomain"] as? String, domain != "darwin" { continue }
-                if isRunning(Int32(clamping: pid)) { registry.running.insert(session) } else { registry.ended.insert(session) }
+                if isRunning(Int32(clamping: pid)) {
+                    registry.running.insert(session)
+                    if json["status"] as? String == "waiting" { registry.asking.insert(session) }
+                } else {
+                    registry.ended.insert(session)
+                }
             }
         }
         // A session resumed by a new process after an old one was killed.

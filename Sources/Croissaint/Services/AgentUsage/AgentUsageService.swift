@@ -488,10 +488,16 @@ final class AgentUsageService: ObservableObject {
     /// Ends the Claude turns whose process is gone. True when one was showing.
     @discardableResult
     private func closeEndedTurns(_ roots: [AgentLogRoot], atLaunch: Bool = false) -> Bool {
-        guard store.showsClaudeTurn else { return false }
+        // A parked turn can come back when its session waits on the person.
+        guard store.showsClaudeTurn || store.waiting.values.contains(where: { $0.provider == .claude }) else { return false }
         let folders = roots.filter { $0.provider == .claude }
             .map { $0.url.deletingLastPathComponent().appending(path: "sessions", directoryHint: .isDirectory) }
-        return store.closeEndedTurns(AgentSessionRegistry.read(folders), atLaunch: atLaunch)
+        let processes = AgentSessionRegistry.read(folders)
+        let closed = store.closeEndedTurns(processes, atLaunch: atLaunch)
+        var events: [AgentUsageEvent] = []
+        let asking = store.syncAsking(processes, events: &events)
+        events.forEach(report)
+        return closed || asking
     }
 
     /// True when the log had entries to apply, or was gone and took a
@@ -668,6 +674,8 @@ final class AgentUsageService: ObservableObject {
             case .finished(let provider, let duration, _, _, _):
                 guard self.providers.contains(provider), let minimum = NotchAgentSupport.finishMinimum(),
                       duration >= minimum else { return }
+            case .needsInput(let provider, _):
+                guard self.providers.contains(provider) else { return }
             case .limitWarning(let provider, _), .limitReset(let provider, _):
                 guard self.providers.contains(provider), NotchAgentSupport.limitThreshold() != nil else { return }
             case .budgetReached:

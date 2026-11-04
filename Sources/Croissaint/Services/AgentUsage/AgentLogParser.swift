@@ -24,6 +24,8 @@ enum AgentLogEntry: Equatable {
     /// A step ended expecting the agent to go on; unless work follows soon,
     /// the agent stopped there and its turn is over.
     case turnSettled(Date)
+    /// The agent asked the person something, or the answer came.
+    case turnAsking(Bool)
     case turnEnded(Date?, completed: Bool, duration: TimeInterval?)
     case reset(Date)
 }
@@ -72,6 +74,8 @@ struct AgentLogState: Equatable {
 
 /// Per-session turn and model tracking for OpenCode databases.
 struct OpenCodeSessionState: Equatable {
+    /// A question of the agent's waits on the person.
+    var asking = false
     var project = ""
     var model = ""
     var turnOpen = false

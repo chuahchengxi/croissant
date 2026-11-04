@@ -55,7 +55,13 @@ struct NotchAgentStrip: View {
             Color.clear.frame(width: geometry.compactActivityCameraGap)
             Button { service.openActivity(.agents) } label: {
                 Group {
-                    if geometry.compactActivityWingWidth >= 42 {
+                    if live.contains(where: \.asking) {
+                        // A question stops the clock's meaning: say so instead.
+                        Image(systemName: "questionmark.bubble.fill")
+                            .font(.system(size: textSize, weight: .semibold))
+                            .foregroundStyle(.orange)
+                            .symbolEffect(.pulse)
+                    } else if geometry.compactActivityWingWidth >= 42 {
                         NotchAgentReadoutTimeline(readout: NotchAgentReadout(rawValue: readout) ?? .elapsed) { date in
                             let text = reading(at: date, live: live)
                             Text(text)
@@ -85,7 +91,9 @@ struct NotchAgentStrip: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(working.map(\.displayName).joined(separator: ", "))
-        .accessibilityValue(reading(at: Date(), live: live))
+        .accessibilityValue(live.first(where: \.asking).map {
+            FeatureStrings.notchAgents(l10n.language).needsInput($0.provider.displayName)
+        } ?? reading(at: Date(), live: live))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { service.openActivity(.agents) }
         .accessibilityHint(FeatureStrings.notch(l10n.language).open)

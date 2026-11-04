@@ -144,6 +144,20 @@ enum AgentOpenCodeReader {
                 AND \(field("m.data", "$.time.completed")) IS NULL, 0)
             OR coalesce(\(role) = 'compaction' AND \(field("m.data", "$.status")) = 'running', 0)))
             """
+        // A question tool still running waits on the person. Only the
+        // tool's name and state are looked at.
+        let asking = version2 ? """
+            CASE WHEN \(recent)\(role) = 'assistant' AND json_valid(m.data)
+            THEN EXISTS (SELECT 1 FROM json_each(json_extract(m.data, '$.content')) c
+                WHERE json_extract(c.value, '$.type') = 'tool' AND json_extract(c.value, '$.name') = 'question'
+                    AND json_extract(c.value, '$.state.status') = 'running')
+            ELSE 0 END
+            """ : hasParts ? """
+            CASE WHEN \(field("m.data", "$.role")) = 'assistant'
+            THEN EXISTS (SELECT 1 FROM part p WHERE p.message_id = m.id
+                AND \(field("p.data", "$.tool")) = 'question' AND \(field("p.data", "$.state.status")) = 'running')
+            ELSE 0 END
+            """ : "0"
         let parentCol = hasParentID ? "s.parent_id" : "NULL"
         // One pass over each message's JSON hands over the values the parser
         // reads. SQLite keeps that parse for the checks above in the same row.
@@ -154,7 +168,7 @@ enum AgentOpenCodeReader {
         SELECT m.rowid, m.id, m.session_id, m.time_created, m.time_updated, \(size), s.directory,
             \(parentCol), CASE WHEN \(recent)json_valid(m.data) THEN json_array(\(role), \(fields)) END,
             \(toolCalls), \(autoCompaction), \(writing),
-            CASE WHEN \(recent)json_valid(m.data) THEN json_type(m.data, '$.error') END
+            CASE WHEN \(recent)json_valid(m.data) THEN json_type(m.data, '$.error') END, \(asking)
         FROM \(messageTable) m
         JOIN \(sessionTable) s ON m.session_id = s.id
         """
@@ -239,6 +253,7 @@ enum AgentOpenCodeReader {
         if sqlite3_column_int64(stmt, 9) != 0 { json["tool_calls"] = true }
         if sqlite3_column_int64(stmt, 10) != 0 { json["auto_compaction"] = true }
         if let error = text(stmt, 12), error != "null" { json["error"] = true }
+        if sqlite3_column_int64(stmt, 13) != 0 { json["asking"] = true }
         // OpenCode 2 completes a step it cut short, as when it resumes a task
         // after it was killed, only as the next step starts. Without a finish,
         // an error or usage, it neither ends nor starts a turn.

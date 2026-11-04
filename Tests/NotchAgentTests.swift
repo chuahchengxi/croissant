@@ -475,6 +475,25 @@ enum NotchAgentTests {
         suite.expect(feed(claudeAssistant(id: "msg_4", request: "req_4", model: "<synthetic>", stop: "stop_sequence",
                                           time: "2026-09-21T23:44:40.000Z")).isEmpty && store.live.isEmpty,
                      "an error written in place of a reply ends the turn without a finish notice")
+        // Claude Code's session record says when it waits on the person.
+        _ = feed(claudeUser())
+        var waits = AgentSessionRegistry()
+        waits.running = ["main"]
+        waits.asking = ["main"]
+        var asked: [AgentUsageEvent] = []
+        suite.expect(store.syncAsking(waits, events: &asked) && store.live.first?.asking == true
+                        && asked == [.needsInput(provider: .claude, project: store.live.first?.project ?? "")],
+                     "a session waiting on the person is flagged and announced")
+        suite.expect(!store.syncAsking(waits, events: &asked) && asked.count == 1, "a wait is announced once")
+        store.closeIdleTurns(now: now.addingTimeInterval(3 * NotchAgentSupport.idleTurn), after: NotchAgentSupport.idleTurn)
+        suite.expect(store.live.first?.asking == true, "an unanswered question never goes idle")
+        waits.asking = []
+        suite.expect(store.syncAsking(waits, events: &asked) && store.live.first?.asking == false, "the answer clears the flag")
+        store.closeIdleTurns(now: now.addingTimeInterval(3 * NotchAgentSupport.idleTurn), after: NotchAgentSupport.idleTurn)
+        waits.asking = ["main"]
+        suite.expect(store.live.isEmpty && store.syncAsking(waits, events: &asked) && store.live.first?.asking == true,
+                     "a turn parked as quiet shows again once its session waits on the person")
+        _ = feed(line(#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#))
         let quiet = AgentUsageStore()
         var quietState = AgentLogState()
         let replay = [claudeUser(), claudeAssistant(stop: "end_turn")].flatMap {
@@ -668,6 +687,16 @@ enum NotchAgentTests {
         let activeDate = Date(timeIntervalSince1970: 1_790_088_005)
         suite.expect(activeEntries.contains(.turnActive(activeDate)),
                      "an in-progress or tool-calling assistant message reports the turn active")
+
+        // A question tool still running waits on the person until the row says otherwise.
+        let asked = AgentLogParser.parseOpenCode(line("""
+        {"id":"msg_q","session_id":"s_oc_1","time_created":1790088010,"role":"assistant","asking":true}
+        """), state: &state, now: now)
+        let answered = AgentLogParser.parseOpenCode(line("""
+        {"id":"msg_q","session_id":"s_oc_1","time_created":1790088010,"role":"assistant","finish":"tool-calls"}
+        """), state: &state, now: now)
+        suite.expect(asked.contains(.turnAsking(true)) && answered.contains(.turnAsking(false)),
+                     "an OpenCode question flags the turn until it is answered")
 
         // 3. Assistant message completed (finish: stop)
         let assistantStop = line("""
@@ -2583,7 +2612,7 @@ enum NotchAgentTests {
         func write(_ name: String, _ text: String) {
             FileManager.default.createFile(atPath: folder.appending(path: name).path, contents: Data(text.utf8))
         }
-        write("100.json", #"{"pid":100,"sessionId":"quit","cwd":"/p"}"#)
+        write("100.json", #"{"pid":100,"sessionId":"quit","cwd":"/p","status":"waiting","waitingFor":"input needed"}"#)
         write("200.json", #"{"pid":200,"sessionId":"killed"}"#)
         write("300.json", #"{"pid":300,"sessionId":"killed"}"#)
         write("300.abc.key", "{}")
@@ -2591,7 +2620,7 @@ enum NotchAgentTests {
         write(".heartbeat", "1")
         let running: Set<Int32> = [100, 300]
         var registry = AgentSessionRegistry.read([folder, folder.appending(path: "missing")]) { running.contains($0) }
-        suite.expect(registry == AgentSessionRegistry(running: ["quit", "killed"], ended: [], complete: true, listed: true),
+        suite.expect(registry == AgentSessionRegistry(running: ["quit", "killed"], asking: ["quit"], ended: [], complete: true, listed: true),
                      "a session with a running process reads as running, even beside a killed one's record, and a container's record proves nothing")
         write("400.json", #"{"pid":"#)
         registry = AgentSessionRegistry.read([folder]) { $0 == 100 }

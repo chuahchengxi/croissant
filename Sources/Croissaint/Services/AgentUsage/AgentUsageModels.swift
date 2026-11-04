@@ -150,11 +150,14 @@ struct AgentLiveSession: Equatable, Identifiable {
     var project: String
     var tokens: AgentTokens
     var cost: Double
+    /// The agent asked the person something and waits for the answer.
+    var asking = false
 }
 
 /// Something worth a moment in the closed island.
 enum AgentUsageEvent: Equatable {
     case finished(provider: AgentProvider, duration: TimeInterval, cost: Double, tokens: Int, project: String)
+    case needsInput(provider: AgentProvider, project: String)
     case limitWarning(provider: AgentProvider, window: AgentLimitWindow)
     case limitReset(provider: AgentProvider, window: AgentLimitWindow)
     case budgetReached(spent: Double, budget: Double)

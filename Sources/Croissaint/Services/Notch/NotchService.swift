@@ -4269,6 +4269,9 @@ final class NotchService: ObservableObject {
                              symbol: provider.symbol, agent: provider))
             // After the notice, the companion cheers the finished task.
             reactMascot(.celebrate)
+        case .needsInput(let provider, let project):
+            show(NotchNotice(event: .agents, title: text.needsInput(provider.displayName), detail: project,
+                             symbol: "questionmark.bubble.fill", agent: provider))
         case .limitWarning(let provider, let limit):
             show(NotchNotice(event: .agents, title: "\(provider.displayName) · \(window(limit))",
                              detail: NotchAgentSupport.limitShare(limit, display: NotchAgentSupport.limitDisplay(),

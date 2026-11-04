@@ -146,6 +146,11 @@ struct OpenCodeReader: AgentHarnessReader {
                                          model: sessionState.model, project: sessionState.project) {
                 entries.append(usage)
             }
+            let asking = json["asking"] as? Bool == true
+            if asking != sessionState.asking, sessionState.turnOpen || !asking {
+                sessionState.asking = asking
+                entries.append(.turnAsking(asking))
+            }
 
             // OpenCode's loop goes on after tool calls, after a reply that
             // still holds calls whatever its finish says, and after the

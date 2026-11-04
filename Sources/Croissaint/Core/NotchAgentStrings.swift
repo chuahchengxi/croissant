@@ -40,6 +40,7 @@ struct NotchAgentStrings {
     let activeDays: String
     let busiestDay: String
     let finishedFormat: String
+    let needsInputFormat: String
     let limitRenewed: String
     let budgetTitle: String
     let leftFormat: String
@@ -108,6 +109,7 @@ struct NotchAgentStrings {
     func saved(_ amount: String) -> String { String(format: savedFormat, amount) }
     func planMultiple(_ multiple: String, plan: String) -> String { String(format: planMultipleFormat, multiple, plan) }
     func finished(_ agent: String) -> String { String(format: finishedFormat, agent) }
+    func needsInput(_ agent: String) -> String { String(format: needsInputFormat, agent) }
     func left(_ share: String) -> String { String(format: leftFormat, share) }
     func usedShare(_ share: String) -> String { String(format: usedFormat, share) }
     func updated(_ when: String) -> String { String(format: updatedFormat, when) }
@@ -225,6 +227,7 @@ extension NotchAgentStrings {
         activeDays: "Active days",
         busiestDay: "Busiest day",
         finishedFormat: "%@ finished",
+        needsInputFormat: "%@ needs your input",
         limitRenewed: "Limit renewed",
         budgetTitle: "Daily budget",
         leftFormat: "%@ left",
@@ -324,6 +327,7 @@ extension NotchAgentStrings {
         activeDays: "Активних днів",
         busiestDay: "Найактивніший день",
         finishedFormat: "%@ завершив роботу",
+        needsInputFormat: "%@ чекає на вашу відповідь",
         limitRenewed: "Ліміт поновлено",
         budgetTitle: "Денний бюджет",
         leftFormat: "Залишилося: %@",
@@ -423,6 +427,7 @@ extension NotchAgentStrings {
         activeDays: "Dias ativos",
         busiestDay: "Dia mais intenso",
         finishedFormat: "%@ terminou",
+        needsInputFormat: "%@ precisa da sua resposta",
         limitRenewed: "Limite renovado",
         budgetTitle: "Orçamento diário",
         leftFormat: "%@ restantes",
@@ -522,6 +527,7 @@ extension NotchAgentStrings {
         activeDays: "Días activos",
         busiestDay: "Día de más uso",
         finishedFormat: "%@ terminó",
+        needsInputFormat: "%@ necesita tu respuesta",
         limitRenewed: "Límite renovado",
         budgetTitle: "Presupuesto diario",
         leftFormat: "%@ restante",
@@ -621,6 +627,7 @@ extension NotchAgentStrings {
         activeDays: "Aktívne dni",
         busiestDay: "Najrušnejší deň",
         finishedFormat: "%@ skončil",
+        needsInputFormat: "%@ čaká na vašu odpoveď",
         limitRenewed: "Limit sa obnovil",
         budgetTitle: "Denný rozpočet",
         leftFormat: "Zostáva %@",
@@ -720,6 +727,7 @@ extension NotchAgentStrings {
         activeDays: "Aktive Tage",
         busiestDay: "Stärkster Tag",
         finishedFormat: "%@ ist fertig",
+        needsInputFormat: "%@ wartet auf deine Antwort",
         limitRenewed: "Limit erneuert",
         budgetTitle: "Tagesbudget",
         leftFormat: "%@ übrig",
@@ -819,6 +827,7 @@ extension NotchAgentStrings {
         activeDays: "Jours actifs",
         busiestDay: "Jour le plus chargé",
         finishedFormat: "%@ a terminé",
+        needsInputFormat: "%@ attend votre réponse",
         limitRenewed: "Limite renouvelée",
         budgetTitle: "Budget quotidien",
         leftFormat: "%@ restant",
@@ -918,6 +927,7 @@ extension NotchAgentStrings {
         activeDays: "Giorni attivi",
         busiestDay: "Giorno più intenso",
         finishedFormat: "%@ ha finito",
+        needsInputFormat: "%@ attende una tua risposta",
         limitRenewed: "Limite rinnovato",
         budgetTitle: "Budget giornaliero",
         leftFormat: "%@ rimasto",
@@ -1017,6 +1027,7 @@ extension NotchAgentStrings {
         activeDays: "Активные дни",
         busiestDay: "Самый активный день",
         finishedFormat: "%@ завершил работу",
+        needsInputFormat: "%@ ждёт вашего ответа",
         limitRenewed: "Лимит обновлён",
         budgetTitle: "Дневной бюджет",
         leftFormat: "Осталось %@",
@@ -1116,6 +1127,7 @@ extension NotchAgentStrings {
         activeDays: "Aktif günler",
         busiestDay: "En yoğun gün",
         finishedFormat: "%@ bitirdi",
+        needsInputFormat: "%@ yanıtınızı bekliyor",
         limitRenewed: "Sınır yenilendi",
         budgetTitle: "Günlük bütçe",
         leftFormat: "%@ kaldı",
@@ -1215,6 +1227,7 @@ extension NotchAgentStrings {
         activeDays: "アクティブな日数",
         busiestDay: "最も多かった日",
         finishedFormat: "%@が完了しました",
+        needsInputFormat: "%@が返答を待っています",
         limitRenewed: "上限がリセットされました",
         budgetTitle: "1日の予算",
         leftFormat: "残り%@",
@@ -1314,6 +1327,7 @@ extension NotchAgentStrings {
         activeDays: "활동한 날",
         busiestDay: "가장 많이 쓴 날",
         finishedFormat: "%@ 작업 완료",
+        needsInputFormat: "%@이(가) 답변을 기다립니다",
         limitRenewed: "한도가 초기화됨",
         budgetTitle: "일일 예산",
         leftFormat: "%@ 남음",
@@ -1413,6 +1427,7 @@ extension NotchAgentStrings {
         activeDays: "活跃天数",
         busiestDay: "用量最多的一天",
         finishedFormat: "%@ 已完成",
+        needsInputFormat: "%@ 正在等你回复",
         limitRenewed: "额度已重置",
         budgetTitle: "每日预算",
         leftFormat: "剩余 %@",
@@ -1512,6 +1527,7 @@ extension NotchAgentStrings {
         activeDays: "活躍天數",
         busiestDay: "用量最多的一天",
         finishedFormat: "%@ 已完成",
+        needsInputFormat: "%@ 正在等你回覆",
         limitRenewed: "額度已重設",
         budgetTitle: "每日預算",
         leftFormat: "剩餘 %@",
@@ -1611,6 +1627,7 @@ extension NotchAgentStrings {
         activeDays: "活躍日數",
         busiestDay: "用量最多的一天",
         finishedFormat: "%@ 已完成",
+        needsInputFormat: "%@ 正在等你回覆",
         limitRenewed: "額度已重設",
         budgetTitle: "每日預算",
         leftFormat: "剩餘 %@",
