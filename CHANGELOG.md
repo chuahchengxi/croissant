@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-11-04
+
+### Added
+- Dynamic Island shows when an AI agent is waiting for your input. When Claude Code or OpenCode asks you a question, wants a plan approved or (Claude Code only) needs a permission, the island announces "<Agent> needs your input", and the closed island swaps the running timer for an orange question mark until you answer.
+
+### Changed
+- A turn waiting on your answer stays on the island however long you take, instead of dropping off after 10 quiet minutes.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.7] - 2026-11-02
 
 Croissaint 0.2.7 merges upstream through `a5da7633` (upstream v3.4.3) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
