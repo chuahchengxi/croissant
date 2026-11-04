@@ -301,8 +301,9 @@ final class AgentUsageStore {
     /// It waits aside for a while, since work can resume after an approval
     /// or a long command.
     func closeIdleTurns(now: Date, after idle: TimeInterval) {
-        // A question stays up however long the person takes to answer.
-        for (file, turn) in turns where !turn.asking && now.timeIntervalSince(turn.lastActivity) >= idle {
+        // A question stays up far longer: the person may be away.
+        for (file, turn) in turns
+        where now.timeIntervalSince(turn.lastActivity) >= (turn.asking ? max(idle, NotchAgentSupport.idleQuestion) : idle) {
             turns[file] = nil
             waiting[file] = turn
         }

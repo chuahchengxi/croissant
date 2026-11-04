@@ -486,9 +486,13 @@ enum NotchAgentTests {
                      "a session waiting on the person is flagged and announced")
         suite.expect(!store.syncAsking(waits, events: &asked) && asked.count == 1, "a wait is announced once")
         store.closeIdleTurns(now: now.addingTimeInterval(3 * NotchAgentSupport.idleTurn), after: NotchAgentSupport.idleTurn)
-        suite.expect(store.live.first?.asking == true, "an unanswered question never goes idle")
+        suite.expect(store.live.first?.asking == true, "an unanswered question stays up while the person is away")
         waits.asking = []
         suite.expect(store.syncAsking(waits, events: &asked) && store.live.first?.asking == false, "the answer clears the flag")
+        let abandoned = AgentUsageStore()
+        _ = abandoned.apply([.turnBegan(now), .turnAsking(true)], file: "gone", provider: .opencode, tracksTurns: true, modified: now, now: now)
+        abandoned.closeIdleTurns(now: now.addingTimeInterval(NotchAgentSupport.idleQuestion), after: NotchAgentSupport.idleTurn)
+        suite.expect(abandoned.live.isEmpty, "a question nobody answers leaves the island after the longer wait")
         store.closeIdleTurns(now: now.addingTimeInterval(3 * NotchAgentSupport.idleTurn), after: NotchAgentSupport.idleTurn)
         waits.asking = ["main"]
         suite.expect(store.live.isEmpty && store.syncAsking(waits, events: &asked) && store.live.first?.asking == true,

@@ -71,6 +71,11 @@ enum NotchAgentSupport {
     static let budgets = [0.0, 5, 10, 25, 50, 100, 250]
     /// A turn silent for this long is not shown as working.
     static let idleTurn: TimeInterval = 10 * 60
+    /// A question waits this long for an answer before its turn counts as
+    /// quiet too, as when its window was closed without answering.
+    // ponytail: one cap for every agent; Claude's own process record could
+    // keep its questions up longer if three hours proves short.
+    static let idleQuestion: TimeInterval = 3 * 3600
 
     static func isEnabled(in defaults: UserDefaults = .standard) -> Bool {
         NotchSupport.isEnabled(in: defaults) && sectionShows(in: defaults)
