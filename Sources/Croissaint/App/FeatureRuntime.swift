@@ -263,6 +263,7 @@ final class FeatureRuntime: ObservableObject {
         .focusFollowsMouse: { FocusFollowsMouseService.shared.syncWithPreferences() },
         .smoothScroll: { SmoothScrollService.shared.syncWithPreferences() },
         .linearScroll: { ScrollInverter.shared.syncWithPreferences() },
+        .scrollSpeed: { ScrollInverter.shared.syncWithPreferences() },
         .mouseAcceleration: { MouseAccelerationService.shared.syncWithPreferences() },
         .mouseNavigation: { MouseNavigationService.shared.syncWithPreferences() },
         .mouseButtonShortcuts: { MouseButtonShortcutService.shared.syncWithPreferences() },
@@ -399,6 +400,7 @@ final class FeatureRuntime: ObservableObject {
             }
         },
         .appUpdates: { AppUpdatesService.shared.syncWithPreferences() },
+        .uninstaller: { TrashAppWatcher.shared.syncWithPreferences() },
         .monitorCPU: { FeatureRuntime.syncMonitor() },
         .monitorGPU: { FeatureRuntime.syncMonitor() },
         .monitorMemory: { FeatureRuntime.syncMonitor() },

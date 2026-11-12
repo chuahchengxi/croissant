@@ -69,7 +69,7 @@ Choose individual features or start with a preset. Uninstalled features stop loa
   <img src="docs/assets/readme/features-hub.png" width="720" alt="The Features hub in Settings, installing and uninstalling whole features">
 </p>
 
-Reorder or hide panel sections, choose a compact layout, and export settings to another Mac. The app supports more than a dozen languages.
+Reorder or hide panel sections, choose a compact layout, and export settings to another Mac or [keep them in your dotfiles](docs/TROUBLESHOOTING.md#keeping-settings-in-your-dotfiles). The app supports more than a dozen languages.
 
 ## Everything it does
 
@@ -156,8 +156,9 @@ Reorder or hide panel sections, choose a compact layout, and export settings to 
 ### Energy and display
 
 - **Keep awake.** Keep the Mac up for a timer, until you say stop or automatically with an external display or power connection, pause the session while the Mac is locked, keep going with the lid closed, let displays sleep without stopping local work, choose the active menu bar icon and color, see the remaining time beside it, and optionally toggle it with a right click.
-- **Displays.** Adjust brightness or turn individual displays on and off. External screens use their own control channel when available and fall back to dimming the picture, while the keyboard brightness keys can follow the pointer and show the brightness percentage.
+- **Displays.** Control individual displays and brightness, with hardware control where supported, half or quarter steps for the brightness keys, optional extra dimming below a monitor's minimum, software dimming as a fallback, and the volume and mute of a monitor's built-in speakers.
 - **Extra brightness.** Pushes the XDR panel of a MacBook Pro past its regular maximum using the display's HDR headroom.
+- **Bluetooth on sleep.** Disconnect Bluetooth during sleep and restore it on wake only if Croissaint turned it off.
 
 ## Install
 

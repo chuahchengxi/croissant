@@ -27,6 +27,7 @@ enum OverlayPanelTests {
             "Sources/Croissaint/UI/PermissionGuideOverlay.swift",
             "Sources/Croissaint/UI/QuitProtection/QuitProtectionHUD.swift",
             "Sources/Croissaint/Services/QuickTools/QuickToolHUD.swift",
+            "Sources/Croissaint/Services/QuickTools/CaptureRegionGuide.swift",
             "Sources/Croissaint/Services/QuickTools/QuickLauncherService.swift",
             "Sources/Croissaint/Services/QuickTools/CameraPreviewService.swift",
             "Sources/Croissaint/Services/QuickTools/RecentCaptureService.swift",

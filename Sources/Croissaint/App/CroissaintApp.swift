@@ -18,6 +18,10 @@ import SwiftUI
 ///   identical to every release before the SwiftUI migration.
 @main
 enum CroissaintEntryPoint {
+    /// Feature keys the read-only XDG settings file set at launch, which
+    /// first-run feature presets must leave alone.
+    static private(set) var configuredFeatureKeys: Set<String> = []
+
     static func main() {
         // Bundled means a real .app: the URL ends in ".app" AND carries a
         // bundle identity. Checking the identity alone is not enough — Xcode
@@ -55,6 +59,7 @@ enum CroissaintEntryPoint {
 
         SuperKeyMappingGuard.runIfRequestedAndExit()
         Defaults.register()
+        configuredFeatureKeys = SettingsBackup.applyConfigFileAtLaunch()
         NotchControlItem.keyboardLightIsSupported = { BrightnessService.keyboardLightIsSupported }
         MouseAccelerationGuard.runIfRequestedAndExit()
         MouseAccelerationService.recoverPendingAtLaunch()

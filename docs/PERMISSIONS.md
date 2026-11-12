@@ -15,7 +15,7 @@ You can review or change every grant in System Settings, under Privacy and Secur
 | Bluetooth | Yes | Accessory battery levels in Monitor, optional accessory alerts in the notch and Bluetooth on sleep |
 | Files and Folders | Yes | Monitoring downloads in a folder you choose |
 | Notifications | Yes | Keep awake, battery, Monitor and update alerts |
-| Full Disk Access | Yes | A deeper uninstaller scan, and the desktop buddy showing other apps' notifications |
+| Full Disk Access | Yes | A deeper uninstaller scan, the optional cleanup offer for apps moved to the Trash, and the desktop buddy showing other apps' notifications |
 | Administrator (one time) | Yes | Password free closed lid toggling |
 | Automation | Yes | Finder actions and supported music playback controls |
 | App Management | Yes | App installs, updates and removal |
@@ -128,9 +128,9 @@ Download monitoring watches only the folder you choose in the system picker. Fol
 
 **Why it comes up.** The uninstaller hunts down the files an app leaves behind, like caches, preferences and logs. Some of those spots are protected by macOS and only open up with Full Disk Access. The same goes for the store macOS keeps your notifications in, which the desktop buddy reads to hold them up on its banner.
 
-**What uses it.** The uninstaller, for a deeper scan. The desktop buddy, to show notifications posted by other apps, and only when you switch that on.
+**What uses it.** The uninstaller, for a deeper scan. The optional Finder cleanup offer watches for an app moving from an Applications folder into your local Trash. You choose the data to remove and confirm that you intended to uninstall the app. Cancel if an updater moved it. The desktop buddy, to show notifications posted by other apps, and only when you switch that on.
 
-**If you say no.** The uninstaller still works and scans the places it can reach. It just might not surface files tucked away in protected folders. The buddy keeps showing Croissaint's own notices and simply stays quiet about other apps.
+**If you say no.** The uninstaller still works and scans the places it can reach. It just might not surface files tucked away in protected folders, and the cleanup offer for trashed apps stays off. The buddy keeps showing Croissaint's own notices and simply stays quiet about other apps.
 
 **Optional.** Yes. There is no pop up for Full Disk Access. You add Croissaint in System Settings, under Privacy and Security, Full Disk Access, and Croissaint opens that pane for you when the feature calls for it.
 

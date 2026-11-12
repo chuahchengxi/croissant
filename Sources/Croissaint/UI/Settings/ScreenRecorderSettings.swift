@@ -19,8 +19,6 @@ struct ScreenRecordingCaptureSettings: View {
     @AppStorage(DefaultsKey.recorderSaveFolder) private var saveFolder = ""
     @AppStorage(DefaultsKey.recorderOpenEditor) private var opensEditor = true
     @AppStorage(DefaultsKey.recorderAutomaticZoom) private var automaticZoom = true
-    @AppStorage(DefaultsKey.recorderGIFSize) private var gifSizeRaw =
-        RecorderSupport.GIFSize.medium.rawValue
     @AppStorage(DefaultsKey.recorderGIFFrameRate) private var gifFrameRate = 12
     @State private var showsMoreOptions = false
 
@@ -113,9 +111,12 @@ struct ScreenRecordingCaptureSettings: View {
                     Group {
                         VStack(alignment: .leading, spacing: 4) {
                             Picker(strings.qualityLabel, selection: $qualityRaw) {
-                                Text(strings.qualitySmall).tag(RecorderSupport.Quality.small.rawValue)
-                                Text(strings.qualityBalanced).tag(RecorderSupport.Quality.balanced.rawValue)
-                                Text(strings.qualityHigh).tag(RecorderSupport.Quality.high.rawValue)
+                                Text(strings.qualitySmall)
+                                    .tag(RecorderSupport.Quality.small.rawValue)
+                                Text(strings.qualityBalanced)
+                                    .tag(RecorderSupport.Quality.balanced.rawValue)
+                                Text(strings.qualityHigh)
+                                    .tag(RecorderSupport.Quality.high.rawValue)
                             }
                             Text(strings.qualityCaption)
                                 .font(.caption)
@@ -125,12 +126,6 @@ struct ScreenRecordingCaptureSettings: View {
                             ForEach(RecorderSupport.frameRates, id: \.self) { rate in
                                 Text(String(format: strings.frameRateFormat, rate)).tag(rate)
                             }
-                        }
-                        .pickerStyle(.segmented)
-                        Picker(strings.gifSizeLabel, selection: $gifSizeRaw) {
-                            Text(strings.gifSizeSmall).tag(RecorderSupport.GIFSize.small.rawValue)
-                            Text(strings.gifSizeMedium).tag(RecorderSupport.GIFSize.medium.rawValue)
-                            Text(strings.gifSizeLarge).tag(RecorderSupport.GIFSize.large.rawValue)
                         }
                         .pickerStyle(.segmented)
                         Picker(strings.gifFrameRateLabel, selection: $gifFrameRate) {

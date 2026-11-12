@@ -243,6 +243,10 @@ else
 fi
 SDK_COMPAT_FLAGS=()
 HID_EVENT_SYSTEM_FLAGS=(-I Sources/HIDEventSystem)
+CORE_AUDIO_TAP_FLAGS=(-I Sources/CoreAudioTapCompat)
+GIF_CODEC_FLAGS=(-I Sources/RecorderGIFCodec)
+GIF_CODEC_OBJECTS=(build/objects/recorder-gif-codec/RecorderGIFCodec.o
+                   build/objects/recorder-gif-codec/cgif_raw.o)
 if [[ "$SDK" == "$PINNED_SDK" ]]; then
     # Swift 6.4 can read the SDK 26 interfaces when given their compiler version.
     SDK_COMPAT_FLAGS=(-Xfrontend -interface-compiler-version -Xfrontend 6.3.2)
@@ -283,6 +287,12 @@ discard_test_preferences() {
 
 # Standalone automated tests: pure contracts plus isolated disk, subprocess,
 # keyboard-data and media fixtures. No application windows or device capture.
+mkdir -p build/objects/recorder-gif-codec
+xcrun clang -O3 -std=c99 -target "$TARGET" -isysroot "$SDK" \
+    -c Sources/RecorderGIFCodec/RecorderGIFCodec.c -o "$GIF_CODEC_OBJECTS[1]"
+xcrun clang -O3 -std=c99 -target "$TARGET" -isysroot "$SDK" \
+    -c Sources/RecorderGIFCodec/vendor/cgif/cgif_raw.c -o "$GIF_CODEC_OBJECTS[2]"
+
 if (( TEST )); then
     python3 Tests/generate_sources.py
     TEST_OBJECT_DIR="build/objects/tests"
@@ -425,6 +435,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Recorder/RecorderWriter.swift
         Sources/Croissaint/Services/Recorder/RecorderCaptureEngine.swift
         Sources/Croissaint/Core/RecorderExportStrings.swift
+        Sources/Croissaint/Core/RecorderExportFormatStrings.swift
         Sources/Croissaint/Services/Recorder/RecorderComposer.swift
         Sources/Croissaint/Services/Recorder/RecorderComposerPlan.swift
         Sources/Croissaint/Services/Recorder/RecorderCursorSprite.swift
@@ -433,6 +444,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Recorder/RecorderExporter.swift
         Sources/Croissaint/Services/Recorder/RecorderGIFClipboard.swift
         Sources/Croissaint/Services/Recorder/RecorderGIFWriter.swift
+        Sources/Croissaint/Services/Recorder/RecorderFastGIFWriter.swift
         Sources/Croissaint/Services/Recorder/RecorderGIFWorkspace.swift
         Sources/Croissaint/Services/Recorder/RecorderComposition.swift
         Sources/Croissaint/Services/PrivateFileStore.swift
@@ -479,6 +491,8 @@ if (( TEST )); then
         Sources/Croissaint/Services/SpacesOrder/SpacesOrderHold.swift
         Sources/Croissaint/Services/Homebrew/HomebrewSupport.swift
         Sources/Croissaint/Services/Homebrew/HomebrewEnvironment.swift
+        Sources/Croissaint/Services/Homebrew/HomebrewManager.swift
+        Sources/Croissaint/UI/HomebrewOperationStatusView.swift
         Sources/Croissaint/Services/AppUpdates/AppUpdatesSupport.swift
         Sources/Croissaint/Services/AppUpdates/AppUpdateFeedSupport.swift
         Sources/Croissaint/Core/AppUpdateStrings.swift
@@ -550,6 +564,9 @@ if (( TEST )); then
         Sources/Croissaint/Services/QuickTools/ScreenshotCapturePolicy.swift
         Sources/Croissaint/Services/QuickTools/ScreenshotSupport.swift
         Sources/Croissaint/Services/QuickTools/ScreenshotCanvasSupport.swift
+        Sources/Croissaint/Services/QuickTools/ScreenshotImageImport.swift
+        Sources/Croissaint/Services/Media/MediaImageProcessing.swift
+        Sources/Croissaint/Services/QuickTools/ScreenshotImageFile.swift
         Sources/Croissaint/UI/Settings/ScreenCaptureToolPicker.swift
         Sources/Croissaint/UI/Settings/MonitorToken.swift
         Sources/Croissaint/Services/QuickTools/ScreenshotRenderer.swift
@@ -576,6 +593,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/Switcher/SwitcherSupport.swift
         Sources/Croissaint/Services/Switcher/SpaceHopSupport.swift
         Sources/Croissaint/Services/Switcher/WindowUseOrder.swift
+        Sources/Croissaint/Services/Switcher/WindowEnumeratorAccessibilityPrefetch.swift
         Sources/Croissaint/Services/Metrics/MetricFormat.swift
         Sources/Croissaint/Services/Metrics/VMStatisticsDecoder.swift
         Sources/Croissaint/Services/KeepAwakeAutomationSupport.swift
@@ -609,6 +627,7 @@ if (( TEST )); then
         Sources/Croissaint/Services/CleaningMode/CleaningMouseReleaseGate.swift
         Sources/Croissaint/Services/Display/ExtraBrightnessSupport.swift
         Sources/Croissaint/Services/Display/BrightnessSupport.swift
+        Sources/Croissaint/Services/Display/MonitorVolumeKeySettings.swift
         Sources/Croissaint/Services/Display/LidDimmingSupport.swift
         Sources/Croissaint/Services/Cleaner/CleanerSupport.swift
         Sources/Croissaint/Services/Cleaner/CleanerPolicy.swift
@@ -628,6 +647,7 @@ if (( TEST )); then
         Sources/Croissaint/Core/AutoQuitDockAppsStrings.swift
         Sources/Croissaint/Services/WindowLayout/WindowStageManagerSupport.swift
         Sources/Croissaint/Core/WindowStageManagerStrings.swift
+        Sources/Croissaint/Core/WindowEdgeSnapRestoreStrings.swift
         Tests/*.swift
         build/generated-tests/*.swift
     )
@@ -637,7 +657,8 @@ if (( TEST )); then
     swiftc -Onone -incremental -enable-batch-mode -j "$(sysctl -n hw.logicalcpu)" \
         -module-name CroissaintTests -output-file-map "$TEST_OUTPUT_FILE_MAP" \
         -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" \
-        "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${TEST_SOURCES[@]}" -o build/metrics-tests
+        "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${CORE_AUDIO_TAP_FLAGS[@]}" "${GIF_CODEC_FLAGS[@]}" \
+        "${TEST_SOURCES[@]}" "${GIF_CODEC_OBJECTS[@]}" -o build/metrics-tests
     test_status=0
     ./build/metrics-tests "${TEST_ARGS[@]}" || test_status=$?
     if (( ${#TEST_ARGS} == 0 )); then
@@ -669,8 +690,10 @@ write_swift_output_file_map "$APP_OUTPUT_FILE_MAP" "$APP_OBJECT_DIR" "${APP_SOUR
 swiftc "${APP_OPTIMIZATION_FLAGS[@]}" -incremental -enable-batch-mode -j "$(sysctl -n hw.logicalcpu)" \
     -output-file-map "$APP_OUTPUT_FILE_MAP" \
     -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${VM_STATISTICS_COMPAT_FLAGS[@]}" "${HID_EVENT_SYSTEM_FLAGS[@]}" \
+    "${CORE_AUDIO_TAP_FLAGS[@]}" "${GIF_CODEC_FLAGS[@]}" \
     "${BUILD_VARIANT_FLAGS[@]}" \
-    "${APP_SOURCES[@]}" -o "build/$EXECUTABLE"
+    "${APP_SOURCES[@]}" "${GIF_CODEC_OBJECTS[@]}" -o "build/$EXECUTABLE"
+xcrun dyld_info -imports "build/$EXECUTABLE" | awk -f Tests/AudioTapImports.awk
 
 echo "▸ Compiling protected fan helper…"
 swiftc -O -target "$TARGET" -sdk "$SDK" "${SDK_COMPAT_FLAGS[@]}" "${BUILD_VARIANT_FLAGS[@]}" \
@@ -779,6 +802,7 @@ cp build/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 # bundled rather than downloaded so it can never disagree with the parser
 # that reads it (PetAnimationPack.swift).
 cp Resources/pet-animation-pack.bin "$STAGE/Contents/Resources/pet-animation-pack.bin"
+cp Sources/RecorderGIFCodec/vendor/cgif/LICENSE "$STAGE/Contents/Resources/cgif-LICENSE.txt"
 cp build/MenuBarIcon.png build/MenuBarIcon@2x.png build/BrandMark.png "$STAGE/Contents/Resources/"
 if [[ -f build/Assets.car ]]; then
     cp build/Assets.car "$STAGE/Contents/Resources/Assets.car"
