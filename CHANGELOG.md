@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-11-13
+
+Croissaint 0.2.10 merges upstream through `ce127647` (upstream v3.4.4) while preserving the fork's branding, desktop pets, updater target, privacy choices, and removed online services.
+
+### Added
+- Displays settings, the mixer and Dynamic Island can control the speakers built into supported monitors, with configurable volume-key steps and limits.
+- Scrolling screenshots have their own shortcut, and Croissaint can scroll the selected window automatically. Auto scroll requires Accessibility.
+- The uninstaller can offer to review leftover files when you move the last copy of an app to the Trash in Finder. This is off by default, uses Full Disk Access, and both result views offer Select all.
+- Holding a modifier key speeds up a mouse wheel from 2× to 15×, set in Mouse settings.
+- The window switcher can turn off hover selection, and edge snapping can restore a window's previous size when you drag its title bar. Both are off by default.
+- Croissaint reads a read-only settings file at launch from `~/.config/croissaint/settings.plist` (or `$XDG_CONFIG_HOME/croissaint/`). Settings it does not list stay local.
+
+### Changed
+- GIF exports use less memory and run faster on supported GPUs, with a frame rate choice and full or scaled resolution.
+- Large clipboard images can be resized before editing, and the screenshot editor keeps supported image formats and HEIC orientation.
+- Keep Awake resumes a manual session after a relaunch with its original end time, and Keep Awake or Quick Snippet Menu shortcuts can be cleared without disabling the feature.
+- Supported DDC monitors can use software dimming, and clipboard history remembers where you placed its list window.
+
+### Fixed
+- Croissaint no longer crashes at launch on macOS Sonoma 14.0 and 14.1.
+- A disabled MacBook display that wakes at the lock screen stays off until you unlock with an external display active.
+- The window switcher opens faster, flashes less when restoring minimized windows, and its shortcuts work during secure input.
+- Super Key preserves Caps Lock after a solo tap and no longer crashes when it reapplies the keyboard mapping at startup.
+- Mic Mute keeps microphones at zero input volume and remembers each channel's level across upgrades and reconnects.
+- Per-app volume changes are smoother, and mute takes effect immediately across audio interruptions.
+- Dynamic Island hides over full-screen apps on each display, stops mirrored banners from flashing on macOS 26, and explains which macOS alerts it can mirror.
+- Settings search finds more controls and opens their section; Command Bar converts mixed feet and inches.
+- Cleaner protects installed apps' support folders, and the last Homebrew log stays available from App Updates.
+
+### Installation and signing
+- This release is ad-hoc signed and is not notarized by Apple. No developer account or signing identity is required to install it.
+- macOS may block a downloaded copy or require explicit approval. Only open a copy whose source and integrity you trust; do not dismiss malware or revoked-certificate warnings as ordinary installation prompts.
+- Accessibility and Screen Recording permissions may need to be granted again after an update. Ad-hoc signing does not provide a stable developer identity between builds.
+- Requires an Apple Silicon Mac running macOS 14 or later.
+
 ## [0.2.9] - 2026-11-04
 
 ### Fixed
